@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<header class="bar">
+  <div class="brand"><span class="logo">🐍</span> PyIDE</div>
+
+  <div class="meta">
+    <input id="title" class="field field-title" type="text"
+           value="{{ title }}" placeholder="Project name" maxlength="120"
+           {% if readonly %}readonly{% endif %}>
+    <input id="author" class="field field-author" type="text"
+           value="{{ author }}" placeholder="Your name" maxlength="80"
+           {% if readonly %}readonly{% endif %}>
+  </div>
+
+  <div class="actions">
+    <button id="run" class="btn btn-run" disabled>
+      <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
+    </button>
+    {% if readonly %}
+      <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
+    {% else %}
+      <button id="share" class="btn btn-primary">Share</button>
+    {% endif %}
+    <button id="download" class="btn">Save .py</button>
+  </div>
+</header>
+
+{% if readonly %}
+<div class="banner">
+  <strong>Shared project</strong> — you're viewing a read-only snapshot{% if author %} from {{ author }}{% endif %}{% if shared_at %}, saved {{ shared_at }}{% endif %}.
+  You can run it, but to change it choose <em>Edit a copy</em>.
+</div>
+{% endif %}
+
+<main class="split">
+  <section class="pane pane-editor">
+    <div class="pane-head">
+      <span>main.py</span>
+      <span class="hint">Ctrl+Enter to run</span>
+    </div>
+    <div class="editor-wrap"><textarea id="editor">{{ code }}</textarea></div>
+  </section>
+
+  <section class="pane pane-output">
+    <div class="pane-head">
+      <span>Output</span>
+      <button id="clear" class="linkbtn">Clear</button>
+    </div>
+    <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
+</pre>
+  </section>
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <h2>Project shared</h2>
+    <p class="modal-sub">Anyone with this link can open and run this snapshot.</p>
+    <div class="linkrow">
+      <input id="share-url" type="text" readonly>
+      <button id="copy" class="btn btn-primary">Copy</button>
+    </div>
+    <p class="modal-note">The link captures your code exactly as it is right now.
+      If you keep working, share again to create an updated link.</p>
+    <button id="close-modal" class="btn">Done</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js"></script>
+<script>
+  window.PYIDE = {
+    readonly: {{ 'true' if readonly else 'false' }},
+    shareUrl: "{{ url_for('create_share') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

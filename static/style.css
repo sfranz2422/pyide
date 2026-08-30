@@ -1,0 +1,264 @@
+:root {
+  --bg: #12151c;
+  --bg-panel: #1a1e27;
+  --bg-head: #212734;
+  --line: #2c3341;
+  --text: #dde3ee;
+  --muted: #8a94a8;
+  --accent: #4f8cff;
+  --accent-hover: #3d78e8;
+  --green: #3ecf8e;
+  --red: #ff6b6b;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bar-h: 56px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------- bar */
+.bar {
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--bg-head);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 650;
+  font-size: 15px;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+.logo { margin-right: 4px; }
+
+.meta {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.field {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+}
+.field:focus { outline: none; border-color: var(--accent); }
+.field::placeholder { color: var(--muted); }
+.field[readonly] { opacity: .7; }
+.field-title { flex: 1 1 260px; max-width: 340px; }
+.field-author { flex: 0 1 160px; }
+
+.actions { display: flex; gap: 8px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: #40495b; background: #232936; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.btn-run {
+  background: var(--green);
+  border-color: var(--green);
+  color: #0d2b1e;
+  font-weight: 650;
+  min-width: 104px;
+  justify-content: center;
+}
+.btn-run:hover:not(:disabled) { background: #35b87d; border-color: #35b87d; }
+.btn-icon { font-size: 11px; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* ---------------------------------------------------------------- banner */
+.banner {
+  background: #1d2740;
+  border-bottom: 1px solid #2b3a5e;
+  color: #c3d3f2;
+  font-size: 13px;
+  padding: 9px 16px;
+}
+.banner strong { color: #fff; }
+
+/* ----------------------------------------------------------------- panes */
+.split {
+  display: flex;
+  height: calc(100% - var(--bar-h));
+  min-height: 0;
+}
+.banner ~ .split { height: calc(100% - var(--bar-h) - 37px); }
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.pane-editor { flex: 1 1 58%; border-right: 1px solid var(--line); }
+.pane-output { flex: 1 1 42%; background: var(--bg-panel); }
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--bg-head);
+  border-bottom: 1px solid var(--line);
+}
+.hint { text-transform: none; font-weight: 400; letter-spacing: 0; }
+
+.linkbtn {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+}
+.linkbtn:hover { color: var(--text); }
+
+/* ---------------------------------------------------------------- editor */
+.editor-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.editor-wrap .CodeMirror {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.CodeMirror-gutters { border-right: 1px solid var(--line); }
+
+/* ---------------------------------------------------------------- output */
+.output {
+  flex: 1;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+.output .err { color: var(--red); }
+.output .dim { color: var(--muted); }
+
+/* ----------------------------------------------------------------- modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, .72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal[hidden] { display: none; }
+
+.modal-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 26px;
+  width: 100%;
+  max-width: 480px;
+}
+.modal-card h2 { margin: 0 0 4px; font-size: 19px; }
+.modal-sub { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; }
+.modal-note { margin: 14px 0 20px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+
+.linkrow { display: flex; gap: 8px; }
+.linkrow input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 9px 11px;
+  font-family: var(--mono);
+  font-size: 13px;
+  min-width: 0;
+}
+.linkrow input:focus { outline: none; border-color: var(--accent); }
+
+/* ---------------------------------------------------------------- mobile */
+@media (max-width: 860px) {
+  html, body { overflow: auto; }
+  .bar { height: auto; flex-wrap: wrap; padding: 10px 12px; gap: 10px; }
+  .meta { order: 3; width: 100%; }
+  .field-title, .field-author { flex: 1 1 auto; max-width: none; }
+  .split, .banner ~ .split { flex-direction: column; height: auto; }
+  .pane-editor { border-right: 0; border-bottom: 1px solid var(--line); }
+  .editor-wrap { height: 55vh; flex: 0 0 auto; }
+  .output { height: 35vh; }
+}
+
+/* -------------------------------------------------------------- 404 page */
+.center {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+.center h1 { margin: 0; font-size: 22px; }
+.center p { margin: 0; color: var(--muted); max-width: 40ch; line-height: 1.6; }
