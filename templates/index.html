@@ -94,12 +94,24 @@
       </div>
     </div>
 
-    <div class="pane-head">
-      <span>Output</span>
-      <button id="clear" class="linkbtn">Clear</button>
-    </div>
-    <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
+    <div id="output-view" class="subpane">
+      <div class="pane-head">
+        <span>Output</span>
+        <button id="clear" class="linkbtn">Clear</button>
+      </div>
+      <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
+    </div>
+
+    <div id="notes-view" class="subpane" hidden>
+      <div class="pane-head">
+        <span id="notes-name">Notes</span>
+        {% if authoring %}
+          <button id="notes-edit" class="linkbtn">Edit source</button>
+        {% endif %}
+      </div>
+      <div id="notes-body" class="notes-body prose"></div>
+    </div>
   </section>
 
   <aside id="sprites" class="pane pane-sprites" hidden>
@@ -144,11 +156,13 @@
 <script>
   window.PYIDE = {
     readonly: {{ 'true' if readonly else 'false' }},
+    authoring: {{ 'true' if authoring else 'false' }},
     shareUrl: "{{ url_for('create_share') }}",
     files: {{ files | tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

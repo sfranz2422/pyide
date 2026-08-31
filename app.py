@@ -192,6 +192,9 @@ def index():
         title="Untitled",
         author="",
         readonly=False,
+        # only here can notes be written; shared snapshots and forks show them
+        # rendered and never expose the markdown source
+        authoring=True,
         slug=None,
         shared_at=None,
     )
@@ -211,6 +214,7 @@ def view_shared(slug):
             title=snip.title,
             author=snip.author,
             readonly=True,
+            authoring=False,
             slug=snip.slug,
             shared_at=snip.created_at.strftime("%b %d, %Y at %I:%M %p UTC"),
         )
@@ -233,6 +237,7 @@ def fork_shared(slug):
             title=f"Copy of {snip.title}",
             author="",
             readonly=False,
+            authoring=False,
             slug=None,
             shared_at=None,
         )

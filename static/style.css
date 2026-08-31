@@ -467,6 +467,115 @@ html, body {
 /* In game mode the output pane becomes a log strip under the picture. */
 body.is-game .pane-right .output { flex: 1 1 auto; min-height: 90px; }
 
+/* ---------------------------------------------------------------- notes */
+/* The right pane holds two views: program output, and rendered notes. Only
+   one is ever visible, and .subpane sets display, so [hidden] needs help. */
+.subpane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.subpane[hidden] { display: none; }
+
+.notes-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 20px 24px 32px;
+  min-height: 0;
+}
+
+/* Class notes are prose, so they get prose treatment rather than the
+   monospaced console look of the output pane. */
+.prose {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 68ch;
+}
+.prose > :first-child { margin-top: 0; }
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  line-height: 1.25;
+  margin: 1.6em 0 .5em;
+  text-wrap: balance;
+}
+.prose h1 { font-size: 1.7em; }
+.prose h2 { font-size: 1.35em; }
+.prose h3 { font-size: 1.15em; }
+.prose h4 { font-size: 1em; letter-spacing: .01em; }
+.prose h1, .prose h2 {
+  padding-bottom: .25em;
+  border-bottom: 1px solid var(--line);
+}
+.prose p, .prose ul, .prose ol, .prose blockquote { margin: 0 0 1em; }
+.prose ul, .prose ol { padding-left: 1.4em; }
+.prose li { margin: .25em 0; }
+.prose li > ul, .prose li > ol { margin: .25em 0; }
+
+.prose a { color: var(--accent); text-decoration: underline; }
+.prose a:hover { color: var(--accent-hover); }
+
+.prose code {
+  font-family: var(--mono);
+  font-size: .88em;
+  background: var(--hover-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: .1em .35em;
+}
+.prose pre {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 1em;
+}
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: .92em;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  padding: .1em 0 .1em 1em;
+  color: var(--muted);
+}
+.prose hr { border: 0; border-top: 1px solid var(--line); margin: 1.8em 0; }
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: .4em 0;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 1em;
+  font-size: .95em;
+}
+.prose th, .prose td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+}
+.prose th { background: var(--bg-head); font-weight: 600; }
+
+.prose kbd {
+  font-family: var(--mono);
+  font-size: .85em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: .05em .4em;
+  background: var(--bg-head);
+}
+
 /* -------------------------------------------------------- sprite panel */
 .pane-sprites {
   flex: 0 0 268px;

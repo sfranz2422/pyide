@@ -34,13 +34,25 @@ silently lose every share link. Postgres keeps them. Locally, with no
 `DATABASE_URL` set, the app falls back to a SQLite file automatically — no
 setup needed.
 
-### Free tier caveat
+### Don't run this on the free tier
 
-Free Render services sleep after 15 minutes idle and take ~30 seconds to wake.
-The first student to open it each period will wait; everyone after that won't.
-If that's annoying, the $7/month Starter plan removes it. Render's free Postgres
-also expires after a set period — check the current terms when you set it up,
-and upgrade the database if you want share links to last all year.
+Two reasons, and the second is the serious one:
+
+- Free web services sleep after 15 minutes idle and take ~30 seconds to wake,
+  so the first student each period waits.
+- **Free Postgres expires 30 days after creation**, with a 14-day grace period,
+  after which Render deletes the database and everything in it. Free databases
+  also get no backups. On the free tier every share link your students had
+  submitted would stop working about six weeks into term, all at once, with no
+  way to recover them.
+
+Nothing in the app expires links — slugs are permanent and never reused. The
+database is the only thing that can take them away, so keep it on a paid plan
+if students are submitting work through it.
+
+Two other things break existing links: renaming the Render service (a link
+embeds the hostname it was shared from) and pointing the app at a different
+database.
 
 ---
 
@@ -146,6 +158,51 @@ Some details worth knowing:
   shown as garbled text.
 - Games can read and write files too; sprites and data files coexist.
 - Twelve files per project, 100 KB each.
+
+## Class notes in a share link
+
+A `.md` file in a project is class notes. It doesn't open as text — it renders
+in the right pane, so a share link carries the assignment instructions along
+with the starter code and its data.
+
+**Students never see the markdown source.** The tab shows the rendered notes,
+there's no editor for it and no way to delete it. Only the authoring view (a
+new project at `/`) gets an **Edit source** button, with live preview as you
+type. To revise notes, author a new project and share a new link — the same way
+you already update a starter.
+
+**A shared link opens on the notes tab**, not on `main.py`, so the instructions
+are the first thing a student sees.
+
+`examples/05_assignment_with_notes/` is a worked example: notes, starter code
+with TODOs, and the data file.
+
+### What's allowed in notes
+
+Ordinary markdown — headings, lists, tables, code blocks, blockquotes, links —
+plus images by URL:
+
+```markdown
+![the loop diagram](https://your-site.example/loop.png)
+```
+
+Images must be `https://` (a browser blocks `http://` on an https page as mixed
+content), and hosts that don't allow hotlinking — Google Drive, Dropbox share
+pages — won't serve them. Links open in a new tab so nobody loses their work.
+
+### Why it's sanitized
+
+Notes are the only place stored content becomes HTML rather than text, so it's
+the only place script injection is possible — and students can write `.md`
+files too, then share them on to each other. Everything is run through
+DOMPurify before it reaches the page, which strips `<script>`, event handlers
+like `onerror`, `javascript:` links, and `<iframe>`.
+
+Two extras are blocked on top of DOMPurify's defaults, both verified against
+real payloads: **forms** (a convincing fake "school login" posting elsewhere)
+and the **`style` attribute** (`position:fixed` can cover the whole editor).
+Neither has any use in class notes. Dropping `FORBID_ATTR` in `static/notes.js`
+brings inline CSS back if you ever want it.
 
 ## Pygame Zero
 
@@ -297,7 +354,8 @@ static/
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
-examples/               Pygame Zero and file-handling starters
+  notes.js              Markdown notes: render, sanitize
+examples/               Pygame Zero, file-handling and notes starters
 ```
 
 ## Possible next steps

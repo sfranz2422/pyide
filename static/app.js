@@ -169,6 +169,23 @@
   var docs = {};
   var active = MAIN;
   var tabsEl = $("file-tabs");
+  var outputView = $("output-view");
+  var notesView = $("notes-view");
+  var notesBody = $("notes-body");
+  var notesName = $("notes-name");
+  var notesEditBtn = $("notes-edit");   // present only while authoring
+
+  function showOutput() {
+    notesView.hidden = true;
+    outputView.hidden = false;
+  }
+
+  function showNotes(name) {
+    notesName.textContent = name;
+    outputView.hidden = true;
+    notesView.hidden = false;
+    window.PyIDENotes.render(notesBody, docs[name].getValue());
+  }
 
   docs[MAIN] = editor.getDoc();
 
@@ -194,12 +211,39 @@
     }).sort());
   }
 
-  function switchTo(name) {
-    if (!docs[name] || name === active) return;
-    docs[active] = editor.swapDoc(docs[name]);
-    active = name;
+  /* A .md tab is a view switch, not an editor swap: the notes render on the
+     right and the editor keeps showing the last code file. While authoring,
+     "Edit source" swaps the editor onto the markdown for a live preview. */
+  var lastCodeFile = MAIN;
+  var mdSourceOpen = false;
+
+  /* docs[] holds the Doc objects themselves, and swapDoc doesn't change their
+     identity, so there is nothing to write back when switching away. */
+  function showEditorDoc(name) {
+    if (editor.getDoc() !== docs[name]) editor.swapDoc(docs[name]);
     editor.setOption("mode", name === MAIN ? "python" : null);
     editor.setOption("readOnly", window.PYIDE.readonly ? "nocursor" : false);
+  }
+
+  function switchTo(name) {
+    if (!docs[name]) return;
+
+    if (window.PyIDENotes.isMarkdown(name)) {
+      active = name;
+      mdSourceOpen = false;
+      showEditorDoc(lastCodeFile);   // editor stays on the code
+      showNotes(name);
+      renderTabs();
+      relayout();
+      return;
+    }
+
+    if (name === active && !mdSourceOpen) return;
+    active = name;
+    lastCodeFile = name;
+    mdSourceOpen = false;
+    showEditorDoc(name);
+    showOutput();
     renderTabs();
     relayout();
     editor.focus();
@@ -219,7 +263,11 @@
       tab.appendChild(label);
       tab.addEventListener("click", function () { switchTo(name); });
 
-      if (name !== MAIN && !window.PYIDE.readonly) {
+      // notes belong to whoever wrote the assignment, so viewers and forkers
+      // get no way to delete them
+      var removable = name !== MAIN && !window.PYIDE.readonly &&
+        (!window.PyIDENotes.isMarkdown(name) || window.PYIDE.authoring);
+      if (removable) {
         var x = document.createElement("span");
         x.className = "tab-x";
         x.textContent = "×";
@@ -271,7 +319,33 @@
     });
   }
 
+  if (notesEditBtn) {
+    notesEditBtn.addEventListener("click", function () {
+      if (!window.PyIDENotes.isMarkdown(active)) return;
+      mdSourceOpen = !mdSourceOpen;
+      notesEditBtn.textContent = mdSourceOpen ? "Done" : "Edit source";
+      showEditorDoc(mdSourceOpen ? active : lastCodeFile);
+      relayout();
+      if (mdSourceOpen) editor.focus();
+    });
+  }
+
+  // live preview while the markdown source is open
+  editor.on("change", function () {
+    if (mdSourceOpen && window.PyIDENotes.isMarkdown(active)) {
+      window.PyIDENotes.render(notesBody, docs[active].getValue());
+    }
+  });
+
   renderTabs();
+
+  /* A shared assignment should open on the notes, not on main.py — otherwise
+     nobody reads them. Viewers only; while authoring you start in the code. */
+  (function openNotesForViewers() {
+    if (window.PYIDE.authoring) return;
+    var md = fileNames().filter(window.PyIDENotes.isMarkdown);
+    if (md.length) switchTo(md[0]);
+  })();
 
   // ---------------------------------------------------------------- output
   function write(text, cls) {
@@ -517,6 +591,7 @@
   async function runConsole(source) {
     setBusy(true, "console");
     stage.hidden = true;   // put the picture away when going back to text
+    showOutput();          // notes must not swallow the program's output
     relayout();
     clearOutput();
     await repaint();
@@ -544,6 +619,7 @@
 
   async function runGame(source) {
     setBusy(true, "game");
+    showOutput();
     clearOutput();
     await repaint();
 
