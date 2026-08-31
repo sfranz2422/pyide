@@ -29,9 +29,12 @@
   </div>
 
   <div class="actions">
+    <button id="mode" class="mode mode-console" type="button">Console</button>
     <button id="run" class="btn btn-run" disabled>
       <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
     </button>
+    <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    <button id="sprites-toggle" class="btn" aria-expanded="false">Sprites</button>
     {% if readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}
@@ -57,7 +60,14 @@
     <div class="editor-wrap"><textarea id="editor">{{ code }}</textarea></div>
   </section>
 
-  <section class="pane pane-output">
+  <section class="pane pane-right">
+    <div id="stage" class="stage" hidden>
+      <div class="pane-head"><span>Game</span></div>
+      <div class="stage-frame">
+        <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
+      </div>
+    </div>
+
     <div class="pane-head">
       <span>Output</span>
       <button id="clear" class="linkbtn">Clear</button>
@@ -65,6 +75,25 @@
     <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
   </section>
+
+  <aside id="sprites" class="pane pane-sprites" hidden>
+    <div class="pane-head">
+      <span>Sprites</span>
+      <button id="sprites-close" class="linkbtn">Close</button>
+    </div>
+    <div class="sprite-tools">
+      <input id="sprite-search" class="field" type="search" placeholder="Search sprites">
+    </div>
+    <div class="sprite-scroll">
+      <div id="sprite-grid" class="sprite-grid"><span class="dim">Loading…</span></div>
+      <p id="sprite-empty" class="dim sprite-empty" hidden>No sprite by that name.</p>
+      <div id="sound-section">
+        <div class="sprite-subhead">Sounds</div>
+        <div id="sound-list" class="chips"></div>
+      </div>
+    </div>
+    <p class="sprite-foot">Click a sprite to drop it into your code.</p>
+  </aside>
 </main>
 
 <div id="modal" class="modal" hidden>
@@ -92,6 +121,7 @@
     shareUrl: "{{ url_for('create_share') }}"
   };
 </script>
+<script src="{{ url_for('static', filename='game.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

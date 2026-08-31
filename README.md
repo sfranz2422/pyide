@@ -79,6 +79,70 @@ https://your-app.onrender.com/s/k3m9pqr/raw
 
 ---
 
+## Pygame Zero
+
+Students can write Pygame Zero games in the same editor, with no imports and no
+`pgzrun` boilerplate — exactly what they'd write locally:
+
+```python
+WIDTH = 600
+HEIGHT = 400
+bean = Actor('bean', (300, 200))
+
+def update(dt):
+    if keyboard.right:
+        bean.x += 4
+
+def draw():
+    screen.fill((120, 190, 230))
+    bean.draw()
+```
+
+**Mode is detected automatically.** Defining `draw()` or `update()` at the top
+level switches the editor into game mode: a canvas appears and the toolbar chip
+reads *Game*. Nothing in an ordinary console program looks like that, so it
+doesn't misfire. If it ever guesses wrong, click the chip to lock the mode by
+hand — a dot on the chip means it's locked.
+
+**Games run until stopped.** The 15-second limit applies to console programs
+only; a game loop is an infinite loop on purpose. Use the red **Stop** button,
+or press Escape.
+
+**Students must click the picture** before the keyboard reaches the game. The
+editor prints a reminder each time a game starts, but it's worth saying aloud on
+day one.
+
+The first game run downloads about 4 MB (pygame-ce, numpy, Pygame Zero) and is
+cached afterward. Console programs never pay that cost.
+
+### Sprites
+
+51 sprites from the KAPLAY game library are bundled and available by name, so
+`Actor('bean')` works with no setup. The **Sprites** button opens a searchable
+panel; clicking a sprite drops `Actor('name', (100, 100))` into the code at the
+cursor.
+
+`dino` is a nine-frame walk cycle in the original artwork, so the build script
+slices it into `dino_0` through `dino_8`. Flipping between those frames is how
+`examples/03_dino_run.py` animates. See `static/assets/CREDITS.md` for the
+license.
+
+### Adding sprites or sounds
+
+Put new artwork in a folder and re-run the build script:
+
+```bash
+python tools/build_assets.py "path/to/sprites" "path/to/sounds"
+```
+
+Sounds are `.wav` or `.ogg`. They appear in the Sprites panel and become
+available to student code as `sounds.<filename>.play()`. Browsers block audio
+until the student has interacted with the page — since they must click the
+canvas to play anyway, this rarely bites, but it explains any silent first run.
+
+To slice a new spritesheet into frames, add it to the `SHEETS` dictionary at the
+top of `tools/build_assets.py` with its frame count.
+
 ## Classroom behavior worth knowing
 
 - **Runaway loops stop themselves.** A line-tracing guard raises after 15
@@ -103,19 +167,29 @@ https://your-app.onrender.com/s/k3m9pqr/raw
 ## Files
 
 ```
-app.py              Flask app: pages, share API, database
-render.yaml         Render blueprint (web service + Postgres)
-requirements.txt    Python dependencies
+app.py                  Flask app: pages, share API, database
+render.yaml             Render blueprint (web service + Postgres)
+requirements.txt        Python dependencies
 templates/
-  index.html        The editor page, in both editable and read-only modes
-  404.html          Bad share link
+  index.html            The editor page, editable and read-only modes
+  404.html              Bad share link
 static/
-  app.js            CodeMirror setup, Pyodide runtime, share/download
-  style.css         All styling
+  app.js                Editor, console runtime, sprite panel, sharing
+  game.js               Pygame Zero: async game loop, asset loading
+  style.css             All styling
+  assets/
+    manifest.json       Generated — what the sprite panel reads
+    images/             60 sprite PNGs
+    sounds/             Empty; drop .wav/.ogg here and rebuild
+    CREDITS.md          Sprite licensing
+tools/
+  build_assets.py       Regenerates static/assets from source folders
+examples/               Pygame Zero starters, ready to share as links
 ```
 
 ## Possible next steps
 
-- **Starter templates** — a `/t/<name>` route that preloads assignment scaffolds
 - **Teacher dashboard** — a password-protected list of every shared snapshot
+- **Fork lineage** — record which starter a project was forked from, so
+  submissions can be grouped by assignment later
 - **Autosave** — persist the current buffer to `localStorage`
