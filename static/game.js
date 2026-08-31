@@ -12,7 +12,7 @@ window.PyIDEGame = (function () {
 
   // Installed into Python the first time a game is run.
   var BOOTSTRAP = [
-    "import asyncio, sys, types, traceback",
+    "import asyncio, linecache, sys, types, traceback",
     "import pygame",
     "import pgzero, pgzero.game, pgzero.loaders, pgzero.builtins, pgzero.clock",
     "",
@@ -34,6 +34,9 @@ window.PyIDEGame = (function () {
     "    mod.__dict__.update(pgzero.builtins.__dict__)",
     "    mod.__file__ = 'main.py'",
     "    sys.modules['__main__'] = mod",
+    "    # let tracebacks quote the student's own source lines",
+    "    linecache.cache['main.py'] = (",
+    "        len(source), None, source.splitlines(True), 'main.py')",
     "    exec(compile(source, 'main.py', 'exec'), mod.__dict__)",
     "    return mod",
     "",
@@ -53,6 +56,11 @@ window.PyIDEGame = (function () {
     "    _stop[0] = False",
     "    _frames[0] = 0",
     "    pygame.init()",
+    "    # A display surface must exist before the student's code runs: a",
+    "    # module-level Actor(...) loads its image and calls convert_alpha(),",
+    "    # which fails without one. Pygame Zero's own runner does exactly this.",
+    "    # reinit_screen() resizes to the real WIDTH/HEIGHT a moment later.",
+    "    pygame.display.set_mode((100, 100), pgzero.game.DISPLAY_FLAGS)",
     "    try:",
     "        mod = _build_module(source)",
     "    except SyntaxError as err:",
