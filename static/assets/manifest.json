@@ -301,5 +301,10 @@
    "h": 52
   }
  ],
- "sounds": []
+ "sounds": [
+  "burp.wav",
+  "electric.wav",
+  "electric_chime.wav",
+  "swoosh.wav"
+ ]
 }

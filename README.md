@@ -129,16 +129,34 @@ license.
 
 ### Adding sprites or sounds
 
-Put new artwork in a folder and re-run the build script:
+Point the build script at any folder on your computer — it doesn't have to be
+inside the project:
 
 ```bash
-python tools/build_assets.py "path/to/sprites" "path/to/sounds"
+# both at once
+python tools/build_assets.py --sprites ~/Desktop/sprites --sounds ~/Desktop/sounds
+
+# just the sounds; the sprites already built are left alone
+python tools/build_assets.py --sounds ~/Desktop/sounds
 ```
 
-Sounds are `.wav` or `.ogg`. They appear in the Sprites panel and become
-available to student code as `sounds.<filename>.play()`. Browsers block audio
-until the student has interacted with the page — since they must click the
-canvas to play anyway, this rarely bites, but it explains any silent first run.
+Whichever category you leave out is carried over unchanged, so updating sounds
+never disturbs the sprites.
+
+Two rules the script enforces, reporting anything it skips:
+
+- **Format.** Images are png/gif/jpg/jpeg/bmp; sounds are wav/ogg/oga. Pygame
+  Zero will not load `.mp3`. To convert:
+  `ffmpeg -i jump.mp3 jump.ogg`
+- **Name.** Filenames must be valid Python names — letters, digits and
+  underscores, starting with a letter — because student code reaches them as
+  `sounds.jump.play()`. `laser-2.ogg` and `3beep.ogg` won't work; `laser_2.ogg`
+  and `beep3.ogg` will.
+
+Sounds appear in the editor's Sprites panel and play with
+`sounds.<name>.play()`. Browsers block audio until the student has interacted
+with the page — since they must click the canvas anyway, this rarely bites, but
+it explains any silent first run.
 
 To slice a new spritesheet into frames, add it to the `SHEETS` dictionary at the
 top of `tools/build_assets.py` with its frame count.
