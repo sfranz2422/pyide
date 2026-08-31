@@ -117,20 +117,25 @@ window.PyIDEGame = (function () {
     "    return 'stopped'",
     "",
     "def reset_game_state():",
-    "    \"\"\"Clear scheduled callbacks and cached art between runs.\"\"\"",
+    "    \"\"\"Drop anything the previous run scheduled.",
+    "",
+    "    Loaded sprites and sounds are deliberately left alone: pgzero keeps them",
+    "    as attributes on the loader, and the bundled assets never change during a",
+    "    session, so holding them makes the next run start faster.",
+    "    \"\"\"",
     "    try:",
     "        pgzero.clock.clock.unschedule_all()",
     "    except Exception:",
     "        pass",
-    "    for loader in (pgzero.loaders.images, pgzero.loaders.sounds):",
-    "        try:",
-    "            loader._cache.clear()",
-    "        except Exception:",
-    "            pass",
+    "    try:",
+    "        pygame.mixer.stop()",
+    "    except Exception:",
+    "        pass",
     ""
   ].join("\n");
 
-  var ROOT = "/game";
+  var ROOT = "/game";          // bundled sprites and sounds
+  var PROJECT_DIR = "/project"; // the student's own files, same as console mode
   var ready = false;      // packages + bootstrap installed
   var assetsLoaded = false;
   var canvasBound = false;
@@ -175,10 +180,14 @@ window.PyIDEGame = (function () {
       pyodide.FS.writeFile(ROOT + "/" + job[0], bytes);
     }));
 
+    // Sprites are found through pgzero's explicit root, so the working
+    // directory stays on the project folder — that way open('scores.txt')
+    // means the same thing in a game as it does in a console program.
     pyodide.runPython(
       "import os, pgzero.loaders\n" +
-      "os.chdir('" + ROOT + "')\n" +
-      "pgzero.loaders.set_root('" + ROOT + "')\n"
+      "pgzero.loaders.set_root('" + ROOT + "')\n" +
+      "os.makedirs('" + PROJECT_DIR + "', exist_ok=True)\n" +
+      "os.chdir('" + PROJECT_DIR + "')\n"
     );
     assetsLoaded = true;
     return manifest;

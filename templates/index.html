@@ -12,6 +12,22 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  /* Runs before anything paints, so projecting in light mode never starts
+     with a flash of dark. No saved choice means follow the computer's. */
+  (function () {
+    try {
+      var saved = localStorage.getItem("pyide-theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+      var size = parseInt(localStorage.getItem("pyide-code-size"), 10);
+      if (size >= 11 && size <= 32) {
+        document.documentElement.style.setProperty("--code-size", size + "px");
+      }
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
 </head>
 
 <body>
@@ -41,6 +57,14 @@
       <button id="share" class="btn btn-primary">Share</button>
     {% endif %}
     <button id="download" class="btn">Download</button>
+    <div class="stepper" role="group" aria-label="Code text size">
+      <button id="font-down" class="step" title="Smaller code text">−</button>
+      <span id="font-size" class="step-value" aria-live="polite">14</span>
+      <button id="font-up" class="step" title="Bigger code text">+</button>
+    </div>
+    <button id="theme" class="btn btn-icon-only" title="Switch between light and dark">
+      <span id="theme-glyph">☾</span>
+    </button>
   </div>
 </header>
 
@@ -53,9 +77,11 @@
 
 <main class="split">
   <section class="pane pane-editor">
-    <div class="pane-head">
-      <span>main.py</span>
-      <span class="hint">Ctrl+Enter to run</span>
+    <div class="pane-head pane-head-tabs">
+      <div id="file-tabs" class="tabs" role="tablist"></div>
+      {% if not readonly %}
+        <button id="new-file" class="linkbtn" title="Add a data file your program can read">+ File</button>
+      {% endif %}
     </div>
     <div class="editor-wrap"><textarea id="editor">{{ code }}</textarea></div>
   </section>
@@ -118,7 +144,8 @@
 <script>
   window.PYIDE = {
     readonly: {{ 'true' if readonly else 'false' }},
-    shareUrl: "{{ url_for('create_share') }}"
+    shareUrl: "{{ url_for('create_share') }}",
+    files: {{ files | tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>

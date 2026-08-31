@@ -301,5 +301,29 @@
    "h": 52
   }
  ],
- "sounds": []
+ "sounds": [
+  "background.wav",
+  "beep.wav",
+  "burp.wav",
+  "chirp.wav",
+  "ding.wav",
+  "electric.wav",
+  "electric_chime.wav",
+  "electric_deep_pulse.wav",
+  "electric_portal_open.wav",
+  "electric_pulse.wav",
+  "electric_pulse_short.wav",
+  "electric_ringing.wav",
+  "fading_ding.wav",
+  "lazer2.wav",
+  "lazer_punch.wav",
+  "rising_beep.wav",
+  "scary_fading.wav",
+  "screech.wav",
+  "small_beep.wav",
+  "small_boom.wav",
+  "swing.wav",
+  "swoosh.wav",
+  "thump.wav"
+ ]
 }

@@ -39,11 +39,12 @@ SOFTWARE.
 
 ## Sounds
 
-`sounds/` is empty in this repository. Drop `.wav` or `.ogg` files in the source
-folder and re-run:
+`sounds/` holds 23 effects. Sounds must be `.wav` — the browser's SDL_mixer has
+no Vorbis decoder, so `.ogg` files fail at playback. To add more, drop `.wav`
+files in a folder and re-run:
 
 ```
-python tools/build_assets.py "path/to/sprites" "path/to/sounds"
+python tools/build_assets.py --sounds "path/to/sounds"
 ```
 
 They will appear in the editor's Sprites panel and become available to student

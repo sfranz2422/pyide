@@ -17,7 +17,8 @@ Folders can live anywhere on your computer; they do not have to be inside the
 project. Whichever category you don't name is carried over from the existing
 manifest, so updating sounds never disturbs the sprites.
 
-Pygame Zero accepts png/gif/jpg/jpeg/bmp for images and wav/ogg/oga for sounds.
+Images can be png/gif/jpg/jpeg/bmp. Sounds must be .wav — the browser build of
+SDL_mixer has no Vorbis decoder, so .ogg files load but refuse to play.
 Anything else is reported and skipped. Names must be valid Python identifiers,
 because student code reaches them as `sounds.jump.play()`.
 
@@ -37,7 +38,13 @@ import sys
 SHEETS = {"dino": 9}
 
 IMAGE_EXTS = (".png", ".gif", ".jpg", ".jpeg", ".bmp")
-SOUND_EXTS = (".wav", ".ogg", ".oga")
+# Pyodide's SDL_mixer 2.8.0 is built without Vorbis: .ogg raises
+# "Unrecognized audio format" at runtime. WAV is the only format that plays.
+SOUND_EXTS = (".wav",)
+
+# Every bundled asset is downloaded by each student's browser on the first game
+# run, so anything past this gets called out rather than quietly shipped.
+BIG_ASSET_BYTES = 1_000_000
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(HERE, "static", "assets")
@@ -77,6 +84,14 @@ def slice_sheet(src, name, frames, out_dir):
     return written
 
 
+def copy_into(src, dst_dir):
+    """Copy, unless the source folder already is the destination."""
+    dst = os.path.join(dst_dir, os.path.basename(src))
+    if os.path.abspath(src) == os.path.abspath(dst):
+        return  # pointed at the built folder itself; just re-index it
+    shutil.copy2(src, dst)
+
+
 def check_name(name, kind, skipped):
     if not IDENT.match(name):
         skipped.append(
@@ -105,7 +120,7 @@ def build_images(src_dir):
         if name in SHEETS:
             images.extend(slice_sheet(path, name, SHEETS[name], IMG_OUT))
             continue
-        shutil.copy2(path, os.path.join(IMG_OUT, fname))
+        copy_into(path, IMG_OUT)
         size = png_size(path) or (0, 0)
         images.append((name, size[0], size[1]))
     images.sort()
@@ -122,15 +137,15 @@ def build_sounds(src_dir):
         name, ext = os.path.splitext(fname)
         if ext.lower() not in SOUND_EXTS:
             hint = ""
-            if ext.lower() in (".mp3", ".m4a", ".aac", ".flac"):
-                hint = ("\n%s convert it first:  ffmpeg -i \"%s\" \"%s.ogg\""
+            if ext.lower() in (".mp3", ".m4a", ".aac", ".flac", ".ogg", ".oga"):
+                hint = ("\n%s convert it first:  ffmpeg -i \"%s\" \"%s.wav\""
                         % (" " * 44, fname, name))
-            skipped.append("%-42s Pygame Zero reads wav/ogg/oga, not %s%s"
+            skipped.append("%-42s only .wav plays in the browser, not %s%s"
                            % (fname, ext or "(no extension)", hint))
             continue
         if not check_name(name, "sound", skipped):
             continue
-        shutil.copy2(path, os.path.join(SND_OUT, fname))
+        copy_into(path, SND_OUT)
         sounds.append(fname)
     sounds.sort()
     return sounds, skipped
@@ -151,7 +166,7 @@ def main(argv=None):
         epilog="Name one or both. Whichever you leave out is kept as it is.",
     )
     ap.add_argument("--sprites", metavar="FOLDER", help="folder of image files")
-    ap.add_argument("--sounds", metavar="FOLDER", help="folder of wav/ogg files")
+    ap.add_argument("--sounds", metavar="FOLDER", help="folder of .wav files")
     args = ap.parse_args(argv)
 
     if not args.sprites and not args.sounds:
@@ -179,6 +194,33 @@ def main(argv=None):
 
     print("sprites: %d%s" % (len(images), "" if args.sprites else "  (unchanged)"))
     print("sounds:  %d%s" % (len(sounds), "" if args.sounds else "  (unchanged)"))
+
+    big = []
+    for folder, names in ((IMG_OUT, [i["name"] for i in images]), (SND_OUT, sounds)):
+        for n in names:
+            path = os.path.join(folder, n if "." in n else n + ".png")
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                continue
+            if size > BIG_ASSET_BYTES:
+                big.append((os.path.basename(path), size))
+
+    total = 0
+    for folder in (IMG_OUT, SND_OUT):
+        for n in os.listdir(folder):
+            fp = os.path.join(folder, n)
+            if os.path.isfile(fp):
+                total += os.path.getsize(fp)
+    print("bundle:  %.1f MB downloaded by each browser on the first game run"
+          % (total / 1_000_000))
+
+    if big:
+        print("\nLarge file(s) — every student downloads these:")
+        for n, size in sorted(big, key=lambda x: -x[1]):
+            print("  %-34s %6.1f MB" % (n, size / 1_000_000))
+        print("  .ogg won't play in the browser, so shrink the .wav instead:")
+        print("    ffmpeg -i big.wav -ar 22050 -ac 1 -sample_fmt s16 smaller.wav")
 
     if skipped:
         print("\nSkipped %d file(s):" % len(skipped))

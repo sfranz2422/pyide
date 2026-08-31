@@ -1,3 +1,5 @@
+/* Dark is the base palette. Light is defined once, below, and applied either
+   by an explicit choice (data-theme) or by the computer's own setting. */
 :root {
   --bg: #12151c;
   --bg-panel: #1a1e27;
@@ -7,12 +9,100 @@
   --muted: #8a94a8;
   --accent: #4f8cff;
   --accent-hover: #3d78e8;
+  --on-accent: #08182f;
   --green: #3ecf8e;
+  --green-hover: #35b87d;
+  --on-green: #0d2b1e;
   --red: #ff6b6b;
+  --on-red: #3a0d0d;
   --purple: #b79cff;
+
+  --hover-bg: #232936;
+  --hover-line: #40495b;
+  --sprite-hover: #1e2534;
+  --banner-bg: #1d2740;
+  --banner-line: #2b3a5e;
+  --banner-text: #c3d3f2;
+  --chip-game-bg: #221d38;
+  --chip-game-line: #3d3560;
+  --check-a: #171b23;
+  --check-b: #1c212b;
+  --shadow: rgba(0, 0, 0, .45);
+
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --bar-h: 56px;
+  --code-size: 14px;   /* editor + output only; the chrome never scales */
+
+  color-scheme: dark;
+}
+
+/* Light. Accent and status colours are darkened so they stay legible on a
+   classroom projector, which washes contrast out badly. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #ffffff;
+    --bg-panel: #f6f8fb;
+    --bg-head: #edf1f7;
+    --line: #ccd4e0;
+    --text: #161c28;
+    --muted: #55607a;
+    --accent: #1d4ed8;
+    --accent-hover: #1e40af;
+    --on-accent: #ffffff;
+    --green: #15803d;
+    --green-hover: #126c34;
+    --on-green: #ffffff;
+    --red: #b91c1c;
+    --on-red: #ffffff;
+    --purple: #6b21a8;
+
+    --hover-bg: #e3e9f2;
+    --hover-line: #9fadc4;
+    --sprite-hover: #eaf0fa;
+    --banner-bg: #e8eefb;
+    --banner-line: #b9c9ea;
+    --banner-text: #24365e;
+    --chip-game-bg: #f0e9fb;
+    --chip-game-line: #cdb6ea;
+    --check-a: #e9edf4;
+    --check-b: #dfe5ef;
+    --shadow: rgba(24, 34, 54, .18);
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-panel: #f6f8fb;
+  --bg-head: #edf1f7;
+  --line: #ccd4e0;
+  --text: #161c28;
+  --muted: #55607a;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --on-accent: #ffffff;
+  --green: #15803d;
+  --green-hover: #126c34;
+  --on-green: #ffffff;
+  --red: #b91c1c;
+  --on-red: #ffffff;
+  --purple: #6b21a8;
+
+  --hover-bg: #e3e9f2;
+  --hover-line: #9fadc4;
+  --sprite-hover: #eaf0fa;
+  --banner-bg: #e8eefb;
+  --banner-line: #b9c9ea;
+  --banner-text: #24365e;
+  --chip-game-bg: #f0e9fb;
+  --chip-game-line: #cdb6ea;
+  --check-a: #e9edf4;
+  --check-b: #dfe5ef;
+  --shadow: rgba(24, 34, 54, .18);
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -91,7 +181,7 @@ html, body {
   cursor: pointer;
   white-space: nowrap;
 }
-.btn:hover:not(:disabled) { border-color: #40495b; background: #232936; }
+.btn:hover:not(:disabled) { border-color: var(--hover-line); background: var(--hover-bg); }
 .btn:disabled { opacity: .5; cursor: default; }
 /* .btn sets display, which would otherwise beat the browser's [hidden] rule */
 .btn[hidden] { display: none; }
@@ -99,27 +189,70 @@ html, body {
 .btn-run {
   background: var(--green);
   border-color: var(--green);
-  color: #0d2b1e;
+  color: var(--on-green);
   font-weight: 650;
   min-width: 104px;
   justify-content: center;
 }
-.btn-run:hover:not(:disabled) { background: #35b87d; border-color: #35b87d; }
+.btn-run:hover:not(:disabled) { background: var(--green-hover); border-color: var(--green-hover); }
 .btn-icon { font-size: 11px; }
+
+.btn-icon-only {
+  padding: 8px 11px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Code text size. Deliberately separate from browser zoom, which blows the
+   toolbar up along with the code. */
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.step {
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.step:hover:not(:disabled) { background: var(--hover-bg); }
+.step:disabled { opacity: .35; cursor: default; }
+
+.step-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 
 .btn-stop {
   background: var(--red);
   border-color: var(--red);
-  color: #3a0d0d;
+  color: var(--on-red);
   font-weight: 650;
 }
-.btn-stop:hover:not(:disabled) { background: #f05555; border-color: #f05555; }
+.btn-stop:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-stop[hidden] { display: none; }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 .btn-primary:hover:not(:disabled) {
@@ -129,13 +262,13 @@ html, body {
 
 /* ---------------------------------------------------------------- banner */
 .banner {
-  background: #1d2740;
-  border-bottom: 1px solid #2b3a5e;
-  color: #c3d3f2;
+  background: var(--banner-bg);
+  border-bottom: 1px solid var(--banner-line);
+  color: var(--banner-text);
   font-size: 13px;
   padding: 9px 16px;
 }
-.banner strong { color: #fff; }
+.banner strong { color: var(--text); }
 
 /* ----------------------------------------------------------------- panes */
 .split {
@@ -169,6 +302,55 @@ html, body {
 }
 .hint { text-transform: none; font-weight: 400; letter-spacing: 0; }
 
+/* ------------------------------------------------------------ file tabs */
+.pane-head-tabs { padding: 0 12px 0 0; gap: 8px; }
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 9px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); background: var(--hover-bg); }
+.tab-on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  background: var(--bg-panel);
+}
+
+.tab-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+.tab-x:hover { background: var(--red); color: var(--on-red); }
+
 .linkbtn {
   background: none;
   border: 0;
@@ -194,10 +376,29 @@ html, body {
   inset: 0;
   height: 100%;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: var(--code-size);
   line-height: 1.6;
 }
 .CodeMirror-gutters { border-right: 1px solid var(--line); }
+
+/* CodeMirror's built-in light theme, retuned for a projector. Its own comment
+   colour (#a50) only reaches 5.2:1 on white; #7a3e00 reaches 8.3:1, and the
+   operator purple is darkened for the same reason. */
+.cm-s-default { background: var(--bg); color: var(--text); }
+.cm-s-default .CodeMirror-gutters { background: var(--bg); }
+.cm-s-default .CodeMirror-linenumber { color: var(--muted); }
+.cm-s-default .CodeMirror-cursor { border-left-color: var(--text); }
+.cm-s-default .CodeMirror-selected { background: #cfe0fb; }
+.cm-s-default.CodeMirror-focused .CodeMirror-selected { background: #b9d3f8; }
+.cm-s-default .CodeMirror-activeline-background { background: #eef3fb; }
+.cm-s-default .cm-comment { color: #7a3e00; }
+.cm-s-default .cm-operator { color: #6b21a8; }
+
+/* material-darker renders comments and line numbers at #545454, only 2.1:1
+   against its own background — close to invisible, and lesson code is full of
+   explanatory comments. Lifted to 5.7:1. */
+.cm-s-material-darker .cm-comment { color: #909d90; }
+.cm-s-material-darker .CodeMirror-linenumber { color: #8b9499; }
 
 /* ---------------------------------------------------------------- output */
 .output {
@@ -206,7 +407,7 @@ html, body {
   padding: 14px;
   overflow: auto;
   font-family: var(--mono);
-  font-size: 13.5px;
+  font-size: var(--code-size);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -231,9 +432,9 @@ html, body {
   cursor: pointer;
   white-space: nowrap;
 }
-.mode:hover { color: var(--text); border-color: #40495b; }
+.mode:hover { color: var(--text); border-color: var(--hover-line); }
 .mode-console { color: var(--muted); }
-.mode-game { color: var(--purple); border-color: #3d3560; background: #221d38; }
+.mode-game { color: var(--purple); border-color: var(--chip-game-line); background: var(--chip-game-bg); }
 .mode-pinned::after { content: " •"; }
 
 /* --------------------------------------------------------------- stage */
@@ -251,14 +452,14 @@ html, body {
   justify-content: center;
   padding: 12px;
   background:
-    repeating-conic-gradient(#171b23 0% 25%, #1c212b 0% 50%) 50% / 18px 18px;
+    repeating-conic-gradient(var(--check-a) 0% 25%, var(--check-b) 0% 50%) 50% / 18px 18px;
 }
 #canvas {
   max-width: 100%;
   height: auto;
   background: #000;
   border-radius: 4px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
+  box-shadow: 0 4px 18px var(--shadow);
   image-rendering: pixelated;
 }
 #canvas:focus { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -297,7 +498,7 @@ body.is-game .pane-right .output { flex: 1 1 auto; min-height: 90px; }
   cursor: pointer;
   font: inherit;
 }
-.sprite:hover { border-color: var(--accent); background: #1e2534; }
+.sprite:hover { border-color: var(--accent); background: var(--sprite-hover); }
 .sprite:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sprite[hidden] { display: none; }
 

@@ -41,6 +41,238 @@
   });
   editor.setSize("100%", "100%");
 
+  /* CodeMirror caches its own width and only rechecks on a window resize.
+     Showing the canvas or the sprite panel resizes the editor without any
+     resize event, leaving those measurements stale — clicks then land on the
+     wrong characters and the caret looks stuck. Tell it after the CSS lands.
+
+     A timeout rather than requestAnimationFrame: rAF is paused in a background
+     tab, so a student switching tabs mid-lesson would come back to a dead
+     caret. */
+  function relayout() {
+    setTimeout(function () { editor.refresh(); }, 0);
+  }
+
+  // ----------------------------------------------------------------- theme
+  /* Light mode exists mainly for projecting the editor in class, where a dark
+     screen washes out. The choice is remembered per browser; with none saved
+     the computer's own light/dark setting decides. */
+  var THEME_KEY = "pyide-theme";
+  var themeBtn = $("theme");
+  var themeGlyph = $("theme-glyph");
+
+  function systemPrefersLight() {
+    return window.matchMedia &&
+           window.matchMedia("(prefers-color-scheme: light)").matches;
+  }
+
+  function currentTheme() {
+    var set = document.documentElement.getAttribute("data-theme");
+    if (set === "light" || set === "dark") return set;
+    return systemPrefersLight() ? "light" : "dark";
+  }
+
+  function applyTheme(name, remember) {
+    document.documentElement.setAttribute("data-theme", name);
+    // CodeMirror carries its own colours, so it needs telling separately
+    editor.setOption("theme", name === "light" ? "default" : "material-darker");
+    themeGlyph.textContent = name === "light" ? "☾" : "☀";
+    themeBtn.title = name === "light"
+      ? "Switch to dark (easier on the eyes up close)"
+      : "Switch to light (easier to read on a projector)";
+    themeBtn.setAttribute("aria-label", themeBtn.title);
+    if (remember) {
+      try { localStorage.setItem(THEME_KEY, name); } catch (e) { /* blocked */ }
+    }
+    relayout();
+  }
+
+  applyTheme(currentTheme(), false);
+
+  themeBtn.addEventListener("click", function () {
+    applyTheme(currentTheme() === "light" ? "dark" : "light", true);
+  });
+
+  // Follow the computer's setting as it changes, until a choice is made here.
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: light)");
+    var onSystemChange = function () {
+      var saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* blocked */ }
+      if (saved !== "light" && saved !== "dark") {
+        applyTheme(systemPrefersLight() ? "light" : "dark", false);
+      }
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onSystemChange);
+    else if (mq.addListener) mq.addListener(onSystemChange);
+  }
+
+  // ------------------------------------------------------------- text size
+  /* Scales the editor and the output pane together, and nothing else — the
+     point is to project readable code without the toolbar ballooning the way
+     browser zoom makes it. */
+  var SIZE_KEY = "pyide-code-size";
+  var SIZES = [11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32];
+  var sizeLabel = $("font-size");
+  var sizeDown = $("font-down");
+  var sizeUp = $("font-up");
+
+  function readSize() {
+    var css = getComputedStyle(document.documentElement)
+      .getPropertyValue("--code-size");
+    var n = parseInt(css, 10);
+    return isNaN(n) ? 14 : n;
+  }
+
+  function nearestIndex(px) {
+    var best = 0;
+    for (var i = 1; i < SIZES.length; i++) {
+      if (Math.abs(SIZES[i] - px) < Math.abs(SIZES[best] - px)) best = i;
+    }
+    return best;
+  }
+
+  var sizeIndex = nearestIndex(readSize());
+
+  function applySize(remember) {
+    var px = SIZES[sizeIndex];
+    document.documentElement.style.setProperty("--code-size", px + "px");
+    sizeLabel.textContent = String(px);
+    sizeDown.disabled = sizeIndex === 0;
+    sizeUp.disabled = sizeIndex === SIZES.length - 1;
+    // CodeMirror measures character width once; it must remeasure after this
+    relayout();
+    if (remember) {
+      try { localStorage.setItem(SIZE_KEY, String(px)); } catch (e) { /* blocked */ }
+    }
+  }
+
+  function stepSize(by) {
+    var next = Math.min(SIZES.length - 1, Math.max(0, sizeIndex + by));
+    if (next === sizeIndex) return;
+    sizeIndex = next;
+    applySize(true);
+  }
+
+  sizeDown.addEventListener("click", function () { stepSize(-1); });
+  sizeUp.addEventListener("click", function () { stepSize(1); });
+  applySize(false);
+
+  // ----------------------------------------------------------------- files
+  /* main.py is the program; every other file is data it can open(). Each file
+     keeps its own CodeMirror document, so switching tabs preserves the caret
+     and the undo history. */
+  var MAIN = "main.py";
+  var PROJECT_DIR = "/project";
+  var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
+
+  var docs = {};
+  var active = MAIN;
+  var tabsEl = $("file-tabs");
+
+  docs[MAIN] = editor.getDoc();
+
+  function makeDoc(text) { return CodeMirror.Doc(text, null); }
+
+  Object.keys(window.PYIDE.files || {}).sort().forEach(function (name) {
+    docs[name] = makeDoc(window.PYIDE.files[name]);
+  });
+
+  function mainSource() { return docs[MAIN].getValue(); }
+
+  function dataFiles() {
+    var out = {};
+    Object.keys(docs).forEach(function (n) {
+      if (n !== MAIN) out[n] = docs[n].getValue();
+    });
+    return out;
+  }
+
+  function fileNames() {
+    return [MAIN].concat(Object.keys(docs).filter(function (n) {
+      return n !== MAIN;
+    }).sort());
+  }
+
+  function switchTo(name) {
+    if (!docs[name] || name === active) return;
+    docs[active] = editor.swapDoc(docs[name]);
+    active = name;
+    editor.setOption("mode", name === MAIN ? "python" : null);
+    editor.setOption("readOnly", window.PYIDE.readonly ? "nocursor" : false);
+    renderTabs();
+    relayout();
+    editor.focus();
+  }
+
+  function renderTabs() {
+    tabsEl.textContent = "";
+    fileNames().forEach(function (name) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "tab" + (name === active ? " tab-on" : "");
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(name === active));
+
+      var label = document.createElement("span");
+      label.textContent = name;
+      tab.appendChild(label);
+      tab.addEventListener("click", function () { switchTo(name); });
+
+      if (name !== MAIN && !window.PYIDE.readonly) {
+        var x = document.createElement("span");
+        x.className = "tab-x";
+        x.textContent = "×";
+        x.title = "Remove " + name;
+        x.addEventListener("click", function (e) {
+          e.stopPropagation();
+          removeFile(name);
+        });
+        tab.appendChild(x);
+      }
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function addFile(name, text) {
+    docs[name] = makeDoc(text || "");
+    renderTabs();
+  }
+
+  function removeFile(name) {
+    if (name === MAIN) return;
+    if (!window.confirm("Remove " + name + " from this project?")) return;
+    if (active === name) {
+      active = MAIN;
+      editor.swapDoc(docs[MAIN]);
+      editor.setOption("mode", "python");
+    }
+    delete docs[name];
+    try { pyodide.FS.unlink(PROJECT_DIR + "/" + name); } catch (e) { /* not written yet */ }
+    renderTabs();
+    relayout();
+  }
+
+  var newFileBtn = $("new-file");
+  if (newFileBtn) {
+    newFileBtn.addEventListener("click", function () {
+      var name = (window.prompt(
+        "Name for the new file, with an extension:", "data.txt") || "").trim();
+      if (!name) return;
+      if (!NAME_OK.test(name) || /\.py$/i.test(name)) {
+        write("\n'" + name + "' won't work as a file name. Use letters, digits," +
+              " dashes and underscores, ending in something like .txt or .csv." +
+              "\n", "err");
+        return;
+      }
+      if (docs[name]) { switchTo(name); return; }
+      addFile(name, "");
+      switchTo(name);
+    });
+  }
+
+  renderTabs();
+
   // ---------------------------------------------------------------- output
   function write(text, cls) {
     var node = document.createElement("span");
@@ -76,14 +308,15 @@
     var isGame = mode === "game";
     spritesToggle.hidden = !isGame;
     if (!isGame) closeSprites();
+    relayout();
   }
 
-  function refreshMode() { paintMode(currentMode(editor.getValue())); }
+  function refreshMode() { paintMode(currentMode(mainSource())); }
 
   editor.on("change", function () { if (!running) refreshMode(); });
 
   modeTag.addEventListener("click", function () {
-    var now = currentMode(editor.getValue());
+    var now = currentMode(mainSource());
     // click cycles: auto -> pinned to the other mode -> auto
     modeOverride = modeOverride ? null : (now === "game" ? "console" : "game");
     refreshMode();
@@ -97,8 +330,14 @@
   // Wraps console programs so that input() uses a browser prompt, a tracing
   // guard stops runaway loops, and tracebacks show only the student's frames.
   var BOOTSTRAP = [
-    "import builtins, linecache, sys, time, traceback",
+    "import builtins, linecache, os, sys, time, traceback",
     "import js",
+    "",
+    "# Console programs get their own folder, so open('notes.txt') always lands",
+    "# somewhere predictable — and never in the game's asset folder, which a",
+    "# previous run may have left as the working directory.",
+    "PROJECT_DIR = '/project'",
+    "os.makedirs(PROJECT_DIR, exist_ok=True)",
     "",
     "_deadline = [0.0]",
     "_limit = [0.0]",
@@ -125,6 +364,8 @@
     "    _limit[0] = seconds",
     "    _deadline[0] = time.monotonic() + seconds",
     "    ticks = [0]",
+    "    os.makedirs(PROJECT_DIR, exist_ok=True)",
+    "    os.chdir(PROJECT_DIR)",
     "    # let tracebacks quote the student's own source lines",
     "    linecache.cache['main.py'] = (",
     "        len(source), None, source.splitlines(True), 'main.py')",
@@ -209,6 +450,54 @@
     });
   }
 
+  /* Attached files are written into Python's filesystem before the program
+     runs, and read back afterwards so anything the program created with
+     open('out.txt', 'w') shows up as a tab the student can open. */
+  function pushFilesToPython() {
+    if (!pyodide) return;
+    pyodide.FS.mkdirTree(PROJECT_DIR);
+    var files = dataFiles();
+    Object.keys(files).forEach(function (name) {
+      pyodide.FS.writeFile(PROJECT_DIR + "/" + name,
+                           new TextEncoder().encode(files[name]));
+    });
+  }
+
+  function pullFilesFromPython() {
+    if (!pyodide) return;
+    var entries;
+    try { entries = pyodide.FS.readdir(PROJECT_DIR); } catch (e) { return; }
+    var appeared = [];
+
+    entries.forEach(function (name) {
+      if (name === "." || name === ".." || name === MAIN) return;
+      var path = PROJECT_DIR + "/" + name;
+      try {
+        if (pyodide.FS.isDir(pyodide.FS.stat(path).mode)) return;
+      } catch (e) { return; }
+
+      var text;
+      try {
+        // fatal:true so an image or other binary is skipped, not mangled
+        text = new TextDecoder("utf-8", { fatal: true })
+          .decode(pyodide.FS.readFile(path));
+      } catch (e) { return; }
+
+      if (!docs[name]) {
+        addFile(name, text);
+        appeared.push(name);
+      } else if (docs[name].getValue() !== text) {
+        docs[name].setValue(text);
+      }
+    });
+
+    renderTabs();
+    if (appeared.length) {
+      write("\nYour program wrote " + appeared.join(", ") +
+            " — open the tab to see it.\n", "dim");
+    }
+  }
+
   function setBusy(isRunning, mode) {
     running = isRunning;
     runBtn.disabled = isRunning;
@@ -219,7 +508,7 @@
   // ---------------------------------------------------------------- run it
   async function run() {
     if (running || !pyRun) return;
-    var source = editor.getValue();
+    var source = mainSource();
     var mode = currentMode(source);
     paintMode(mode);
     return mode === "game" ? runGame(source) : runConsole(source);
@@ -228,6 +517,7 @@
   async function runConsole(source) {
     setBusy(true, "console");
     stage.hidden = true;   // put the picture away when going back to text
+    relayout();
     clearOutput();
     await repaint();
 
@@ -240,12 +530,14 @@
       /* an unavailable import surfaces as a normal ModuleNotFoundError below */
     }
 
+    pushFilesToPython();
     try {
       var result = pyRun(source, TIME_LIMIT_SECONDS);
       if (result === "ok") write("\n— finished —\n", "dim");
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
+      pullFilesFromPython();
       setBusy(false, "console");
     }
   }
@@ -269,8 +561,10 @@
     clearOutput();
     write("Game running. Click the picture first so the keys reach it.\n", "dim");
     stage.hidden = false;
+    relayout();
     canvas.focus();
 
+    pushFilesToPython();
     try {
       pyodide.runPython("reset_game_state()");
       var result = await pyodide.runPythonAsync(
@@ -280,6 +574,7 @@
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
+      pullFilesFromPython();
       setBusy(false, "game");
     }
   }
@@ -305,6 +600,8 @@
 
   function insertAtCursor(text) {
     if (window.PYIDE.readonly) return;
+    // sprites belong in the program, not in a data file
+    if (active !== MAIN) switchTo(MAIN);
     editor.replaceSelection(text, "end");
     editor.focus();
   }
@@ -360,12 +657,14 @@
   function closeSprites() {
     panel.setAttribute("hidden", "");
     spritesToggle.setAttribute("aria-expanded", "false");
+    relayout();
   }
 
   function openSprites() {
     panel.removeAttribute("hidden");
     spritesToggle.setAttribute("aria-expanded", "true");
     fillSpritePanel();
+    relayout();
   }
 
   spritesToggle.addEventListener("click", function () {
@@ -418,7 +717,8 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            code: editor.getValue(),
+            code: mainSource(),
+            files: dataFiles(),
             title: $("title").value,
             author: $("author").value
           })
@@ -462,7 +762,7 @@
   // -------------------------------------------------------------- download
   $("download").addEventListener("click", function () {
     var name = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
-    var blob = new Blob([editor.getValue()], { type: "text/x-python" });
+    var blob = new Blob([mainSource()], { type: "text/x-python" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name + ".py";

@@ -6,6 +6,7 @@ WebAssembly). The server only stores and serves shared code snapshots, so
 there is no sandboxing or CPU cost per student run.
 """
 
+import json
 import os
 import re
 import secrets
@@ -28,8 +29,15 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 # --------------------------------------------------------------------------
 
 MAX_CODE_BYTES = 200_000          # ~200 KB, generous for a class assignment
+MAX_FILES = 12
+MAX_FILE_BYTES = 100_000          # per attached data file
+MAX_FILES_TOTAL = 400_000         # all attached files together
 ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alike characters
 ID_LENGTH = 7
+
+# Data files students can attach. Any text file with a safe name and an
+# extension is fine; .py is reserved so there is exactly one thing that runs.
+FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
 
 DEFAULT_CODE = '''# Welcome to Python!
 # Write your code here, then press Run (or Ctrl+Enter).
@@ -68,8 +76,17 @@ class Snippet(Base):
     title = Column(String(120), nullable=False, default="Untitled")
     author = Column(String(80), nullable=False, default="")
     code = Column(Text, nullable=False)
+    # attached data files, as a JSON object of {filename: contents}
+    files = Column(Text, nullable=False, default="{}")
     created_at = Column(DateTime, nullable=False,
                         default=lambda: datetime.now(timezone.utc))
+
+    def file_map(self) -> dict:
+        try:
+            data = json.loads(self.files or "{}")
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
 
 
 engine = create_engine(
@@ -81,6 +98,34 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 Base.metadata.create_all(engine)
+
+
+def _add_missing_columns() -> None:
+    """Bring an older deployment's table up to date.
+
+    create_all() only creates missing tables, never missing columns, so a
+    database written before attached files existed would break on the first
+    query. Adding the column is idempotent and cheap; anything already correct
+    raises and is ignored.
+    """
+    from sqlalchemy import inspect, text
+
+    try:
+        existing = {c["name"] for c in inspect(engine).get_columns("snippets")}
+    except Exception:
+        return
+    if "files" in existing:
+        return
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE snippets ADD COLUMN files TEXT NOT NULL DEFAULT '{}'"
+            ))
+        except Exception:
+            pass
+
+
+_add_missing_columns()
 
 
 def new_slug(db) -> str:
@@ -97,6 +142,40 @@ def clean(value, limit) -> str:
     return value[:limit]
 
 
+def validate_files(raw):
+    """Check an incoming {name: contents} map. Returns (files, error)."""
+    if raw in (None, ""):
+        return {}, None
+    if not isinstance(raw, dict):
+        return None, "Those attached files could not be read."
+    if len(raw) > MAX_FILES:
+        return None, "A project can hold at most %d files." % MAX_FILES
+
+    files, total = {}, 0
+    for name, body in raw.items():
+        name = str(name).strip()
+        # no directories, no traversal — these are plain names in one folder
+        if "/" in name or "\\" in name or name in (".", ".."):
+            return None, "'%s' is not a valid file name." % name
+        if not FILE_NAME.match(name):
+            return None, ("'%s' is not a valid file name. Use letters, digits, "
+                          "dashes and underscores, and end with an extension "
+                          "like .txt or .csv." % name)
+        if name.lower().endswith(".py"):
+            return None, ("'%s' can't be saved — main.py is the program, and "
+                          "other files are data it reads." % name)
+        if not isinstance(body, str):
+            return None, "'%s' could not be read as text." % name
+        size = len(body.encode("utf-8"))
+        if size > MAX_FILE_BYTES:
+            return None, "'%s' is too large to save." % name
+        total += size
+        if total > MAX_FILES_TOTAL:
+            return None, "Those files are too large to save together."
+        files[name] = body
+    return files, None
+
+
 # --------------------------------------------------------------------------
 # App
 # --------------------------------------------------------------------------
@@ -109,6 +188,7 @@ def index():
     return render_template(
         "index.html",
         code=DEFAULT_CODE,
+        files={},
         title="Untitled",
         author="",
         readonly=False,
@@ -127,6 +207,7 @@ def view_shared(slug):
         return render_template(
             "index.html",
             code=snip.code,
+            files=snip.file_map(),
             title=snip.title,
             author=snip.author,
             readonly=True,
@@ -148,6 +229,7 @@ def fork_shared(slug):
         return render_template(
             "index.html",
             code=snip.code,
+            files=snip.file_map(),
             title=f"Copy of {snip.title}",
             author="",
             readonly=False,
@@ -185,6 +267,10 @@ def create_share():
         return jsonify(error="Put your name in before sharing.",
                        field="author"), 400
 
+    files, file_error = validate_files(data.get("files"))
+    if file_error:
+        return jsonify(error=file_error), 400
+
     db = SessionLocal()
     try:
         snip = Snippet(
@@ -192,6 +278,7 @@ def create_share():
             title=clean(data.get("title"), 120) or "Untitled",
             author=author,
             code=code,
+            files=json.dumps(files),
         )
         db.add(snip)
         db.commit()

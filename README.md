@@ -74,6 +74,30 @@ under yours.
 
 **Download** saves the file to disk if they want a local copy.
 
+### Code text size
+
+The **− 14 +** stepper scales the editor and the output pane together, and
+nothing else. Browser zoom (Cmd +) enlarges the toolbar and inputs along with
+the code; this leaves the chrome alone, so a projected editor can run at 22 or
+24 while the interface stays a normal size.
+
+Steps are 11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32. The size is remembered per
+browser, so your projection machine keeps its setting without affecting anyone
+else. It applies on shared projects too, so a student opening a link on a small
+screen can size it to suit.
+
+### Light and dark
+
+The ☀/☾ button in the toolbar switches themes, and the choice sticks in that
+browser. With no choice made the editor follows the computer's own light/dark
+setting, so a machine set to light opens light.
+
+Light mode is tuned for projecting: the blues, greens and reds are darker than
+a typical light theme, and comment colour is overridden, because a projector
+flattens contrast badly. Every text colour in both themes clears 5:1 against
+its background — CodeMirror's stock themes don't (its dark comments sit at
+2.1:1, near invisible on a screen at the back of a room).
+
 ### For grading
 
 Have students paste their share link into your LMS. Add `/raw` to any share URL
@@ -84,6 +108,44 @@ https://your-app.onrender.com/s/k3m9pqr/raw
 ```
 
 ---
+
+## File handling
+
+Tabs above the editor hold the project's files. `main.py` is the program;
+every other tab is a data file it can `open()`.
+
+**+ File** adds one. Name it with an extension (`scores.txt`, `names.csv`) and
+type the contents straight into the editor. Before each run the files are
+written into Python's filesystem, so this works with no setup:
+
+```python
+with open("scores.txt") as f:
+    for line in f:
+        name, score = line.strip().split(",")
+        print(name, "scored", score)
+```
+
+**Files the program writes appear as new tabs.** After a run the editor checks
+the folder again, so `open("report.txt", "w")` produces a `report.txt` tab the
+student can open and read. That's the part that makes writing files feel real
+rather than theoretical — the output pane even says which files appeared.
+
+Files travel with the share link, so a starter project can ship its data. Make
+the project, attach the file, press Share, and hand out the link: students fork
+it and the data is already there. `examples/04_read_a_file/` is a worked
+version — paste `main.py` in, add a `scores.txt` tab with that content, and
+share it.
+
+Some details worth knowing:
+
+- Files live in the browser only and vanish on reload unless the project was
+  shared. Tell students to share before they close the tab.
+- `.py` files other than `main.py` aren't allowed — there is exactly one thing
+  that runs, which avoids a lot of confusion about imports.
+- A file the program writes as binary (an image, say) is skipped rather than
+  shown as garbled text.
+- Games can read and write files too; sprites and data files coexist.
+- Twelve files per project, 100 KB each.
 
 ## Pygame Zero
 
@@ -153,15 +215,38 @@ python tools/build_assets.py --sounds ~/Desktop/sounds
 Whichever category you leave out is carried over unchanged, so updating sounds
 never disturbs the sprites.
 
+Pointing it at `static/assets/sounds` itself is fine — it re-indexes in place
+rather than trying to copy files onto themselves.
+
 Two rules the script enforces, reporting anything it skips:
 
-- **Format.** Images are png/gif/jpg/jpeg/bmp; sounds are wav/ogg/oga. Pygame
-  Zero will not load `.mp3`. To convert:
-  `ffmpeg -i jump.mp3 jump.ogg`
+- **Format.** Images are png/gif/jpg/jpeg/bmp. **Sounds must be `.wav`.** The
+  browser build of SDL_mixer (2.8.0) has no Vorbis decoder, so an `.ogg` is
+  found but fails with "Unrecognized audio format" the moment it plays. To
+  convert: `ffmpeg -i jump.mp3 jump.wav`
 - **Name.** Filenames must be valid Python names — letters, digits and
   underscores, starting with a letter — because student code reaches them as
-  `sounds.jump.play()`. `laser-2.ogg` and `3beep.ogg` won't work; `laser_2.ogg`
-  and `beep3.ogg` will.
+  `sounds.jump.play()`. `laser-2.wav` and `3beep.wav` won't work; `laser_2.wav`
+  and `beep3.wav` will.
+
+### Keeping the bundle small
+
+Every bundled asset is downloaded by each student's browser on the first game
+run, so the build script prints the running total and flags anything over 1 MB.
+
+WAV is uncompressed and long music tracks get very large — a 108-second track at
+44.1 kHz is 9.3 MB on its own. Since `.ogg` isn't an option, shrink the WAV:
+
+```bash
+# halves it, and at classroom volume the difference is hard to hear
+ffmpeg -i background.wav -ar 22050 -ac 1 -c:a pcm_s16le background_small.wav
+
+# eighth the size, fine for background music, audibly rougher for effects
+ffmpeg -i background.wav -ar 11025 -ac 1 -c:a pcm_u8 background_small.wav
+```
+
+Short effects are already small — all 22 of ours together come to well under
+1 MB.
 
 Sounds appear in the editor's Sprites panel and play with
 `sounds.<name>.play()`. Browsers block audio until the student has interacted
@@ -208,11 +293,11 @@ static/
   assets/
     manifest.json       Generated — what the sprite panel reads
     images/             60 sprite PNGs
-    sounds/             Empty; drop .wav/.ogg here and rebuild
+    sounds/             23 sound effects (.wav only)
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
-examples/               Pygame Zero starters, ready to share as links
+examples/               Pygame Zero and file-handling starters
 ```
 
 ## Possible next steps
