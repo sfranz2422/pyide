@@ -13,6 +13,11 @@
   var modeTag = $("mode");
   var stage = $("stage");
   var canvas = $("canvas");
+  var spritesToggle = $("sprites-toggle");
+  var authorField = $("author");
+  var panel = $("sprites");
+  var spriteGrid = $("sprite-grid");
+  var soundList = $("sound-list");
 
   // ---------------------------------------------------------------- editor
   var editor = CodeMirror.fromTextArea($("editor"), {
@@ -66,6 +71,11 @@
       ? "Locked to " + mode + " mode. Click to go back to automatic."
       : "Detected automatically from your code. Click to lock the mode.";
     document.body.classList.toggle("is-game", mode === "game");
+
+    // Sprites are only meaningful to a game, so the button appears with one.
+    var isGame = mode === "game";
+    spritesToggle.hidden = !isGame;
+    if (!isGame) closeSprites();
   }
 
   function refreshMode() { paintMode(currentMode(editor.getValue())); }
@@ -78,6 +88,10 @@
     modeOverride = modeOverride ? null : (now === "game" ? "console" : "game");
     refreshMode();
   });
+
+  // Paint the mode before Python loads, so opening a shared game project shows
+  // the Sprites button straight away rather than several seconds later.
+  refreshMode();
 
   // --------------------------------------------------------------- runtime
   // Wraps console programs so that input() uses a browser prompt, a tracing
@@ -287,9 +301,6 @@
   canvas.addEventListener("mousedown", function () { canvas.focus(); });
 
   // --------------------------------------------------------- sprite panel
-  var panel = $("sprites");
-  var spriteGrid = $("sprite-grid");
-  var soundList = $("sound-list");
   var spritesFetched = false;
 
   function insertAtCursor(text) {
@@ -346,11 +357,20 @@
     }
   }
 
-  $("sprites-toggle").addEventListener("click", function () {
-    var open = panel.hasAttribute("hidden");
-    if (open) { panel.removeAttribute("hidden"); fillSpritePanel(); }
-    else panel.setAttribute("hidden", "");
-    $("sprites-toggle").setAttribute("aria-expanded", String(open));
+  function closeSprites() {
+    panel.setAttribute("hidden", "");
+    spritesToggle.setAttribute("aria-expanded", "false");
+  }
+
+  function openSprites() {
+    panel.removeAttribute("hidden");
+    spritesToggle.setAttribute("aria-expanded", "true");
+    fillSpritePanel();
+  }
+
+  spritesToggle.addEventListener("click", function () {
+    if (panel.hasAttribute("hidden")) openSprites();
+    else closeSprites();
   });
 
   $("sprite-search").addEventListener("input", function (e) {
@@ -364,15 +384,32 @@
     $("sprite-empty").hidden = shown > 0;
   });
 
-  $("sprites-close").addEventListener("click", function () {
-    panel.setAttribute("hidden", "");
-    $("sprites-toggle").setAttribute("aria-expanded", "false");
-  });
+  $("sprites-close").addEventListener("click", closeSprites);
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
+
+  function flagAuthor(message) {
+    authorField.classList.add("field-bad");
+    authorField.setAttribute("aria-invalid", "true");
+    authorField.focus();
+    write("\n" + message + "\n", "err");
+  }
+
+  if (authorField) {
+    authorField.addEventListener("input", function () {
+      authorField.classList.remove("field-bad");
+      authorField.removeAttribute("aria-invalid");
+    });
+  }
+
   if (shareBtn) {
     shareBtn.addEventListener("click", async function () {
+      // a submission nobody can be identified from is no use to a teacher
+      if (!authorField.value.trim()) {
+        flagAuthor("Put your name in the box at the top before sharing.");
+        return;
+      }
       shareBtn.disabled = true;
       var original = shareBtn.textContent;
       shareBtn.textContent = "Sharing…";
@@ -387,7 +424,13 @@
           })
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not share this project.");
+        if (!res.ok) {
+          if (data.field === "author") {
+            flagAuthor(data.error);
+            return;
+          }
+          throw new Error(data.error || "Could not share this project.");
+        }
         $("share-url").value = data.url;
         $("modal").hidden = false;
         $("share-url").select();

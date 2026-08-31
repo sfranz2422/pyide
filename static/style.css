@@ -65,6 +65,11 @@ html, body {
 .field:focus { outline: none; border-color: var(--accent); }
 .field::placeholder { color: var(--muted); }
 .field[readonly] { opacity: .7; }
+.field-bad {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, .18);
+}
+.field-bad:focus { border-color: var(--red); }
 .field-title { flex: 1 1 260px; max-width: 340px; }
 .field-author { flex: 0 1 160px; }
 
@@ -88,6 +93,8 @@ html, body {
 }
 .btn:hover:not(:disabled) { border-color: #40495b; background: #232936; }
 .btn:disabled { opacity: .5; cursor: default; }
+/* .btn sets display, which would otherwise beat the browser's [hidden] rule */
+.btn[hidden] { display: none; }
 
 .btn-run {
   background: var(--green);

@@ -174,18 +174,23 @@ def raw_shared(slug):
 def create_share():
     data = request.get_json(silent=True) or {}
     code = data.get("code", "")
+    author = clean(data.get("author"), 80)
 
     if not isinstance(code, str) or not code.strip():
         return jsonify(error="There's no code to share yet."), 400
     if len(code.encode("utf-8")) > MAX_CODE_BYTES:
         return jsonify(error="That program is too large to share."), 413
+    # a submission nobody can be identified from is no use to a teacher
+    if not author:
+        return jsonify(error="Put your name in before sharing.",
+                       field="author"), 400
 
     db = SessionLocal()
     try:
         snip = Snippet(
             slug=new_slug(db),
             title=clean(data.get("title"), 120) or "Untitled",
-            author=clean(data.get("author"), 80),
+            author=author,
             code=code,
         )
         db.add(snip)

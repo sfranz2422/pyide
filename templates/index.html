@@ -34,13 +34,13 @@
       <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
     </button>
     <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
-    <button id="sprites-toggle" class="btn" aria-expanded="false">Sprites</button>
+    <button id="sprites-toggle" class="btn" aria-expanded="false" hidden>Sprites</button>
     {% if readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}
       <button id="share" class="btn btn-primary">Share</button>
     {% endif %}
-    <button id="download" class="btn">Save .py</button>
+    <button id="download" class="btn">Download</button>
   </div>
 </header>
 

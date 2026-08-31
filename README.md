@@ -66,7 +66,13 @@ snapshot of the code at that moment — opening it is read-only, so nobody can
 alter a submitted project. Anyone viewing it can still press Run, and can press
 **Edit a copy** to fork it into their own editable version.
 
-**Save .py** downloads the file if they want it on disk.
+**A name is required to share.** Sharing without one turns the name box red and
+stops — enforced on the server too, so it can't be skipped. The project name
+stays optional and falls back to "Untitled". Forking clears the name, so a
+student who opens your starter has to enter their own rather than submitting
+under yours.
+
+**Download** saves the file to disk if they want a local copy.
 
 ### For grading
 
@@ -121,6 +127,10 @@ cached afterward. Console programs never pay that cost.
 `Actor('bean')` works with no setup. The **Sprites** button opens a searchable
 panel; clicking a sprite drops `Actor('name', (100, 100))` into the code at the
 cursor.
+
+The button only appears in game mode, so it stays out of the way during console
+work. A student who wants to browse sprites before writing any `draw()` can
+click the mode chip to lock the editor into Game mode.
 
 `dino` is a nine-frame walk cycle in the original artwork, so the build script
 slices it into `dino_0` through `dino_8`. Flipping between those frames is how
