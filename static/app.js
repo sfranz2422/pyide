@@ -389,6 +389,29 @@
 
   editor.on("change", function () { if (!running) refreshMode(); });
 
+  /* Name completion, for main.py only. A .txt or .md tab is not Python, and a
+     read-only snapshot can't be typed into anyway. */
+  var nameTimer = null, hintTimer = null;
+
+  editor.on("change", function (cm, change) {
+    if (window.PYIDE.readonly) return;
+    if (active !== MAIN || mdSourceOpen) return;
+
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(function () {
+      window.PyIDEComplete.refresh(mainSource());
+    }, 250);
+
+    // only offer suggestions while a word is actually being typed
+    var typed = change.origin === "+input" && change.text.join("") ;
+    if (typed && /^[A-Za-z0-9_]$/.test(typed)) {
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(function () {
+        if (!cm.state.completionActive) window.PyIDEComplete.show(cm);
+      }, 120);
+    }
+  });
+
   modeTag.addEventListener("click", function () {
     var now = currentMode(mainSource());
     // click cycles: auto -> pinned to the other mode -> auto
@@ -428,6 +451,8 @@
     "    # a cancelled prompt returns JS null, which is not a Python str",
     "    if not isinstance(value, str):",
     "        raise _Cancelled()",
+    "    # Echo the prompt and what was typed, so the output pane reads like a",
+    "    # terminal transcript rather than jumping straight to the next print.",
     "    print(label + value)",
     "    _deadline[0] = time.monotonic() + _limit[0]",
     "    return value",
@@ -505,6 +530,8 @@
       pyodide.setStderr({ batched: function (s) { write(s + "\n", "err"); } });
       pyodide.runPython(BOOTSTRAP);
       pyRun = pyodide.globals.get("_pyide_run");
+      window.PyIDEComplete.attach(pyodide);
+      window.PyIDEComplete.refresh(mainSource());
       var version = pyodide.runPython(
         "import sys; '.'.join(str(v) for v in sys.version_info[:3])"
       );

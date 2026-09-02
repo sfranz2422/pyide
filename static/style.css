@@ -467,6 +467,29 @@ html, body {
 /* In game mode the output pane becomes a log strip under the picture. */
 body.is-game .pane-right .output { flex: 1 1 auto; min-height: 90px; }
 
+/* ----------------------------------------------------- completion popup */
+/* show-hint.css hardcodes a white box with black text, which would be a
+   glaring rectangle in dark mode. Repaint it from the tokens. */
+.CodeMirror-hints {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 6px 20px var(--shadow);
+  font-family: var(--mono);
+  font-size: calc(var(--code-size) * 0.92);
+  padding: 4px;
+  z-index: 40;
+}
+.CodeMirror-hint {
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 9px;
+}
+li.CodeMirror-hint-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 /* ---------------------------------------------------------------- notes */
 /* The right pane holds two views: program output, and rendered notes. Only
    one is ever visible, and .subpane sets display, so [hidden] needs help. */

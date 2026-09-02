@@ -110,6 +110,25 @@ flattens contrast badly. Every text colour in both themes clears 5:1 against
 its background — CodeMirror's stock themes don't (its dark comments sit at
 2.1:1, near invisible on a screen at the back of a room).
 
+### Name completion
+
+After two characters, the editor suggests names **the student defined
+themselves** — variables, loop targets, unpacked tuples, `with ... as` targets,
+functions and their parameters, classes and imports. Tab or a click accepts;
+Esc dismisses; Enter always makes a new line and never inserts a suggestion.
+
+There are deliberately **no builtins and no signature help**. The point is to
+kill `NameError` typos, not to write the program. A student still has to know
+that `print` exists and what it takes.
+
+The list comes from Python's own `ast` module parsing their code — nothing is
+executed to produce it, and it works before the program has ever run. Because
+`ast` needs valid syntax and half-typed code isn't, the last successful parse
+is kept, so suggestions don't vanish mid-keystroke.
+
+Completion is offered on `main.py` only: a `.txt` data file and a `.md` notes
+file aren't Python.
+
 ### For grading
 
 Have students paste their share link into your LMS. Add `/raw` to any share URL
@@ -355,6 +374,7 @@ static/
 tools/
   build_assets.py       Regenerates static/assets from source folders
   notes.js              Markdown notes: render, sanitize
+  complete.js           Name completion from Python's ast
 examples/               Pygame Zero, file-handling and notes starters
 ```
 
