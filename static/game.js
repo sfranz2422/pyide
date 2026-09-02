@@ -217,9 +217,47 @@ window.PyIDEGame = (function () {
     await loadAssets(pyodide, onProgress);
   }
 
+  /* Hand the keyboard back to the page when a game finishes.
+   *
+   * Emscripten's SDL installs a document-level keypress handler that calls
+   * preventDefault, and it stays installed after the game loop ends. keydown
+   * still arrives, so Enter and clicks keep working, but no keypress means no
+   * input event — typing into the editor silently does nothing, which reads
+   * like a focus bug rather than a keyboard one. Shutting the display down
+   * removes the handler; Pygame Zero's own run() does exactly this in its
+   * finally block.
+   *
+   * display.quit() also resizes the canvas to zero, so the last frame is
+   * copied out first and put back afterwards, leaving the picture on screen.
+   */
+  function releaseKeyboard(pyodide, canvas) {
+    if (!pyodide || !canvas) return;
+    var w = canvas.width, h = canvas.height, frame = null;
+    try {
+      if (w && h) frame = canvas.getContext("2d").getImageData(0, 0, w, h);
+    } catch (e) { /* nothing worth keeping */ }
+
+    try {
+      pyodide.runPython(
+        "import pygame\n" +
+        "try:\n" +
+        "    pygame.display.quit()\n" +
+        "except Exception:\n" +
+        "    pass\n"
+      );
+    } catch (e) { /* engine never loaded */ }
+
+    if (frame) {
+      canvas.width = w;
+      canvas.height = h;
+      try { canvas.getContext("2d").putImageData(frame, 0, 0); } catch (e) {}
+    }
+  }
+
   return {
     looksLikeGame: looksLikeGame,
     ensureReady: ensureReady,
+    releaseKeyboard: releaseKeyboard,
     isReady: function () { return ready; }
   };
 })();

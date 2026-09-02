@@ -256,6 +256,18 @@ or press Escape.
 editor prints a reminder each time a game starts, but it's worth saying aloud on
 day one.
 
+**The keyboard is handed back when a game stops.** Emscripten's SDL installs a
+document-level `keypress` handler that calls `preventDefault`, and it survives
+the game loop ending — which made the editor silently refuse typed characters
+while Enter and mouse clicks still worked, so it looked like a focus bug rather
+than a keyboard one. Shutting the display down removes the handler (Pygame
+Zero's own runner does the same). Since that also blanks the canvas, the last
+frame is copied out and put back, so the picture stays on screen after Stop.
+
+One case this doesn't cover: clicking into the editor while a game is still
+running. The game owns the keyboard until it stops, which is what you want for
+playing, but it means Stop first, then edit.
+
 The first game run downloads about 4 MB (pygame-ce, numpy, Pygame Zero) and is
 cached afterward. Console programs never pay that cost.
 

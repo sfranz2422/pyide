@@ -678,7 +678,11 @@
       write(String(e) + "\n", "err");
     } finally {
       pullFilesFromPython();
+      // give the keyboard back, or the editor stops accepting typed characters
+      window.PyIDEGame.releaseKeyboard(pyodide, canvas);
       setBusy(false, "game");
+      // the student stopped the game to get back to the code
+      if (!window.PyIDENotes.isMarkdown(active)) editor.focus();
     }
   }
 
