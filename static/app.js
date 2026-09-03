@@ -36,7 +36,12 @@
       Tab: function (cm) {
         if (cm.somethingSelected()) cm.indentSelection("add");
         else cm.replaceSelection("    ", "end");
-      }
+      },
+      "Shift-Tab": function (cm) { cm.indentSelection("subtract"); },
+      // indent:true keeps the # at the code's own indentation rather than
+      // shoving it to column 0, which is how Python is normally written
+      "Ctrl-/": function (cm) { cm.toggleComment({ indent: true }); },
+      "Cmd-/": function (cm) { cm.toggleComment({ indent: true }); }
     }
   });
   editor.setSize("100%", "100%");

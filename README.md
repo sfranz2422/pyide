@@ -129,6 +129,22 @@ is kept, so suggestions don't vanish mid-keystroke.
 Completion is offered on `main.py` only: a `.txt` data file and a `.md` notes
 file aren't Python.
 
+### Editor keys
+
+| Key | What it does |
+|---|---|
+| `Ctrl+Enter` / `Cmd+Enter` | Run |
+| `Tab` | Indent four spaces, or indent the whole selection |
+| `Shift+Tab` | Outdent the line or selection |
+| `Ctrl+/` / `Cmd+/` | Comment or uncomment the selected lines |
+| `Tab` (suggestions open) | Accept the highlighted name |
+| `Esc` | Dismiss suggestions |
+
+Commenting keeps the `#` at the code's own indentation rather than pushing it
+to column 0, so an indented block still reads as Python. Pressing it again
+restores the lines exactly. In a `.txt` data file it does nothing, since there
+is no comment syntax to apply.
+
 ### For grading
 
 Have students paste their share link into your LMS. Add `/raw` to any share URL
