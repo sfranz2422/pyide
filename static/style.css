@@ -165,6 +165,24 @@ html, body {
 
 .actions { display: flex; gap: 8px; }
 
+/* "Hide code" — turns Share into a demo link. Deliberately understated: it
+   sits next to Share rather than announcing itself, and reads as a modifier
+   to the button beside it rather than as an action of its own. */
+.hidecode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.hidecode input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.hidecode:hover { color: var(--text); }
+.hidecode[hidden] { display: none; }
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -466,6 +484,17 @@ html, body {
 
 /* In game mode the output pane becomes a log strip under the picture. */
 body.is-game .pane-right .output { flex: 1 1 auto; min-height: 90px; }
+
+/* ------------------------------------------------------------- demo page */
+/* What a "hide my code" link opens. There is no editor pane to place beside
+   the output, because there is no editor on that page at all — not hidden,
+   not read-only, absent — so the output takes the full width. */
+.demo-main {
+  display: flex;
+  height: calc(100% - var(--bar-h));
+  min-height: 0;
+}
+.demo-main .pane-right { flex: 1 1 100%; }
 
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a

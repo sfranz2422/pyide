@@ -78,6 +78,11 @@ class Snippet(Base):
     code = Column(Text, nullable=False)
     # attached data files, as a JSON object of {filename: contents}
     files = Column(Text, nullable=False, default="{}")
+    # A demo snapshot: reachable only at /d/<slug>, which shows the output and
+    # never the program. One flag decides everything — a hidden snapshot is
+    # refused by /s, /fork and /raw alike, so there is no second door to forget
+    # about and nothing to gain by editing the letter in the URL.
+    hidden = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False,
                         default=lambda: datetime.now(timezone.utc))
 
@@ -87,6 +92,11 @@ class Snippet(Base):
             return data if isinstance(data, dict) else {}
         except (ValueError, TypeError):
             return {}
+
+    @property
+    def is_hidden(self) -> bool:
+        # rows written before this column existed come back as NULL
+        return bool(self.hidden)
 
 
 engine = create_engine(
@@ -100,13 +110,23 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 Base.metadata.create_all(engine)
 
 
+# Columns added after the table first shipped, with the DDL to add each one.
+# Every default has to make an existing row correct: an old snapshot has no
+# attached files and is not a demo.
+LATER_COLUMNS = [
+    ("files", "ALTER TABLE snippets ADD COLUMN files TEXT NOT NULL DEFAULT '{}'"),
+    ("hidden", "ALTER TABLE snippets ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0"),
+]
+
+
 def _add_missing_columns() -> None:
     """Bring an older deployment's table up to date.
 
     create_all() only creates missing tables, never missing columns, so a
-    database written before attached files existed would break on the first
-    query. Adding the column is idempotent and cheap; anything already correct
-    raises and is ignored.
+    database written before a column existed would break on the first query.
+    Each ALTER runs only when its column is absent, so this is safe to run on
+    every boot — which it does, because Render restarts a service on deploy
+    and there is no migration step to remember.
     """
     from sqlalchemy import inspect, text
 
@@ -114,15 +134,14 @@ def _add_missing_columns() -> None:
         existing = {c["name"] for c in inspect(engine).get_columns("snippets")}
     except Exception:
         return
-    if "files" in existing:
-        return
-    with engine.begin() as conn:
-        try:
-            conn.execute(text(
-                "ALTER TABLE snippets ADD COLUMN files TEXT NOT NULL DEFAULT '{}'"
-            ))
-        except Exception:
-            pass
+    for name, ddl in LATER_COLUMNS:
+        if name in existing:
+            continue
+        with engine.begin() as conn:
+            try:
+                conn.execute(text(ddl))
+            except Exception:
+                pass
 
 
 _add_missing_columns()
@@ -200,13 +219,24 @@ def index():
     )
 
 
+def load_visible(db, slug):
+    """A snapshot the /s routes are allowed to serve.
+
+    A demo snapshot is not one of them. Changing /d/abc to /s/abc is the first
+    thing anyone tries, so the refusal lives here rather than in the template:
+    the code never leaves the database for a hidden row, whatever the URL says.
+    """
+    snip = db.query(Snippet).filter_by(slug=slug).first()
+    if snip is None or snip.is_hidden:
+        abort(404)
+    return snip
+
+
 @app.get("/s/<slug>")
 def view_shared(slug):
     db = SessionLocal()
     try:
-        snip = db.query(Snippet).filter_by(slug=slug).first()
-        if snip is None:
-            abort(404)
+        snip = load_visible(db, slug)
         return render_template(
             "index.html",
             code=snip.code,
@@ -227,9 +257,7 @@ def fork_shared(slug):
     """Open a shared snapshot as an editable copy."""
     db = SessionLocal()
     try:
-        snip = db.query(Snippet).filter_by(slug=slug).first()
-        if snip is None:
-            abort(404)
+        snip = load_visible(db, slug)
         return render_template(
             "index.html",
             code=snip.code,
@@ -249,10 +277,56 @@ def fork_shared(slug):
 def raw_shared(slug):
     db = SessionLocal()
     try:
-        snip = db.query(Snippet).filter_by(slug=slug).first()
-        if snip is None:
-            abort(404)
+        snip = load_visible(db, slug)
         return snip.code, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Demo links — output only, no code on display
+# --------------------------------------------------------------------------
+#
+# The program still has to reach the browser: Pyodide runs it there, which is
+# what makes the whole IDE free to run and impossible to abuse. So this is not
+# encryption and it is not sold as such. What it does is remove every ordinary
+# way of reading the code — there is no editor on the page, no markup holding
+# the source, no /raw, no fork, and no Download. Recovering it means opening
+# the network panel on purpose, which is a different kind of student from the
+# one who presses Ctrl+U out of curiosity.
+
+
+def load_demo(db, slug):
+    snip = db.query(Snippet).filter_by(slug=slug).first()
+    if snip is None or not snip.is_hidden:
+        abort(404)
+    return snip
+
+
+@app.get("/d/<slug>")
+def view_demo(slug):
+    db = SessionLocal()
+    try:
+        snip = load_demo(db, slug)
+        # Deliberately no code and no file contents in this render: the page
+        # asks for them separately, and only once Run is pressed.
+        return render_template("demo.html", title=snip.title, slug=snip.slug)
+    finally:
+        db.close()
+
+
+@app.get("/d/<slug>/source")
+def demo_source(slug):
+    """What the demo page fetches when Run is pressed."""
+    db = SessionLocal()
+    try:
+        snip = load_demo(db, slug)
+        response = jsonify(code=snip.code, files=snip.file_map())
+        # Nothing here should sit in a shared cache or turn up in a search
+        # result, and a stale copy would be a stale demo.
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
     finally:
         db.close()
 
@@ -276,6 +350,8 @@ def create_share():
     if file_error:
         return jsonify(error=file_error), 400
 
+    hidden = bool(data.get("hidden"))
+
     db = SessionLocal()
     try:
         snip = Snippet(
@@ -284,12 +360,15 @@ def create_share():
             author=author,
             code=code,
             files=json.dumps(files),
+            hidden=1 if hidden else 0,
         )
         db.add(snip)
         db.commit()
+        route = "view_demo" if hidden else "view_shared"
         return jsonify(
             slug=snip.slug,
-            url=url_for("view_shared", slug=snip.slug, _external=True),
+            hidden=hidden,
+            url=url_for(route, slug=snip.slug, _external=True),
         )
     finally:
         db.close()

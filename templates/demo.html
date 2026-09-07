@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{{ title }} — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  /* Same as the editor: settle the theme before anything paints, so a lesson
+     projected in light mode never opens with a flash of dark. */
+  (function () {
+    try {
+      var saved = localStorage.getItem("pyide-theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+      var size = parseInt(localStorage.getItem("pyide-code-size"), 10);
+      if (size >= 11 && size <= 32) {
+        document.documentElement.style.setProperty("--code-size", size + "px");
+      }
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+</head>
+
+<body class="is-demo">
+
+<header class="bar">
+  <div class="brand"><span class="logo">🐍</span> PyIDE</div>
+
+  <div class="actions">
+    <button id="run" class="btn btn-run" disabled>
+      <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
+    </button>
+    <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    <div class="stepper" role="group" aria-label="Output text size">
+      <button id="font-down" class="step" title="Smaller text">−</button>
+      <span id="font-size" class="step-value" aria-live="polite">14</span>
+      <button id="font-up" class="step" title="Bigger text">+</button>
+    </div>
+    <button id="theme" class="btn btn-icon-only" title="Switch between light and dark">
+      <span id="theme-glyph">☾</span>
+    </button>
+  </div>
+</header>
+
+<main class="demo-main">
+  <section class="pane pane-right">
+    <div id="stage" class="stage" hidden>
+      <div class="pane-head"><span>Game</span></div>
+      <div class="stage-frame">
+        <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
+      </div>
+    </div>
+
+    <div id="output-view" class="subpane">
+      <div class="pane-head">
+        <span>Output</span>
+        <button id="clear" class="linkbtn">Clear</button>
+      </div>
+      <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
+</pre>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js"></script>
+<script>
+  /* Only the slug. The program itself is fetched when Run is pressed, and is
+     never written into this document — nothing here is worth reading. */
+  window.PYIDE_DEMO = { sourceUrl: "{{ url_for('demo_source', slug=slug) }}" };
+</script>
+<script src="{{ url_for('static', filename='runtime.js') }}"></script>
+<script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='demo.js') }}"></script>
+</body>
+</html>

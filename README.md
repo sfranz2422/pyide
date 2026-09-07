@@ -86,6 +86,56 @@ under yours.
 
 **Download** saves the file to disk if they want a local copy.
 
+## Demo links — showing the output without showing the code
+
+Tick **Hide code** before pressing Share and you get a link like
+`/d/k3m9pqr` instead of `/s/k3m9pqr`. It opens a page with a Run button, the
+output, and nothing else: no editor, no tabs, no notes, no fork, no download.
+For a Pygame Zero project the game runs on the canvas exactly as it does in
+the editor. Leave the box unticked and sharing behaves exactly as it always
+has, so students hand work in the same way.
+
+The dialog says which kind of link it just made, because an accidental tick is
+otherwise invisible until someone opens it.
+
+**Read this part before relying on it.** Pyodide runs Python *in the viewer's
+browser*, so the program has to reach that browser to run at all. This is not
+encryption and it cannot be. What it removes is every ordinary way of reading
+the code:
+
+| | Normal share | Demo link |
+|---|---|---|
+| Code in the page markup | yes, in the editor | no — the page never contains it |
+| `Ctrl+U` / View Source | shows everything | shows nothing |
+| `/raw` endpoint | plain text | 404 |
+| Fork, Download | yes | absent |
+| `/s/<slug>` for the same id | the project | 404 |
+| Network panel, deliberately | — | one request, when Run is pressed |
+
+Recovering the program means opening developer tools and going looking. That is
+a different student from the one who presses `Ctrl+U` out of curiosity, and it
+is the line a classroom actually needs — but it is a cupboard, not a safe.
+Don't put anything in a demo link that would matter if a determined student
+found it.
+
+Two smaller details that follow from the same goal:
+
+- **The source is fetched only when Run is pressed**, and kept after that, so
+  running twice adds nothing further to the network log. Nothing is fetched at
+  all if the viewer never presses Run.
+- **Errors name the line but never quote it.** Normally a traceback prints the
+  offending source line, which is most of what makes it useful to a beginner.
+  On a demo link that would leak the code one line per crash, so it prints
+  `File "main.py", line 12` and stops. Same for `SyntaxError`.
+
+Changing `/d/abc123` to `/s/abc123` returns a 404. The refusal lives in the
+route, not the template — the code never leaves the database for a hidden
+snapshot, whatever the URL asks for.
+
+**A hidden snapshot is hidden from you too.** There's no way back to the source
+through the link, so keep your own copy. If you want both kinds of link for the
+same project, share it twice.
+
 ### Code text size
 
 The **− 14 +** stepper scales the editor and the output pane together, and
@@ -389,10 +439,15 @@ render.yaml             Render blueprint (web service + Postgres)
 requirements.txt        Python dependencies
 templates/
   index.html            The editor page, editable and read-only modes
+  demo.html             A "hide my code" link: Run and the output, nothing else
   404.html              Bad share link
 static/
-  app.js                Editor, console runtime, sprite panel, sharing
+  app.js                Editor, sprite panel, sharing
+  runtime.js            The Python bootstrap, shared by the editor and demo pages
+  demo.js               The demo page: fetch on Run, run, show the output
   game.js               Pygame Zero: async game loop, asset loading
+  notes.js              Markdown notes: render, sanitize
+  complete.js           Name completion from Python's ast
   style.css             All styling
   assets/
     manifest.json       Generated — what the sprite panel reads
@@ -401,10 +456,13 @@ static/
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
-  notes.js              Markdown notes: render, sanitize
-  complete.js           Name completion from Python's ast
 examples/               Pygame Zero, file-handling and notes starters
 ```
+
+`runtime.js` exists because two pages need the same Python: the `input()` shim,
+the runaway-loop guard, and the traceback filtering. Keeping one copy is what
+stops the editor and a demo link from slowly disagreeing about how a program
+behaves.
 
 ## Possible next steps
 

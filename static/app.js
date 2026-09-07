@@ -431,98 +431,8 @@
   // --------------------------------------------------------------- runtime
   // Wraps console programs so that input() uses a browser prompt, a tracing
   // guard stops runaway loops, and tracebacks show only the student's frames.
-  var BOOTSTRAP = [
-    "import builtins, linecache, os, sys, time, traceback",
-    "import js",
-    "",
-    "# Console programs get their own folder, so open('notes.txt') always lands",
-    "# somewhere predictable — and never in the game's asset folder, which a",
-    "# previous run may have left as the working directory.",
-    "PROJECT_DIR = '/project'",
-    "os.makedirs(PROJECT_DIR, exist_ok=True)",
-    "",
-    "_deadline = [0.0]",
-    "_limit = [0.0]",
-    "",
-    "class _TimeLimit(Exception):",
-    "    pass",
-    "",
-    "class _Cancelled(Exception):",
-    "    pass",
-    "",
-    "def _pyide_input(prompt=''):",
-    "    label = str(prompt)",
-    "    value = js.window.prompt(label if label.strip() else 'Program input:')",
-    "    # a cancelled prompt returns JS null, which is not a Python str",
-    "    if not isinstance(value, str):",
-    "        raise _Cancelled()",
-    "    # Echo the prompt and what was typed, so the output pane reads like a",
-    "    # terminal transcript rather than jumping straight to the next print.",
-    "    print(label + value)",
-    "    _deadline[0] = time.monotonic() + _limit[0]",
-    "    return value",
-    "",
-    "builtins.input = _pyide_input",
-    "",
-    "def _pyide_run(source, seconds):",
-    "    _limit[0] = seconds",
-    "    _deadline[0] = time.monotonic() + seconds",
-    "    ticks = [0]",
-    "    os.makedirs(PROJECT_DIR, exist_ok=True)",
-    "    os.chdir(PROJECT_DIR)",
-    "    # let tracebacks quote the student's own source lines",
-    "    linecache.cache['main.py'] = (",
-    "        len(source), None, source.splitlines(True), 'main.py')",
-    "",
-    "    def guard(frame, event, arg):",
-    "        ticks[0] += 1",
-    "        if ticks[0] % 1500 == 0 and time.monotonic() > _deadline[0]:",
-    "            raise _TimeLimit()",
-    "        return guard",
-    "",
-    "    try:",
-    "        code = compile(source, 'main.py', 'exec')",
-    "    except SyntaxError as err:",
-    "        line = err.lineno or 0",
-    "        text = (err.text or '').rstrip()",
-    "        msg = 'SyntaxError on line %d: %s' % (line, err.msg)",
-    "        if text:",
-    "            msg += '\\n    ' + text.strip()",
-    "        print(msg, file=sys.stderr)",
-    "        return 'error'",
-    "",
-    "    scope = {'__name__': '__main__', '__builtins__': builtins}",
-    "    sys.settrace(guard)",
-    "    try:",
-    "        exec(code, scope)",
-    "        return 'ok'",
-    "    except _TimeLimit:",
-    "        sys.settrace(None)",
-    "        print('Stopped after %g seconds. Is there a loop that never ends?'",
-    "              % seconds, file=sys.stderr)",
-    "        return 'timeout'",
-    "    except _Cancelled:",
-    "        sys.settrace(None)",
-    "        print('Stopped — you cancelled the input box.', file=sys.stderr)",
-    "        return 'cancelled'",
-    "    except SystemExit:",
-    "        return 'ok'",
-    "    except BaseException as err:",
-    "        sys.settrace(None)",
-    "        # keep only the student's own frames; library internals are noise",
-    "        frames = [f for f in traceback.extract_tb(err.__traceback__)",
-    "                  if f.filename == 'main.py']",
-    "        if frames:",
-    "            sys.stderr.write('Traceback (most recent call last):\\n')",
-    "            for line in traceback.format_list(frames):",
-    "                sys.stderr.write(line)",
-    "        for line in traceback.format_exception_only(type(err), err):",
-    "            sys.stderr.write(line)",
-    "        return 'error'",
-    "    finally:",
-    "        sys.settrace(None)",
-    ""
-  ].join("\n");
+  // Shared with the demo page, so it lives in runtime.js.
+  var BOOTSTRAP = window.PyIDERuntime.BOOTSTRAP;
 
   var pyodide = null;
   var pyRun = null;
@@ -799,6 +709,23 @@
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
+  var hideCode = $("hide-code");   // absent on a read-only snapshot
+
+  /* Two kinds of link come out of one button, so the dialog has to say which
+     one it just produced — an accidental tick is otherwise invisible until a
+     student opens the link and finds no code. */
+  function describeShare(hidden) {
+    $("modal-title").textContent = hidden ? "Demo link ready" : "Project shared";
+    $("modal-sub").textContent = hidden
+      ? "This link runs the program and shows the output. The code is not on the page."
+      : "Anyone with this link can open and run this snapshot.";
+    $("modal-note").textContent = hidden
+      ? "Nobody can read, fork or download the program from this link — including you, " +
+        "so keep your own copy. Recovering the code from it would take the browser's " +
+        "developer tools, which is a fair barrier for a class but not a lock."
+      : "The link captures your code exactly as it is right now. " +
+        "If you keep working, share again to create an updated link.";
+  }
 
   function flagAuthor(message) {
     authorField.classList.add("field-bad");
@@ -832,7 +759,8 @@
             code: mainSource(),
             files: dataFiles(),
             title: $("title").value,
-            author: $("author").value
+            author: $("author").value,
+            hidden: !!(hideCode && hideCode.checked)
           })
         });
         var data = await res.json();
@@ -843,6 +771,9 @@
           }
           throw new Error(data.error || "Could not share this project.");
         }
+        // the server decides, not the checkbox — they agree, but only one of
+        // them knows what actually got written
+        describeShare(!!data.hidden);
         $("share-url").value = data.url;
         $("modal").hidden = false;
         $("share-url").select();

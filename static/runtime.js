@@ -1,0 +1,117 @@
+/* PyIDE — the Python side of running a console program.
+ *
+ * Lives in its own file because two pages need it: the editor, and the demo
+ * page a "hide my code" share link opens. Keeping one copy means the input()
+ * shim, the runaway-loop guard and the traceback filtering can't drift apart
+ * between them.
+ *
+ * quote_source is the one thing that differs. Normally a traceback quotes the
+ * offending line, which is most of what makes an error useful to a beginner.
+ * On a demo link the whole point is that the source isn't on display, so the
+ * error still names the line number but prints no code.
+ */
+
+window.PyIDERuntime = (function () {
+  "use strict";
+
+  var BOOTSTRAP = [
+    "import builtins, linecache, os, sys, time, traceback",
+    "import js",
+    "",
+    "# Console programs get their own folder, so open('notes.txt') always lands",
+    "# somewhere predictable — and never in the game's asset folder, which a",
+    "# previous run may have left as the working directory.",
+    "PROJECT_DIR = '/project'",
+    "os.makedirs(PROJECT_DIR, exist_ok=True)",
+    "",
+    "_deadline = [0.0]",
+    "_limit = [0.0]",
+    "",
+    "class _TimeLimit(Exception):",
+    "    pass",
+    "",
+    "class _Cancelled(Exception):",
+    "    pass",
+    "",
+    "def _pyide_input(prompt=''):",
+    "    label = str(prompt)",
+    "    value = js.window.prompt(label if label.strip() else 'Program input:')",
+    "    # a cancelled prompt returns JS null, which is not a Python str",
+    "    if not isinstance(value, str):",
+    "        raise _Cancelled()",
+    "    # Echo the prompt and what was typed, so the output pane reads like a",
+    "    # terminal transcript rather than jumping straight to the next print.",
+    "    print(label + value)",
+    "    _deadline[0] = time.monotonic() + _limit[0]",
+    "    return value",
+    "",
+    "builtins.input = _pyide_input",
+    "",
+    "def _pyide_run(source, seconds, quote_source=True):",
+    "    _limit[0] = seconds",
+    "    _deadline[0] = time.monotonic() + seconds",
+    "    ticks = [0]",
+    "    os.makedirs(PROJECT_DIR, exist_ok=True)",
+    "    os.chdir(PROJECT_DIR)",
+    "    # Tracebacks quote the student's own source lines — except on a demo",
+    "    # link, where the source is deliberately not on display. Clearing the",
+    "    # entry matters as much as setting it: an earlier run in the same page",
+    "    # would otherwise leave the code sitting in the cache.",
+    "    if quote_source:",
+    "        linecache.cache['main.py'] = (",
+    "            len(source), None, source.splitlines(True), 'main.py')",
+    "    else:",
+    "        linecache.cache.pop('main.py', None)",
+    "",
+    "    def guard(frame, event, arg):",
+    "        ticks[0] += 1",
+    "        if ticks[0] % 1500 == 0 and time.monotonic() > _deadline[0]:",
+    "            raise _TimeLimit()",
+    "        return guard",
+    "",
+    "    try:",
+    "        code = compile(source, 'main.py', 'exec')",
+    "    except SyntaxError as err:",
+    "        line = err.lineno or 0",
+    "        text = (err.text or '').rstrip()",
+    "        msg = 'SyntaxError on line %d: %s' % (line, err.msg)",
+    "        if text and quote_source:",
+    "            msg += '\\n    ' + text.strip()",
+    "        print(msg, file=sys.stderr)",
+    "        return 'error'",
+    "",
+    "    scope = {'__name__': '__main__', '__builtins__': builtins}",
+    "    sys.settrace(guard)",
+    "    try:",
+    "        exec(code, scope)",
+    "        return 'ok'",
+    "    except _TimeLimit:",
+    "        sys.settrace(None)",
+    "        print('Stopped after %g seconds. Is there a loop that never ends?'",
+    "              % seconds, file=sys.stderr)",
+    "        return 'timeout'",
+    "    except _Cancelled:",
+    "        sys.settrace(None)",
+    "        print('Stopped — you cancelled the input box.', file=sys.stderr)",
+    "        return 'cancelled'",
+    "    except SystemExit:",
+    "        return 'ok'",
+    "    except BaseException as err:",
+    "        sys.settrace(None)",
+    "        # keep only the student's own frames; library internals are noise",
+    "        frames = [f for f in traceback.extract_tb(err.__traceback__)",
+    "                  if f.filename == 'main.py']",
+    "        if frames:",
+    "            sys.stderr.write('Traceback (most recent call last):\\n')",
+    "            for line in traceback.format_list(frames):",
+    "                sys.stderr.write(line)",
+    "        for line in traceback.format_exception_only(type(err), err):",
+    "            sys.stderr.write(line)",
+    "        return 'error'",
+    "    finally:",
+    "        sys.settrace(None)",
+    ""
+  ].join("\n");
+
+  return { BOOTSTRAP: BOOTSTRAP };
+})();

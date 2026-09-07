@@ -55,6 +55,10 @@
     {% if readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}
+      <label class="hidecode"
+             title="Share a link that runs the program and shows the output, with no code on the page and no way to copy it.">
+        <input type="checkbox" id="hide-code"> Hide code
+      </label>
       <button id="share" class="btn btn-primary">Share</button>
     {% endif %}
     <button id="download" class="btn">Download</button>
@@ -137,13 +141,13 @@
 
 <div id="modal" class="modal" hidden>
   <div class="modal-card">
-    <h2>Project shared</h2>
-    <p class="modal-sub">Anyone with this link can open and run this snapshot.</p>
+    <h2 id="modal-title">Project shared</h2>
+    <p class="modal-sub" id="modal-sub">Anyone with this link can open and run this snapshot.</p>
     <div class="linkrow">
       <input id="share-url" type="text" readonly>
       <button id="copy" class="btn btn-primary">Copy</button>
     </div>
-    <p class="modal-note">The link captures your code exactly as it is right now.
+    <p class="modal-note" id="modal-note">The link captures your code exactly as it is right now.
       If you keep working, share again to create an updated link.</p>
     <button id="close-modal" class="btn">Done</button>
   </div>
@@ -164,6 +168,7 @@
     files: {{ files | tojson }}
   };
 </script>
+<script src="{{ url_for('static', filename='runtime.js') }}"></script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
