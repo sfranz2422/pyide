@@ -69,8 +69,61 @@ python app.py
 ## How students use it
 
 **Write and run.** Type in the left pane, press **Run** or `Ctrl+Enter`. Output
-appears on the right. `input()` opens a browser prompt and echoes the value into
-the output pane so the transcript reads like a real terminal.
+appears on the right.
+
+**`input()` is typed in the output pane**, on the line where the question was
+asked, the way a terminal works:
+
+```
+--- Welcome to the Dungeon Realm ---
+What is your character's name? Fred
+A new hero approaches...
+Fred
+```
+
+Students write plain `name = input("...")` — no `await`, nothing that differs
+from the textbook. **Enter** answers, **Escape** or **Stop** cancels and ends
+the program. Time spent thinking doesn't count against the fifteen-second
+limit, so a student can take a minute to answer and still have the full limit
+for the rest of the program.
+
+<details>
+<summary>Why this used to be a dialog box, and what changed</summary>
+
+`input()` is synchronous and reading a keystroke is not, which for years left
+`window.prompt()` as the only way to get a string from a student without making
+them write `await`. WebAssembly stack switching removes the constraint:
+`run_sync()` suspends the Python frame, the browser delivers the keystrokes,
+and the frame resumes with the answer. Verified in Chrome 148 with Python
+3.14.2 — plain synchronous Python, suspended two calls deep and resumed with
+the typed value.
+
+It needs a browser that supports stack switching and a program started through
+`runPythonAsync` — a plain `runPython` call has no suspender on the stack to
+switch to. Both are checked at the moment of the call rather than assumed, and
+where either is missing it falls back to the old dialog. An older browser gets
+a working IDE, not a hung one.
+
+This is worth more than tidiness. Chrome offers "prevent this page from
+creating additional dialogs" after a few prompts in a row, so a student with a
+loop that asks four questions could tick it and watch their program silently
+stop working. There's no such failure here.
+
+**The catch, found by measuring rather than reasoning.** Python's output goes
+to the pane through `write` rather than the more obvious `batched`, because a
+batched stream only hands text over when it sees a newline — and
+`sys.stdout.flush()` does not move it. So this:
+
+```python
+print("Your name? ", end="")
+name = input()
+```
+
+stopped and waited for an answer while the question was still in the buffer,
+and the student typed above a prompt that hadn't appeared. Taking the bytes raw
+puts the timing back under Python's control.
+
+</details>
 
 **Share.** Fill in the project name and their own name, press **Share**, and
 they get a link like `https://your-app.onrender.com/s/k3m9pqr`. The link is a
@@ -443,7 +496,8 @@ templates/
   404.html              Bad share link
 static/
   app.js                Editor, sprite panel, sharing
-  runtime.js            The Python bootstrap, shared by the editor and demo pages
+  runtime.js            Python bootstrap, output piping and the input line —
+                        shared by the editor and demo pages
   demo.js               The demo page: fetch on Run, run, show the output
   game.js               Pygame Zero: async game loop, asset loading
   notes.js              Markdown notes: render, sanitize
@@ -462,7 +516,9 @@ examples/               Pygame Zero, file-handling and notes starters
 `runtime.js` exists because two pages need the same Python: the `input()` shim,
 the runaway-loop guard, and the traceback filtering. Keeping one copy is what
 stops the editor and a demo link from slowly disagreeing about how a program
-behaves.
+behaves. The output piping lives there too, because the raw-`write` decision
+and the `flush()` in `input()` are two halves of one fix and would be a puzzle
+apart.
 
 ## Possible next steps
 

@@ -434,6 +434,46 @@ html, body {
 .output .err { color: var(--red); }
 .output .dim { color: var(--muted); }
 
+/* ------------------------------------------------- typing into the output */
+/* input() reads here rather than in a browser dialog, so the question, the
+   answer and everything printed around them share one transcript.
+
+   The field has to be invisible as a control and identical as text: same
+   font, same size, same colour, sitting on the prompt line with no box around
+   it. Anything else and the line the student types looks unlike the line that
+   appears a moment later when it becomes output. */
+.askline { display: inline; }
+
+input.ask {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: var(--code-size);
+  line-height: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  /* wide enough for a sentence, but it is an inline element on a wrapping
+     line, so it gives way rather than forcing a horizontal scrollbar */
+  width: 22ch;
+  max-width: 100%;
+  caret-color: var(--green);
+}
+input.ask::selection { background: var(--accent); color: #fff; }
+
+/* A hairline under the field. Without a border it is genuinely invisible when
+   unfocused, and a student who clicked into the editor and came back would
+   have nothing showing them where the program is waiting. */
+input.ask { box-shadow: inset 0 -1px 0 var(--line); }
+input.ask:focus { box-shadow: inset 0 -1px 0 var(--accent); }
+
+/* Committed input: the same text, now ordinary output. No underline, nothing
+   to click, indistinguishable from a line the program printed itself. */
+.output .typed { color: var(--text); }
+
 /* ------------------------------------------------------------ mode chip */
 .mode {
   align-self: center;

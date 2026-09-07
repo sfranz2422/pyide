@@ -35,7 +35,19 @@
     outputEl.scrollTop = outputEl.scrollHeight;
   }
 
-  function clearOutput() { outputEl.textContent = ""; }
+  /* Declared before clearOutput, which calls into it during the Python boot. */
+  var consoleIO = window.PyIDERuntime.attachConsole({
+    outputEl: outputEl,
+    onWaiting: function () { paintStop(); }
+  });
+
+  /* Clearing has to put back the line a blocked program is waiting on, or the
+     program hangs on a keystroke that can never arrive. */
+  function clearOutput() {
+    outputEl.textContent = "";
+    consoleIO.restore();
+  }
+
   function status(text) { clearOutput(); write(text + "\n", "dim"); }
 
   $("clear").addEventListener("click", clearOutput);
@@ -148,8 +160,7 @@
   (async function () {
     try {
       pyodide = await loadPyodide();
-      pyodide.setStdout({ batched: function (s) { write(s + "\n"); } });
-      pyodide.setStderr({ batched: function (s) { write(s + "\n", "err"); } });
+      window.PyIDERuntime.pipeOutput(pyodide, write);
       pyodide.runPython(window.PyIDERuntime.BOOTSTRAP);
       pyRun = pyodide.globals.get("_pyide_run");
       status("Ready. Press Run to see what this program does.");
@@ -190,11 +201,20 @@
     });
   }
 
+  var runMode = null;
+
+  // Stop is offered for a game, and for a program sitting on an unanswered
+  // input(); a console program that is merely computing has the time limit.
+  function paintStop() {
+    stopBtn.hidden = !(running && (runMode === "game" || consoleIO.isWaiting()));
+  }
+
   function setBusy(isRunning, mode) {
     running = isRunning;
+    runMode = isRunning ? mode : null;
     runBtn.disabled = isRunning;
     runLabel.textContent = isRunning ? "Running…" : "Run";
-    stopBtn.hidden = !(isRunning && mode === "game");
+    paintStop();
   }
 
   // ---------------------------------------------------------------- run it
@@ -235,9 +255,18 @@
     }
 
     pushFilesToPython(loaded.files);
+    consoleIO.setEnabled(true);
     try {
-      // quote_source false: an error still names the line, but prints no code
-      var result = pyRun(loaded.code, TIME_LIMIT_SECONDS, false);
+      /* runPythonAsync, not a direct call: that is what puts a suspender on
+         the stack for input() to switch to. quote_source false keeps an error
+         naming the line without printing the code.
+
+         The program goes through a global rather than into this snippet — it
+         is the one string on this page we must never paste into source. */
+      pyodide.globals.set("_pyide_source", loaded.code);
+      var result = await pyodide.runPythonAsync(
+        "_pyide_run(_pyide_source, " + TIME_LIMIT_SECONDS + ", False)"
+      );
       if (result === "ok") write("\n— finished —\n", "dim");
     } catch (e) {
       write(String(e) + "\n", "err");
@@ -268,6 +297,9 @@
     canvas.focus();
 
     pushFilesToPython(loaded.files);
+    // SDL owns the keyboard while a game is up, so input() falls back to the
+    // dialog box rather than a field that would collect nothing
+    consoleIO.setEnabled(false);
     try {
       pyodide.runPython("reset_game_state()");
       var result = await pyodide.runPythonAsync(
@@ -278,19 +310,25 @@
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
-      // give the keyboard back, or the page stops responding to typed keys
+      // give the keyboard back, or the console's input line stops accepting
+      // typed characters
       window.PyIDEGame.releaseKeyboard(pyodide, canvas);
+      consoleIO.setEnabled(true);
       setBusy(false, "game");
     }
   }
 
-  function stopGame() {
-    if (!running || !pyodide) return;
+  function stopRun() {
+    if (!running) return;
+    // a program blocked on input() isn't executing, so cancelling the read is
+    // what ends it
+    if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
+    if (!pyodide) return;
     try { pyodide.runPython("request_stop()"); } catch (e) { /* not loaded */ }
   }
 
   runBtn.addEventListener("click", run);
-  stopBtn.addEventListener("click", stopGame);
+  stopBtn.addEventListener("click", stopRun);
 
   canvas.addEventListener("keydown", function (e) {
     if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
@@ -304,6 +342,6 @@
       e.preventDefault();
       run();
     }
-    if (e.key === "Escape" && running) stopGame();
+    if (e.key === "Escape" && running) stopRun();
   });
 })();
