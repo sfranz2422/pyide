@@ -222,12 +222,27 @@
   var lastCodeFile = MAIN;
   var mdSourceOpen = false;
 
-  /* docs[] holds the Doc objects themselves, and swapDoc doesn't change their
-     identity, so there is nothing to write back when switching away. */
   function modeFor(name) {
     return /\.py$/i.test(name) ? "python" : null;   // .txt and .csv are text
   }
 
+  /* Which file the editor is actually editing.
+     Deliberately not the same as `active`, and the gap between them caused a
+     bug: selecting a .md tab makes it active but leaves the editor on the last
+     code file, because notes render on the right rather than opening to be
+     edited. So anything asking "what am I typing into?" — name completion,
+     inserting a sprite — has to ask this instead. Asking `active` meant
+     completion went silent the moment a project gained notes, and stayed
+     silent until the student happened to click the main.py tab again. */
+  function editingFile() {
+    if (window.PyIDENotes.isMarkdown(active)) {
+      return mdSourceOpen ? active : lastCodeFile;
+    }
+    return active;
+  }
+
+  /* docs[] holds the Doc objects themselves, and swapDoc doesn't change their
+     identity, so there is nothing to write back when switching away. */
   function showEditorDoc(name) {
     if (editor.getDoc() !== docs[name]) editor.swapDoc(docs[name]);
     editor.setOption("mode", modeFor(name));
@@ -448,7 +463,8 @@
 
   editor.on("change", function (cm, change) {
     if (window.PYIDE.readonly) return;
-    if (active !== MAIN || mdSourceOpen) return;
+    // what the editor holds, not which tab is lit — see editingFile()
+    if (editingFile() !== MAIN) return;
 
     clearTimeout(nameTimer);
     nameTimer = setTimeout(function () {
@@ -700,8 +716,10 @@
 
   function insertAtCursor(text) {
     if (window.PYIDE.readonly) return;
-    // sprites belong in the program, not in a data file
-    if (active !== MAIN) switchTo(MAIN);
+    /* Sprites belong in the program, not in a data file. Same distinction as
+       above: if the editor is already on main.py there is nothing to switch,
+       and switching anyway would close the notes a student is reading. */
+    if (editingFile() !== MAIN) switchTo(MAIN);
     editor.replaceSelection(text, "end");
     editor.focus();
   }
