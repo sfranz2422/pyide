@@ -224,9 +224,13 @@
 
   /* docs[] holds the Doc objects themselves, and swapDoc doesn't change their
      identity, so there is nothing to write back when switching away. */
+  function modeFor(name) {
+    return /\.py$/i.test(name) ? "python" : null;   // .txt and .csv are text
+  }
+
   function showEditorDoc(name) {
     if (editor.getDoc() !== docs[name]) editor.swapDoc(docs[name]);
-    editor.setOption("mode", name === MAIN ? "python" : null);
+    editor.setOption("mode", modeFor(name));
     editor.setOption("readOnly", window.PYIDE.readonly ? "nocursor" : false);
   }
 
@@ -306,19 +310,48 @@
     relayout();
   }
 
+  /* A file called random.py, math.py or string.py wins over the real library,
+     because the project folder is first on sys.path. `import random` then
+     silently imports the student's own empty file and every call into it fails
+     with something that looks nothing like the cause. Worth a warning, not a
+     ban — the name is legal, and seeing why it breaks is a decent lesson. */
+  function shadowedLibrary(name) {
+    if (!pyodide || !/\.py$/i.test(name)) return null;
+    var base = name.replace(/\.py$/i, "");
+    try {
+      pyodide.globals.set("_pyide_candidate", base);
+      var hit = pyodide.runPython(
+        "import sys; _pyide_candidate in sys.stdlib_module_names");
+      return hit ? base : null;
+    } catch (e) {
+      return null;                      // older Pyodide; skip the warning
+    }
+  }
+
   var newFileBtn = $("new-file");
   if (newFileBtn) {
     newFileBtn.addEventListener("click", function () {
       var name = (window.prompt(
-        "Name for the new file, with an extension:", "data.txt") || "").trim();
+        "Name for the new file — data.txt, notes.md or helper.py:",
+        "helper.py") || "").trim();
       if (!name) return;
-      if (!NAME_OK.test(name) || /\.py$/i.test(name)) {
+      if (!NAME_OK.test(name)) {
         write("\n'" + name + "' won't work as a file name. Use letters, digits," +
-              " dashes and underscores, ending in something like .txt or .csv." +
-              "\n", "err");
+              " dashes and underscores, ending in something like .py, .txt" +
+              " or .csv.\n", "err");
         return;
       }
+      if (name.toLowerCase() === MAIN) { switchTo(MAIN); return; }
       if (docs[name]) { switchTo(name); return; }
+
+      var clash = shadowedLibrary(name);
+      if (clash) {
+        write("\nHeads up: '" + name + "' has the same name as a Python" +
+              " library, so `import " + clash + "` will find this file instead" +
+              " of the real one. Rename it if you meant to use the library.\n",
+              "dim");
+      }
+
       addFile(name, "");
       switchTo(name);
     });
@@ -848,16 +881,32 @@
   });
 
   // -------------------------------------------------------------- download
+  /* One file downloads as one file; a project with imports or data files
+     downloads as a zip. Handing over main.py alone would silently drop the
+     module it imports, and the student would find out at home when nothing
+     runs. */
   $("download").addEventListener("click", function () {
-    var name = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
-    var blob = new Blob([mainSource()], { type: "text/x-python" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name + ".py";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+    var base = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
+    var extras = dataFiles();
+    var names = Object.keys(extras);
+
+    if (!names.length) {
+      var blob = new Blob([mainSource()], { type: "text/x-python" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = base + ".py";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      return;
+    }
+
+    var entries = [{ name: MAIN, data: mainSource() }];
+    names.sort().forEach(function (n) {
+      entries.push({ name: n, data: extras[n] });
+    });
+    window.PyIDEZip.download(base + ".zip", entries);
   });
 
   document.addEventListener("keydown", function (e) {

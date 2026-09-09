@@ -35,8 +35,9 @@ MAX_FILES_TOTAL = 400_000         # all attached files together
 ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alike characters
 ID_LENGTH = 7
 
-# Data files students can attach. Any text file with a safe name and an
-# extension is fine; .py is reserved so there is exactly one thing that runs.
+# Files students can attach: data for the program to read, notes to display,
+# and other .py modules for it to import. main.py is the one thing that runs,
+# so it is the one name that can't be attached — it arrives as `code`.
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
 
 DEFAULT_CODE = '''# Welcome to Python!
@@ -180,9 +181,9 @@ def validate_files(raw):
             return None, ("'%s' is not a valid file name. Use letters, digits, "
                           "dashes and underscores, and end with an extension "
                           "like .txt or .csv." % name)
-        if name.lower().endswith(".py"):
-            return None, ("'%s' can't be saved — main.py is the program, and "
-                          "other files are data it reads." % name)
+        if name.lower() == "main.py":
+            return None, ("main.py is the program itself and is saved with the "
+                          "project, so it can't also be attached as a file.")
         if not isinstance(body, str):
             return None, "'%s' could not be read as text." % name
         size = len(body.encode("utf-8"))

@@ -137,7 +137,65 @@ stays optional and falls back to "Untitled". Forking clears the name, so a
 student who opens your starter has to enter their own rather than submitting
 under yours.
 
-**Download** saves the file to disk if they want a local copy.
+**Download** saves the file to disk if they want a local copy — one `.py` for a
+one-file project, a zip when there's more than that, so a program and the
+module it imports never get separated.
+
+## More than one .py file
+
+**+ File** and a name ending in `.py` adds a module, and `main.py` can import
+it:
+
+```python
+# helper.py
+def greet(name):
+    return "Hello, " + name
+
+# main.py
+import helper
+print(helper.greet("Fred"))
+```
+
+The project folder goes on `sys.path`, which is what makes this work —
+`os.chdir` alone wouldn't, because Python searches `sys.path` and not the
+working directory.
+
+**Editing a module and pressing Run gets the new version.** That sounds
+obvious and isn't: Python caches modules in `sys.modules` and will hand back
+the one it imported ten minutes ago. Measured, both ways:
+
+```
+edit helper.py, run again, without clearing the cache -> "version ONE"
+                                    after clearing it -> "version TWO"
+```
+
+A student changing a function and seeing no effect, with nothing in the output
+to explain it, is about the worst debugging experience the IDE could offer. So
+project modules are dropped from `sys.modules` before every run, in game mode
+too. `__pycache__` is switched off for the same reason — a stale `.pyc`
+outliving an edit is no better.
+
+**Tracebacks name the file the error is actually in:**
+
+```
+Traceback (most recent call last):
+  File "main.py", line 2, in <module>
+    print(helper.divide(1, 0))
+  File "helper.py", line 4, in divide
+    return a / b
+ZeroDivisionError: division by zero
+```
+
+Library frames are still filtered out; frames from the student's own files, in
+any of them, are kept. A syntax error inside an imported module says which file
+and which line rather than the raw `/project/` path. Demo links keep their
+promise here too — line numbers, no source, in any file.
+
+**A file named after a library gets a warning, not a ban.** `random.py` sits
+ahead of the real `random` on `sys.path`, so `import random` quietly finds the
+student's empty file and everything after it fails in a way that looks nothing
+like the cause. Creating one says so; the name still works if that's genuinely
+what they meant.
 
 ## Demo links — showing the output without showing the code
 
@@ -498,6 +556,7 @@ static/
   app.js                Editor, sprite panel, sharing
   runtime.js            Python bootstrap, output piping and the input line —
                         shared by the editor and demo pages
+  zip.js                Dependency-free ZIP writer (multi-file downloads)
   demo.js               The demo page: fetch on Run, run, show the output
   game.js               Pygame Zero: async game loop, asset loading
   notes.js              Markdown notes: render, sanitize
