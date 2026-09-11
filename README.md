@@ -373,6 +373,35 @@ are the first thing a student sees.
 `examples/05_assignment_with_notes/` is a worked example: notes, starter code
 with TODOs, and the data file.
 
+### Students can't copy out of the notes
+
+Code in an assignment can't be selected, so it can't be pasted into the editor.
+Typing it out is most of the exercise. Verified in Chrome — a select-all picks
+up the rest of the page and skips the notes entirely, and a copy carries
+nothing from them:
+
+```
+Ctrl+A captured:        "OTHER_PAGE_TEXT"
+includes the notes:     false
+a copy would carry it:  false
+```
+
+Done by preventing selection rather than by policing paste. A paste filter
+would have to guess where text came from, and would block a student who typed
+your starter code correctly and then copied their own line — which is the
+worst possible false positive, since it punishes the one doing the work. This
+approach has no such failure.
+
+Two deliberate exceptions:
+
+- **Links stay selectable**, so a URL in an assignment can still be copied out.
+- **Not while authoring.** At `/` the notes are yours and fully selectable.
+  Every view a student sees — a share, a fork — is covered.
+
+It's a speed bump, not a lock: developer tools will still show the text. Same
+bargain as a demo link, and it closes the path a student would actually take.
+Copy and paste inside the editor is untouched, and WebIDE is unchanged.
+
 ### What's allowed in notes
 
 Ordinary markdown — headings, lists, tables, code blocks, blockquotes, links —

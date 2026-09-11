@@ -577,6 +577,33 @@ li.CodeMirror-hint-active {
   min-height: 0;
 }
 
+/* Assignment notes can't be selected, so the code in them can't be copied
+   into the editor. Typing it out is most of the exercise.
+
+   Done by preventing selection rather than by policing paste: a paste filter
+   would have to guess where text came from, and would block a student who
+   typed the starter code correctly and then copied their own line. This has no
+   such failure — it removes the shortcut without ever getting in the way of
+   someone doing the work.
+
+   It is a speed bump, not a lock. Developer tools will still show the text.
+   That is the same bargain as a demo link, and it stops the ordinary path.
+
+   Not while authoring: at `/` the notes are yours, and you may well want to
+   copy a line out of them. Every view a student sees — a share, a fork — is
+   covered. */
+body:not(.is-authoring) .notes-body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Links stay usable: clicking one still works, and its text is the one thing
+   worth being able to lift out of the notes. */
+body:not(.is-authoring) .notes-body a {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* Class notes are prose, so they get prose treatment rather than the
    monospaced console look of the output pane. */
 .prose {
