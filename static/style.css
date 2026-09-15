@@ -892,19 +892,46 @@ body:not(.is-authoring) .notes-body a {
 .projects { max-height: 340px; overflow-y: auto; margin: 4px 0 18px; }
 .project-row {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-bottom: 6px;
+}
+.project-row:hover { border-color: var(--accent); }
+.project-open {
+  flex: 1;
+  display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 14px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  margin-bottom: 6px;
   text-decoration: none;
   color: var(--text);
+  min-width: 0;
 }
-.project-row:hover { border-color: var(--accent); }
 .project-name { font-weight: 500; }
 .project-when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* Quiet until you go looking for it, so nobody deletes a project on the way
+   to opening one. */
+.project-x {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  padding: 6px 12px 8px;
+  cursor: pointer;
+  opacity: .35;
+  border-radius: 6px;
+}
+.project-row:hover .project-x { opacity: 1; }
+.project-x:hover { color: var(--red); background: var(--bg); }
+
+.rowactions { white-space: nowrap; }
+.rowactions .linkbtn { margin-left: 12px; }
+.linkbtn.danger { color: var(--red); }
 
 /* ------------------------------------------------------ teacher's pages */
 .sheet {

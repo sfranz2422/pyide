@@ -100,6 +100,10 @@ class Assignment(Base):
     files = Column(Text, nullable=False, default="{}")
     created_at = Column(DateTime, nullable=False, default=now)
     closed = Column(Integer, nullable=False, default=0)
+    # Tidied away rather than destroyed. An archived assignment keeps every
+    # submission and every student's work; it just stops filling up the
+    # dashboard months after the class moved on.
+    archived = Column(Integer, nullable=False, default=0)
 
     def file_map(self) -> dict:
         return _as_map(self.files)
@@ -175,13 +179,38 @@ def _as_map(raw) -> dict:
         return {}
 
 
+# Columns added after a table first shipped, with the DDL to add each one.
+# create_all() makes missing tables but never missing columns, so a database
+# from an earlier deploy needs these. Every default has to leave existing rows
+# correct: an assignment that existed before archiving did is not archived.
+LATER_COLUMNS = [
+    ("assignments", "archived",
+     "ALTER TABLE assignments ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"),
+]
+
+
 def create_all(engine) -> None:
-    """Create only the tables defined here.
+    """Create only the tables defined here, then bring them up to date.
 
     Uses this module's own metadata, so it never touches `snippets` or
     anything WebIDE owns in the same database.
     """
     Base.metadata.create_all(engine)
+
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    for table, column, ddl in LATER_COLUMNS:
+        try:
+            existing = {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            continue
+        if column in existing:
+            continue
+        with engine.begin() as conn:
+            try:
+                conn.execute(text(ddl))
+            except Exception:
+                pass
 
 
 # --------------------------------------------------------------------------

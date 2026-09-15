@@ -262,19 +262,59 @@ window.PyIDEAccount = (function () {
       box.appendChild(none);
     }
     list.forEach(function (p) {
-      var row = document.createElement("a");
+      var row = document.createElement("div");
       row.className = "project-row";
-      row.href = p.url;
+
+      var open = document.createElement("a");
+      open.className = "project-open";
+      open.href = p.url;
 
       var name = document.createElement("span");
       name.className = "project-name";
       name.textContent = p.title || "Untitled";
-      row.appendChild(name);
+      open.appendChild(name);
 
       var when = document.createElement("span");
       when.className = "project-when";
-      when.textContent = (p.assignment ? p.assignment + " · " : "") + p.updated;
-      row.appendChild(when);
+      when.textContent = (p.assignment ? p.assignment + " · " : "") + p.updated
+                       + (p.submitted ? " · turned in" : "");
+      open.appendChild(when);
+      row.appendChild(open);
+
+      var bin = document.createElement("button");
+      bin.className = "project-x";
+      bin.type = "button";
+      bin.textContent = "×";
+      bin.title = "Delete this project";
+      bin.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        /* Say what is actually at stake. Work already turned in stays with
+           the teacher, and an assignment copy can be started again from the
+           link — neither is obvious, and both change the answer. */
+        var warning = "Delete “" + (p.title || "Untitled") + "”?";
+        if (p.submitted) {
+          warning += "\n\nWhat you turned in stays with your teacher. "
+                   + "This only deletes your working copy.";
+        } else if (p.assignment) {
+          warning += "\n\nYou can open your teacher's link again to start "
+                   + "this assignment over from scratch.";
+        } else {
+          warning += "\n\nThis can't be undone.";
+        }
+        if (!window.confirm(warning)) return;
+
+        fetch("/api/draft/" + encodeURIComponent(p.slug), { method: "DELETE" })
+          .then(function (res) {
+            if (!res.ok) return;
+            row.remove();
+            if (!box.querySelector(".project-row")) showProjects([]);
+            // deleting the project you are looking at leaves you on a dead
+            // address, so step back to a fresh editor
+            if (cfg.draftSlug === p.slug) window.location.href = "/";
+          });
+      });
+      row.appendChild(bin);
 
       box.appendChild(row);
     });

@@ -682,6 +682,31 @@ def start_draft():
         db.close()
 
 
+@app.delete("/api/draft/<slug>")
+def delete_draft(slug):
+    """Throw away one of your own saved projects.
+
+    Only ever your own, and only ever the working copy. Anything already
+    turned in stays with the teacher untouched — a submission points at its
+    own frozen snapshot, not at this. Deleting an assignment copy is also how
+    a student starts that assignment over: open the link again and they get a
+    clean one from the starter.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="not signed in"), 401
+        draft = db.query(accounts.Draft).filter_by(slug=slug).first()
+        if draft is None or draft.owner_id != user.id:
+            return jsonify(error="no such project"), 404
+        db.delete(draft)
+        db.commit()
+        return jsonify(ok=True)
+    finally:
+        db.close()
+
+
 @app.get("/api/my/projects")
 def my_projects():
     """Everything this student has saved, newest first."""
@@ -695,10 +720,14 @@ def my_projects():
                   .order_by(accounts.Draft.updated_at.desc())
                   .limit(60).all())
         titles = {a.id: a.title for a in db.query(accounts.Assignment).all()}
+        # which of these have been handed in, so deleting one can say so
+        turned_in = {s.assignment_id for s in db.query(accounts.Submission)
+                     .filter_by(student_id=user.id).all()}
         return jsonify(projects=[{
             "slug": d.slug,
             "title": d.title,
             "assignment": titles.get(d.assignment_id, ""),
+            "submitted": bool(d.assignment_id and d.assignment_id in turned_in),
             "updated": d.updated_at.strftime("%b %d, %I:%M %p"),
             "url": url_for("open_draft", slug=d.slug),
         } for d in rows])
@@ -892,16 +921,86 @@ def teacher_home():
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
+        show_archived = request.args.get("archived") == "1"
         items = (db.query(accounts.Assignment)
                    .filter_by(teacher_id=user.id)
                    .order_by(accounts.Assignment.created_at.desc()).all())
+        live = [a for a in items if not a.archived]
+        filed = [a for a in items if a.archived]
+
         counts = {}
         for item in items:
             counts[item.id] = db.query(accounts.Submission).filter_by(
                 assignment_id=item.id).count()
+
         ctx = user_context(db)
-        ctx.update(assignments=items, counts=counts)
+        ctx.update(assignments=live, archived=filed, counts=counts,
+                   show_archived=show_archived)
         return render_template("teacher.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.post("/api/assignment/<slug>/archive")
+def archive_assignment(slug):
+    """Tidy an assignment away, or bring it back.
+
+    Nothing is destroyed: every submission and every student's copy stays
+    exactly as it was. It only stops crowding the dashboard.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="not allowed"), 403
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None or item.teacher_id != user.id:
+            return jsonify(error="no such assignment"), 404
+        item.archived = 0 if item.archived else 1
+        db.commit()
+        return jsonify(ok=True, archived=bool(item.archived))
+    finally:
+        db.close()
+
+
+@app.delete("/api/assignment/<slug>")
+def delete_assignment(slug):
+    """Delete an assignment outright — only if nobody has turned anything in.
+
+    The refusal is the point. Submissions are the closest thing this app has
+    to a record of a student's work for a teacher, and no single click should
+    be able to wipe them. An assignment with submissions can be archived
+    instead, which hides it and keeps everything.
+
+    Students who started but never submitted keep their code: their copy is
+    detached from the assignment and becomes an ordinary saved project, so a
+    tidy-up on your side never deletes work on theirs.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="not allowed"), 403
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None or item.teacher_id != user.id:
+            return jsonify(error="no such assignment"), 404
+
+        handed_in = db.query(accounts.Submission).filter_by(
+            assignment_id=item.id).count()
+        if handed_in:
+            return jsonify(
+                error="%d student%s turned work in to this. Archive it instead "
+                      "— that hides it and keeps everything."
+                      % (handed_in, "" if handed_in == 1 else "s"),
+                submissions=handed_in), 409
+
+        detached = (db.query(accounts.Draft)
+                      .filter_by(assignment_id=item.id).all())
+        for draft in detached:
+            draft.assignment_id = None       # their work becomes their own
+        db.delete(item)
+        db.commit()
+        return jsonify(ok=True, kept_projects=len(detached))
     finally:
         db.close()
 
