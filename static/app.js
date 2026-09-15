@@ -171,6 +171,7 @@
   var PROJECT_DIR = "/project";
   var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
 
+  var account = null;      // assigned further down, once the editor exists
   var docs = {};
   var active = MAIN;
   var tabsEl = $("file-tabs");
@@ -309,6 +310,8 @@
   function addFile(name, text) {
     docs[name] = makeDoc(text || "");
     renderTabs();
+    // adding a file is a change, but fires no editor change event
+    if (account) account.noteEdit();
   }
 
   function removeFile(name) {
@@ -323,6 +326,7 @@
     try { pyodide.FS.unlink(PROJECT_DIR + "/" + name); } catch (e) { /* not written yet */ }
     renderTabs();
     relayout();
+    if (account) account.noteEdit();
   }
 
   /* A file called random.py, math.py or string.py wins over the real library,
@@ -802,6 +806,29 @@
   });
 
   $("sprites-close").addEventListener("click", closeSprites);
+
+  // ----------------------------------------------------- saving and turn-in
+  /* Dormant unless somebody is signed in and this is a saved project. */
+  account = window.PyIDEAccount.attach({
+    read: function () {
+      return {
+        code: mainSource(),
+        files: dataFiles(),
+        title: $("title").value
+      };
+    },
+    say: write
+  });
+
+  // Every change to any file counts, including a data file or the notes
+  editor.on("change", function () { account.noteEdit(); });
+
+  $("close-projects").addEventListener("click", function () {
+    $("projects-modal").hidden = true;
+  });
+  $("projects-modal").addEventListener("click", function (e) {
+    if (e.target === $("projects-modal")) $("projects-modal").hidden = true;
+  });
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");

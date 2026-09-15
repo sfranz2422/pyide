@@ -19,3 +19,27 @@ services:
         fromDatabase:
           name: pyide-db
           property: connectionString
+
+      # Signs the session cookie. Render generates one; never set this by
+      # hand and never change it casually — changing it signs everyone out.
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Google sign-in. Leave all four unset and the site runs exactly as it
+      # did before accounts existed: no sign-in button, no saving, no
+      # dashboard, and every existing share link still works.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # Who may sign in. Comma separated, no @. Leave empty to allow anyone,
+      # which you do NOT want in production.
+      - key: ALLOWED_EMAIL_DOMAINS
+        sync: false
+
+      # Who gets the dashboard and the Publish button. Comma separated full
+      # addresses. Kept here rather than in the database so nobody can
+      # promote themselves by finding a hole in the app.
+      - key: TEACHER_EMAILS
+        sync: false

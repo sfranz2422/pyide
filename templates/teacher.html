@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignments — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('index') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">Assignments</span></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('index') }}">New project</a>
+    <span class="whoami">{{ user_email }}</span>
+    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
+  </div>
+</header>
+
+<main class="sheet">
+  {% if assignments %}
+    <table class="listing">
+      <thead>
+        <tr><th>Assignment</th><th>Set</th><th>Turned in</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for a in assignments %}
+          <tr>
+            <td><a href="{{ url_for('teacher_assignment', slug=a.slug) }}">{{ a.title }}</a></td>
+            <td class="dim">{{ a.created_at.strftime('%b %d, %Y') }}</td>
+            <td><strong>{{ counts.get(a.id, 0) }}</strong></td>
+            <td class="right">
+              <a class="linkbtn" href="{{ url_for('open_assignment', slug=a.slug) }}">Open it</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">
+      <h2>No assignments yet</h2>
+      <p>Open a project, get it how you want students to find it, then press
+         <strong>Publish as assignment</strong>. You'll get a link to hand out.</p>
+      <p><a class="btn btn-primary" href="{{ url_for('index') }}">Start a project</a></p>
+    </div>
+  {% endif %}
+</main>
+
+</body>
+</html>

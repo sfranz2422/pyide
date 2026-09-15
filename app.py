@@ -19,10 +19,13 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+import accounts
 
 # --------------------------------------------------------------------------
 # Config
@@ -109,6 +112,10 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 Base.metadata.create_all(engine)
+
+# Signing in, saved work, assignments and turning in. Its own metadata, so it
+# creates only its own tables and never touches snippets or WebIDE's.
+accounts.create_all(engine)
 
 
 # Columns added after the table first shipped, with the DDL to add each one.
@@ -201,6 +208,137 @@ def validate_files(raw):
 # --------------------------------------------------------------------------
 
 app = Flask(__name__)
+
+# Signed session cookies. Generated if unset so the app still boots locally,
+# but then every restart logs everyone out — set it properly on the server.
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",       # Lax, not Strict: the OAuth redirect
+                                        # arrives from Google and must carry
+                                        # the cookie or login silently fails
+    SESSION_COOKIE_SECURE=bool(os.environ.get("DATABASE_URL")),
+)
+
+# --------------------------------------------------------------------------
+# Signing in
+# --------------------------------------------------------------------------
+# Entirely optional. With no Google credentials set, `oauth` stays None, the
+# sign-in button never renders, and every route below behaves as it did before
+# any of this existed.
+
+oauth = None
+if accounts.login_configured():
+    from authlib.integrations.flask_client import OAuth
+
+    oauth = OAuth(app)
+    oauth.register(
+        name="google",
+        client_id=os.environ["GOOGLE_CLIENT_ID"],
+        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        server_metadata_url=(
+            "https://accounts.google.com/.well-known/openid-configuration"
+        ),
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+
+def current_user(db):
+    """The signed-in user, or None. Never raises."""
+    uid = session.get("uid")
+    if not uid:
+        return None
+    return db.query(accounts.User).filter_by(id=uid).first()
+
+
+def user_context(db):
+    """What every template needs to know about who is looking."""
+    user = current_user(db)
+    return {
+        "login_enabled": accounts.login_configured(),
+        "user": user,
+        "user_name": user.display_name() if user else "",
+        "user_email": user.email if user else "",
+        "is_teacher": bool(user and accounts.is_teacher(user.email)),
+    }
+
+
+@app.context_processor
+def inject_user():
+    """Available to every template, so no page can forget who is looking."""
+    db = SessionLocal()
+    try:
+        return user_context(db)
+    finally:
+        db.close()
+
+
+@app.get("/login")
+def login():
+    if not oauth:
+        abort(404)
+    # Where to go afterwards, so a student who signs in from an assignment
+    # link lands back on that assignment rather than on a blank editor.
+    nxt = request.args.get("next", "")
+    session["after_login"] = nxt if nxt.startswith("/") else ""
+    return oauth.google.authorize_redirect(
+        url_for("auth_callback", _external=True, _scheme=_scheme())
+    )
+
+
+def _scheme():
+    """Render terminates TLS in front of us, so url_for sees plain http."""
+    return "https" if os.environ.get("DATABASE_URL") else "http"
+
+
+@app.get("/auth/callback")
+def auth_callback():
+    if not oauth:
+        abort(404)
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception:
+        return render_template("signin_problem.html",
+                               reason="That sign-in didn't complete."), 400
+
+    info = token.get("userinfo") or {}
+    sub = info.get("sub")
+    email = (info.get("email") or "").strip()
+
+    # Checked here, on the server, from the verified token — never from
+    # anything the browser handed us.
+    if not sub or not email or not info.get("email_verified"):
+        return render_template("signin_problem.html",
+                               reason="Google didn't confirm that address."), 400
+    if not accounts.email_allowed(email):
+        return render_template(
+            "signin_problem.html",
+            reason="%s isn't a school account for this site. Sign in with "
+                   "your school address." % email), 403
+
+    db = SessionLocal()
+    try:
+        user = db.query(accounts.User).filter_by(google_sub=sub).first()
+        if user is None:
+            user = accounts.User(google_sub=sub, email=email,
+                                 name=info.get("name") or "")
+            db.add(user)
+        else:
+            user.email = email                     # a school can rename a mailbox
+            user.name = info.get("name") or user.name
+            user.last_seen = accounts.now()
+        db.commit()
+        session["uid"] = user.id
+    finally:
+        db.close()
+
+    return redirect(session.pop("after_login", "") or url_for("index"))
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(request.args.get("next") or url_for("index"))
 
 
 @app.get("/")
@@ -371,6 +509,364 @@ def create_share():
             hidden=hidden,
             url=url_for(route, slug=snip.slug, _external=True),
         )
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Saved work
+# --------------------------------------------------------------------------
+# A draft is a student's living copy: it autosaves as they type and is found
+# again by who they are, not by a link they have to keep. There is exactly one
+# per student per assignment, so opening the assignment link a week later
+# returns them to their own work rather than to a fresh starter.
+
+def _draft_payload(db, draft, extra=None):
+    ctx = user_context(db)
+    ctx.update(
+        code=draft.code,
+        files=draft.file_map(),
+        title=draft.title,
+        author=ctx["user_name"],
+        readonly=False,
+        authoring=False,
+        slug=None,
+        shared_at=None,
+        draft_slug=draft.slug,
+    )
+    ctx.update(extra or {})
+    return ctx
+
+
+@app.get("/p/<slug>")
+def open_draft(slug):
+    """A student's own saved project."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return redirect(url_for("login", next=request.path))
+        draft = db.query(accounts.Draft).filter_by(slug=slug).first()
+        if draft is None:
+            abort(404)
+        # Somebody else's work is simply not found, rather than forbidden —
+        # there is no reason to confirm that a given link belongs to anyone.
+        if draft.owner_id != user.id:
+            abort(404)
+
+        assignment = None
+        if draft.assignment_id:
+            assignment = db.query(accounts.Assignment).filter_by(
+                id=draft.assignment_id).first()
+
+        submitted = None
+        if assignment:
+            submitted = db.query(accounts.Submission).filter_by(
+                assignment_id=assignment.id, student_id=user.id).first()
+
+        return render_template("index.html", **_draft_payload(db, draft, {
+            "assignment_title": assignment.title if assignment else "",
+            "assignment_slug": assignment.slug if assignment else "",
+            "submitted_at": submitted.submitted_at.strftime("%b %d at %I:%M %p")
+                            if submitted else "",
+        }))
+    finally:
+        db.close()
+
+
+@app.post("/api/draft/<slug>")
+def save_draft(slug):
+    """Autosave. Called a moment after the student stops typing."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="not signed in"), 401
+        draft = db.query(accounts.Draft).filter_by(slug=slug).first()
+        if draft is None or draft.owner_id != user.id:
+            return jsonify(error="no such project"), 404
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code", "")
+        if not isinstance(code, str):
+            return jsonify(error="bad code"), 400
+        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That program is too large to save."), 413
+
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+
+        draft.code = code
+        draft.files = json.dumps(files)
+        draft.title = clean(data.get("title"), 200) or draft.title
+        draft.updated_at = accounts.now()
+        db.commit()
+        return jsonify(saved_at=draft.updated_at.strftime("%I:%M %p"))
+    finally:
+        db.close()
+
+
+@app.get("/api/my/projects")
+def my_projects():
+    """Everything this student has saved, newest first."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="not signed in"), 401
+        rows = (db.query(accounts.Draft)
+                  .filter_by(owner_id=user.id)
+                  .order_by(accounts.Draft.updated_at.desc())
+                  .limit(60).all())
+        titles = {a.id: a.title for a in db.query(accounts.Assignment).all()}
+        return jsonify(projects=[{
+            "slug": d.slug,
+            "title": d.title,
+            "assignment": titles.get(d.assignment_id, ""),
+            "updated": d.updated_at.strftime("%b %d, %I:%M %p"),
+            "url": url_for("open_draft", slug=d.slug),
+        } for d in rows])
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Assignments
+# --------------------------------------------------------------------------
+
+@app.post("/api/assignment")
+def publish_assignment():
+    """Turn whatever the teacher is looking at into an assignment link."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="Only a teacher can publish an assignment."), 403
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code", "")
+        if not isinstance(code, str) or not code.strip():
+            return jsonify(error="There's no code to hand out yet."), 400
+        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That program is too large."), 413
+
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+
+        item = accounts.Assignment(
+            slug=accounts.new_id(db, accounts.Assignment),
+            teacher_id=user.id,
+            title=clean(data.get("title"), 200) or "Untitled assignment",
+            code=code,
+            files=json.dumps(files),
+        )
+        db.add(item)
+        db.commit()
+        return jsonify(slug=item.slug,
+                       url=url_for("open_assignment", slug=item.slug,
+                                   _external=True, _scheme=_scheme()))
+    finally:
+        db.close()
+
+
+@app.get("/a/<slug>")
+def open_assignment(slug):
+    """The link a teacher hands out.
+
+    Signed in, this finds the student's own copy — or makes one the first
+    time — and sends them to it. Signed out, it behaves exactly like a fork
+    of a shared project always has: an editable copy that saves nothing. A
+    student with no account, or whose sign-in is being awkward, can still do
+    the work and share a link the old way.
+    """
+    db = SessionLocal()
+    try:
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None:
+            abort(404)
+
+        user = current_user(db)
+        if user is None:
+            ctx = user_context(db)
+            ctx.update(
+                code=item.code,
+                files=item.file_map(),
+                title=item.title,
+                author="",
+                readonly=False,
+                authoring=False,
+                slug=None,
+                shared_at=None,
+                draft_slug=None,
+                assignment_title=item.title,
+                assignment_slug=item.slug,
+                submitted_at="",
+                sign_in_hint=True,
+            )
+            return render_template("index.html", **ctx)
+
+        draft = db.query(accounts.Draft).filter_by(
+            owner_id=user.id, assignment_id=item.id).first()
+        if draft is None:
+            draft = accounts.Draft(
+                slug=accounts.new_id(db, accounts.Draft),
+                owner_id=user.id,
+                assignment_id=item.id,
+                title=item.title,
+                code=item.code,
+                files=item.files,
+            )
+            db.add(draft)
+            db.commit()
+        return redirect(url_for("open_draft", slug=draft.slug))
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Turning it in
+# --------------------------------------------------------------------------
+
+@app.post("/api/submit")
+def turn_in():
+    """Freeze the student's work and record it against the assignment.
+
+    The frozen copy is an ordinary share snapshot, so what was handed in
+    cannot change afterwards however much the student keeps tinkering.
+    Turning in again replaces the row and points it at a newer snapshot.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first, then you can turn work in."), 401
+
+        data = request.get_json(silent=True) or {}
+        draft = db.query(accounts.Draft).filter_by(
+            slug=str(data.get("draft", ""))).first()
+        if draft is None or draft.owner_id != user.id:
+            return jsonify(error="no such project"), 404
+        if not draft.assignment_id:
+            return jsonify(error="This project isn't part of an assignment."), 400
+
+        item = db.query(accounts.Assignment).filter_by(id=draft.assignment_id).first()
+        if item is None:
+            return jsonify(error="That assignment is gone."), 404
+        if item.closed:
+            return jsonify(error="That assignment is closed."), 403
+
+        code = data.get("code", draft.code)
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+        if not isinstance(code, str) or not code.strip():
+            return jsonify(error="There's nothing to turn in yet."), 400
+
+        # keep the draft in step, so the saved copy matches what was submitted
+        draft.code = code
+        draft.files = json.dumps(files)
+        draft.updated_at = accounts.now()
+
+        snap = Snippet(
+            slug=new_slug(db),
+            title=draft.title or item.title,
+            author=user.display_name(),
+            code=code,
+            files=json.dumps(files),
+        )
+        db.add(snap)
+        db.flush()
+
+        row = db.query(accounts.Submission).filter_by(
+            assignment_id=item.id, student_id=user.id).first()
+        if row is None:
+            row = accounts.Submission(assignment_id=item.id, student_id=user.id,
+                                      snippet_slug=snap.slug)
+            db.add(row)
+        else:
+            row.snippet_slug = snap.slug
+            row.submitted_at = accounts.now()
+            row.times_submitted = (row.times_submitted or 1) + 1
+        db.commit()
+        return jsonify(ok=True,
+                       submitted_at=row.submitted_at.strftime("%b %d at %I:%M %p"),
+                       again=row.times_submitted > 1)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# The teacher's view
+# --------------------------------------------------------------------------
+
+def _require_teacher(db):
+    user = current_user(db)
+    if user is None:
+        return None, redirect(url_for("login", next=request.path))
+    if not accounts.is_teacher(user.email):
+        abort(404)                      # don't advertise that it exists
+    return user, None
+
+
+@app.get("/teacher")
+def teacher_home():
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        items = (db.query(accounts.Assignment)
+                   .filter_by(teacher_id=user.id)
+                   .order_by(accounts.Assignment.created_at.desc()).all())
+        counts = {}
+        for item in items:
+            counts[item.id] = db.query(accounts.Submission).filter_by(
+                assignment_id=item.id).count()
+        ctx = user_context(db)
+        ctx.update(assignments=items, counts=counts)
+        return render_template("teacher.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.get("/teacher/<slug>")
+def teacher_assignment(slug):
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None or item.teacher_id != user.id:
+            abort(404)
+
+        rows = (db.query(accounts.Submission, accounts.User)
+                  .join(accounts.User, accounts.Submission.student_id == accounts.User.id)
+                  .filter(accounts.Submission.assignment_id == item.id)
+                  .order_by(accounts.User.name).all())
+        handed_in = [{
+            "name": student.display_name(),
+            "email": student.email,
+            "when": sub.submitted_at.strftime("%b %d at %I:%M %p"),
+            "times": sub.times_submitted,
+            "url": url_for("view_shared", slug=sub.snippet_slug),
+        } for sub, student in rows]
+
+        # Anyone who opened the assignment but never pressed Turn in.
+        started = (db.query(accounts.User)
+                     .join(accounts.Draft, accounts.Draft.owner_id == accounts.User.id)
+                     .filter(accounts.Draft.assignment_id == item.id).all())
+        done = {s["email"] for s in handed_in}
+        not_yet = sorted({u.email: u.display_name() for u in started
+                          if u.email not in done}.values())
+
+        ctx = user_context(db)
+        ctx.update(assignment=item, handed_in=handed_in, not_yet=not_yet,
+                   share_url=url_for("open_assignment", slug=item.slug,
+                                     _external=True, _scheme=_scheme()))
+        return render_template("teacher_assignment.html", **ctx)
     finally:
         db.close()
 

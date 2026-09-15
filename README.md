@@ -10,6 +10,93 @@ Run at once on Render's free tier without trouble.
 
 ---
 
+## Accounts, saved work and turning in
+
+Signing in is **optional and additive**. With no Google credentials set, the
+site is exactly what it was: anonymous students open a link, write code, press
+Run, share a snapshot. No sign-in button renders, `/login` isn't even a route,
+and every link handed out before today still works. Verified as its own test,
+because "the new feature quietly broke the old one" is the failure that matters
+most here.
+
+Signing in adds three things and takes nothing away.
+
+**Work saves itself.** A signed-in student's project autosaves about a second
+and a half after they stop typing, and again on the way out if they close the
+tab. The state sits in the toolbar — `Saved 9:42 AM` — and goes red if a save
+fails, because a student whose work isn't reaching the server needs to know
+before they shut the lid, not after.
+
+Autosave lives in the editor rather than on a home page on purpose: students
+arrive from a link their teacher gave them and never see a front page, so a
+"recent projects" list there would never be read. Their work is reachable from
+the account menu in the bar they're already looking at.
+
+**Assignments.** Open a project, get it how you want the class to find it, and
+press **Publish**. You name it and get a link to hand out — the same workflow
+as sharing, one button along. A student who opens it gets *their own copy*,
+saved under their name. Opening it again a week later returns them to their own
+work rather than starting them over, which is the whole point: losing the link
+stops mattering.
+
+A student who isn't signed in can still open an assignment link and do the
+work. They just can't save it or turn it in, and a banner says so. Nobody is
+locked out by a login that won't cooperate five minutes before the bell.
+
+**Turning in** freezes the work as an ordinary share snapshot and records it
+against the assignment. Turning in again replaces it and says so. What you're
+marking can't change under you while a student keeps tinkering — tested
+explicitly: edit after submitting, and the submitted copy is unmoved.
+
+The dashboard at `/teacher` lists your assignments with counts, and each one
+shows who turned in, when, how many attempts, and a link to exactly what they
+submitted — plus who has *started* but not turned in, which is the list you
+actually want ten minutes before the end of a lesson.
+
+### Setting up Google sign-in
+
+Four environment variables, all in `render.yaml`:
+
+| | |
+|---|---|
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from a Google Cloud OAuth client |
+| `ALLOWED_EMAIL_DOMAINS` | e.g. `yourschool.org` — who may sign in at all |
+| `TEACHER_EMAILS` | full addresses that get Publish and the dashboard |
+
+In Google Cloud, create an OAuth 2.0 Web application client and set the
+authorised redirect URI to `https://your-app.onrender.com/auth/callback`.
+
+**Your district admin has to allowlist the app.** Google Workspace for
+Education blocks under-18 accounts from third-party apps by default, and the
+student just sees a "request access" message. Ask them to mark the OAuth client
+trusted *including the sign-in scope*, or none of this works for students no
+matter how correct the code is.
+
+Two deliberate choices worth knowing:
+
+- **Teachers come from an environment variable, not a database column.** There
+  is no code path anywhere that can make someone a teacher. Changing who
+  teaches is a deploy setting.
+- **Identity hangs off Google's `sub`, not the email address.** A school can
+  rename a mailbox; `sub` never changes and is never reused, so a renamed
+  student keeps their work.
+
+### The tables
+
+`snippets` is untouched. Four new ones, named so they can't collide with
+WebIDE's in the shared database:
+
+| table | what it holds |
+|---|---|
+| `users` | one row per person who has ever signed in |
+| `assignments` | a starter project you handed out, and its link |
+| `drafts` | a student's living copy — this is what autosaves |
+| `submissions` | what was turned in, pointing at a frozen snapshot |
+
+A draft is found by *who you are plus which assignment*, not by a link, which
+is what makes a lost link harmless. There is exactly one per student per
+assignment, enforced by a unique constraint rather than by hoping.
+
 ## Deploying to Render
 
 1. Push this folder to a GitHub repo.

@@ -55,11 +55,24 @@
     {% if readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}
+      {% if draft_slug %}
+        <span id="save-state" class="savestate" aria-live="polite">Saved</span>
+      {% endif %}
+      {% if draft_slug and assignment_slug %}
+        <button id="turn-in" class="btn btn-primary"
+                title="Hand this in to your teacher. You can keep working and turn it in again.">
+          {% if submitted_at %}Turn in again{% else %}Turn in{% endif %}
+        </button>
+      {% endif %}
       <label class="hidecode"
              title="Share a link that runs the program and shows the output, with no code on the page and no way to copy it.">
         <input type="checkbox" id="hide-code"> Hide code
       </label>
       <button id="share" class="btn btn-primary">Share</button>
+      {% if is_teacher %}
+        <button id="publish" class="btn"
+                title="Hand this out to a class as an assignment.">Publish</button>
+      {% endif %}
     {% endif %}
     <button id="download" class="btn">Download</button>
     <div class="stepper" role="group" aria-label="Code text size">
@@ -70,8 +83,37 @@
     <button id="theme" class="btn btn-icon-only" title="Switch between light and dark">
       <span id="theme-glyph">☾</span>
     </button>
+
+    {% if login_enabled %}
+      {% if user %}
+        <div class="account">
+          <button id="account" class="btn btn-account" aria-expanded="false"
+                  title="{{ user_email }}">{{ user_name }}</button>
+          <div id="account-menu" class="menu" hidden>
+            <button id="my-projects" class="menu-item">My projects</button>
+            {% if is_teacher %}
+              <a class="menu-item" href="{{ url_for('teacher_home') }}">Assignments</a>
+            {% endif %}
+            <a class="menu-item" href="{{ url_for('logout', next=request.path) }}">Sign out</a>
+          </div>
+        </div>
+      {% else %}
+        <a class="btn btn-primary"
+           href="{{ url_for('login', next=request.full_path if request.query_string else request.path) }}"
+           title="Sign in with your school Google account to save your work">Sign in</a>
+      {% endif %}
+    {% endif %}
   </div>
 </header>
+
+{% if sign_in_hint and login_enabled and not user %}
+<div class="banner banner-hint">
+  <strong>You're not signed in.</strong> You can do the work right here, but it
+  won't be saved and you can't turn it in.
+  <a href="{{ url_for('login', next=request.path) }}">Sign in with your school account</a>
+  to keep it.
+</div>
+{% endif %}
 
 {% if readonly %}
 <div class="banner">
@@ -153,6 +195,15 @@
   </div>
 </div>
 
+<div id="projects-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h2>My projects</h2>
+    <p class="modal-sub">Everything you have saved, newest first.</p>
+    <div id="projects-list" class="projects"></div>
+    <button id="close-projects" class="btn">Done</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
@@ -165,7 +216,12 @@
     readonly: {{ 'true' if readonly else 'false' }},
     authoring: {{ 'true' if authoring else 'false' }},
     shareUrl: "{{ url_for('create_share') }}",
-    files: {{ files | tojson }}
+    files: {{ files | tojson }},
+    signedIn: {{ 'true' if user else 'false' }},
+    isTeacher: {{ 'true' if is_teacher else 'false' }},
+    draftSlug: {{ (draft_slug or '') | tojson }},
+    assignmentSlug: {{ (assignment_slug or '') | tojson }},
+    submittedAt: {{ (submitted_at or '') | tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='zip.js') }}"></script>
@@ -173,6 +229,7 @@
 <script src="{{ url_for('static', filename='game.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
+<script src="{{ url_for('static', filename='account.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -1,0 +1,248 @@
+/* PyIDE — saving, turning in, and the account menu.
+ *
+ * All of this is dormant unless somebody is signed in. Anonymous students get
+ * exactly the editor they had before: nothing here runs, nothing is sent, and
+ * no button appears.
+ *
+ * Autosave lives in the editor rather than on a home page on purpose. Students
+ * arrive from a link their teacher gave them and never see a front page, so a
+ * "your recent projects" list there would never be read. The save state sits
+ * in the toolbar they are already looking at, and their own work is reachable
+ * from the account menu in the same bar.
+ */
+
+window.PyIDEAccount = (function () {
+  "use strict";
+
+  var SAVE_DELAY = 1500;     // after typing stops; long enough not to spam,
+                             // short enough that a closed tab loses a sentence
+
+  var cfg = window.PYIDE || {};
+  var $ = function (id) { return document.getElementById(id); };
+
+  function attach(opts) {
+    var read = opts.read;               // () -> {code, files, title}
+    var say = opts.say;                 // (text, cls) -> write to the output pane
+    var onEdit = opts.onEdit || function () {};
+
+    if (!cfg.draftSlug) {
+      // Not a saved project. Still wire the menus, then stop.
+      wireAccountMenu();
+      wirePublish(read, say);
+      return { noteEdit: function () {} };
+    }
+
+    var stateEl = $("save-state");
+    var timer = null;
+    var inFlight = false;
+    var dirtyAgain = false;
+    var lastSent = null;
+
+    function show(text, cls) {
+      if (!stateEl) return;
+      stateEl.textContent = text;
+      stateEl.className = "savestate" + (cls ? " " + cls : "");
+    }
+
+    function save() {
+      if (inFlight) { dirtyAgain = true; return; }
+      var payload = read();
+      var body = JSON.stringify(payload);
+      if (body === lastSent) { show("Saved"); return; }
+
+      inFlight = true;
+      show("Saving…", "busy");
+      fetch("/api/draft/" + encodeURIComponent(cfg.draftSlug), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body
+      }).then(function (res) {
+        return res.json().then(function (data) { return { res: res, data: data }; });
+      }).then(function (out) {
+        inFlight = false;
+        if (!out.res.ok) {
+          /* Left visible rather than retried silently. A student whose work is
+             not reaching the server needs to know before they close the tab,
+             and "too large to save" will not fix itself on a retry. */
+          show("Not saved", "bad");
+          say("\nCouldn't save: " + (out.data.error || "the server said no") +
+              "\n", "err");
+          return;
+        }
+        lastSent = body;
+        show("Saved " + (out.data.saved_at || ""));
+        if (dirtyAgain) { dirtyAgain = false; schedule(); }
+      }).catch(function () {
+        inFlight = false;
+        show("Not saved", "bad");
+      });
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      show("Saving…", "busy");
+      timer = setTimeout(save, SAVE_DELAY);
+    }
+
+    /* A tab closing takes any pending save with it, so push one last copy on
+       the way out. keepalive lets the request outlive the page. */
+    window.addEventListener("pagehide", function () {
+      if (!timer && !dirtyAgain) return;
+      try {
+        fetch("/api/draft/" + encodeURIComponent(cfg.draftSlug), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(read()),
+          keepalive: true
+        });
+      } catch (e) { /* nothing more we can do from here */ }
+    });
+
+    wireAccountMenu();
+    wirePublish(read, say);
+    wireTurnIn(read, say);
+    show("Saved");
+
+    return {
+      noteEdit: function () { schedule(); onEdit(); },
+      saveNow: save
+    };
+  }
+
+  // ------------------------------------------------------------- turn in
+  function wireTurnIn(read, say) {
+    var btn = $("turn-in");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var payload = read();
+      payload.draft = cfg.draftSlug;
+      btn.disabled = true;
+      var label = btn.textContent;
+      btn.textContent = "Turning in…";
+      fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        return res.json().then(function (d) { return { res: res, data: d }; });
+      }).then(function (out) {
+        btn.disabled = false;
+        if (!out.res.ok) {
+          btn.textContent = label;
+          say("\n" + (out.data.error || "That didn't go through.") + "\n", "err");
+          return;
+        }
+        btn.textContent = "Turn in again";
+        say("\nTurned in at " + out.data.submitted_at +
+            (out.data.again ? " (replacing your last one)" : "") +
+            ". You can keep working and turn it in again.\n", "dim");
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = label;
+        say("\nCouldn't reach the server to turn that in.\n", "err");
+      });
+    });
+  }
+
+  // ------------------------------------------------------------- publish
+  function wirePublish(read, say) {
+    var btn = $("publish");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var payload = read();
+      var title = window.prompt(
+        "Name this assignment — students will see it:", payload.title || "");
+      if (title === null) return;
+      payload.title = title.trim() || payload.title;
+
+      btn.disabled = true;
+      fetch("/api/assignment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        return res.json().then(function (d) { return { res: res, data: d }; });
+      }).then(function (out) {
+        btn.disabled = false;
+        if (!out.res.ok) {
+          say("\n" + (out.data.error || "Couldn't publish that.") + "\n", "err");
+          return;
+        }
+        $("modal-title").textContent = "Assignment published";
+        $("modal-sub").textContent =
+          "Hand this link to your class. Each student gets their own copy.";
+        $("modal-note").textContent =
+          "Opening it again returns a student to their own work rather than " +
+          "starting them over. Turned-in work appears under Assignments.";
+        $("share-url").value = out.data.url;
+        $("modal").hidden = false;
+        $("share-url").select();
+      }).catch(function () {
+        btn.disabled = false;
+        say("\nCouldn't reach the server.\n", "err");
+      });
+    });
+  }
+
+  // -------------------------------------------------------- account menu
+  function wireAccountMenu() {
+    var btn = $("account");
+    var menu = $("account-menu");
+    if (!btn || !menu) return;
+
+    function close() {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+      btn.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+
+    var mine = $("my-projects");
+    if (mine) {
+      mine.addEventListener("click", function () {
+        close();
+        fetch("/api/my/projects").then(function (r) { return r.json(); })
+          .then(function (data) { showProjects(data.projects || []); });
+      });
+    }
+  }
+
+  function showProjects(list) {
+    var box = $("projects-list");
+    box.textContent = "";
+    if (!list.length) {
+      var none = document.createElement("p");
+      none.className = "dim";
+      none.textContent = "Nothing saved yet. Open an assignment link from your "
+                       + "teacher and your work will be kept here.";
+      box.appendChild(none);
+    }
+    list.forEach(function (p) {
+      var row = document.createElement("a");
+      row.className = "project-row";
+      row.href = p.url;
+
+      var name = document.createElement("span");
+      name.className = "project-name";
+      name.textContent = p.title || "Untitled";
+      row.appendChild(name);
+
+      var when = document.createElement("span");
+      when.className = "project-when";
+      when.textContent = (p.assignment ? p.assignment + " · " : "") + p.updated;
+      row.appendChild(when);
+
+      box.appendChild(row);
+    });
+    $("projects-modal").hidden = false;
+  }
+
+  return { attach: attach };
+})();

@@ -839,6 +839,125 @@ body:not(.is-authoring) .notes-body a {
   .sprite-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
 }
 
+/* ------------------------------------------------- signing in and saving */
+
+/* Whether the work is safe. Quiet when it is, because it almost always is —
+   the only state worth noticing is the one that says it isn't. */
+.savestate {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 0 4px;
+  min-width: 68px;
+  text-align: right;
+}
+.savestate.busy { opacity: .7; }
+.savestate.bad { color: var(--red); font-weight: 600; }
+
+.account { position: relative; }
+.btn-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 170px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow);
+  padding: 5px;
+  z-index: 60;
+}
+.menu[hidden] { display: none; }
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.menu-item:hover { background: var(--bg); }
+
+.banner-hint { background: var(--bg-panel); }
+
+.projects { max-height: 340px; overflow-y: auto; margin: 4px 0 18px; }
+.project-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-bottom: 6px;
+  text-decoration: none;
+  color: var(--text);
+}
+.project-row:hover { border-color: var(--accent); }
+.project-name { font-weight: 500; }
+.project-when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* ------------------------------------------------------ teacher's pages */
+.sheet {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+  overflow-y: auto;
+  height: calc(100% - var(--bar-h));
+}
+.sheet h2 {
+  font-size: 15px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 30px 0 12px;
+}
+.sheet .count {
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.pagetitle { font-weight: 600; }
+.whoami { align-self: center; color: var(--muted); font-size: 12.5px; }
+.brandlink { color: inherit; text-decoration: none; }
+
+.listing { width: 100%; border-collapse: collapse; font-size: 14px; }
+.listing th {
+  text-align: left;
+  font-size: 11.5px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.listing td { padding: 12px 10px; border-bottom: 1px solid var(--line); }
+.listing tr:hover td { background: var(--bg-panel); }
+.listing a { color: var(--accent); text-decoration: none; }
+.listing a:hover { text-decoration: underline; }
+.listing .right { text-align: right; }
+.small { font-size: 12px; }
+
+.handout { border: 1px solid var(--line); border-radius: 9px; padding: 16px 18px; }
+.handout h2 { margin-top: 0; }
+.names { columns: 2; margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty h2 { text-transform: none; font-size: 20px; color: var(--text); }
+
 /* -------------------------------------------------------------- 404 page */
 .center {
   height: 100%;
