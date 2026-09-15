@@ -930,7 +930,9 @@
      downloads as a zip. Handing over main.py alone would silently drop the
      module it imports, and the student would find out at home when nothing
      runs. */
-  $("download").addEventListener("click", function () {
+  /* Download sits in the toolbar for a signed-out student and in the account
+     menu for a signed-in one, so bind whichever is actually on the page. */
+  function onDownload() {
     var base = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
     var extras = dataFiles();
     var names = Object.keys(extras);
@@ -952,6 +954,11 @@
       entries.push({ name: n, data: extras[n] });
     });
     window.PyIDEZip.download(base + ".zip", entries);
+  }
+
+  ["download", "download-menu"].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener("click", onDownload);
   });
 
   document.addEventListener("keydown", function (e) {

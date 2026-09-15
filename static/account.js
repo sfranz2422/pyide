@@ -26,9 +26,11 @@ window.PyIDEAccount = (function () {
     var onEdit = opts.onEdit || function () {};
 
     if (!cfg.draftSlug) {
-      // Not a saved project. Still wire the menus, then stop.
+      // Not a saved project yet. Wire the menus and the Save button, then stop
+      // — there is nothing to autosave to until they press it.
       wireAccountMenu();
       wirePublish(read, say);
+      wireSave(read, say);
       return { noteEdit: function () {} };
     }
 
@@ -140,6 +142,41 @@ window.PyIDEAccount = (function () {
         btn.disabled = false;
         btn.textContent = label;
         say("\nCouldn't reach the server to turn that in.\n", "err");
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- save
+  /* Keeping a project the student started themselves. One press turns it into
+     their own project and moves them onto its address, after which it behaves
+     exactly like one opened from an assignment — the editor does not change,
+     it just starts remembering. */
+  function wireSave(read, say) {
+    var btn = $("save-project");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      var label = btn.textContent;
+      btn.textContent = "Saving…";
+      fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(read())
+      }).then(function (res) {
+        return res.json().then(function (d) { return { res: res, data: d }; });
+      }).then(function (out) {
+        if (!out.res.ok) {
+          btn.disabled = false;
+          btn.textContent = label;
+          say("\n" + (out.data.error || "Couldn't save that.") + "\n", "err");
+          return;
+        }
+        // onto the saved copy, which autosaves from here
+        window.location.href = out.data.url;
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = label;
+        say("\nCouldn't reach the server to save that.\n", "err");
       });
     });
   }

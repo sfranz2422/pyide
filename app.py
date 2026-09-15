@@ -641,6 +641,47 @@ def save_draft(slug):
         db.close()
 
 
+@app.post("/api/draft")
+def start_draft():
+    """Keep a project the student started themselves.
+
+    Assignments make a draft automatically, so this covers the other two ways
+    into the editor: a new project, or a fork of somebody's share link. Press
+    Save once and it becomes theirs, autosaving from then on exactly like an
+    assignment does — nothing about the editor behaves differently afterwards.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first, then you can save projects."), 401
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code", "")
+        if not isinstance(code, str) or not code.strip():
+            return jsonify(error="There's nothing to save yet."), 400
+        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That program is too large to save."), 413
+
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+
+        draft = accounts.Draft(
+            slug=accounts.new_id(db, accounts.Draft),
+            owner_id=user.id,
+            assignment_id=None,           # not part of an assignment
+            title=clean(data.get("title"), 200) or "Untitled",
+            code=code,
+            files=json.dumps(files),
+        )
+        db.add(draft)
+        db.commit()
+        return jsonify(slug=draft.slug, url=url_for("open_draft", slug=draft.slug))
+    finally:
+        db.close()
+
+
 @app.get("/api/my/projects")
 def my_projects():
     """Everything this student has saved, newest first."""
