@@ -281,9 +281,18 @@ def login():
     # link lands back on that assignment rather than on a blank editor.
     nxt = request.args.get("next", "")
     session["after_login"] = nxt if nxt.startswith("/") else ""
-    return oauth.google.authorize_redirect(
-        url_for("auth_callback", _external=True, _scheme=_scheme())
-    )
+    try:
+        return oauth.google.authorize_redirect(
+            url_for("auth_callback", _external=True, _scheme=_scheme())
+        )
+    except Exception:
+        # Authlib fetches Google's discovery document on the first sign-in of
+        # each worker, so a network blip or a blocked outbound request lands
+        # here. A student should see a sentence and a way onwards, not a
+        # stack trace — and the editor still works without signing in.
+        return render_template(
+            "signin_problem.html",
+            reason="Couldn't reach Google just now. Try again in a moment."), 503
 
 
 def _scheme():
