@@ -557,13 +557,19 @@ def create_share():
 
 def _draft_payload(db, draft, extra=None):
     ctx = user_context(db)
+    # Authoring means "these notes are yours to edit", and it also decides
+    # whether the notes pane can be selected at all. You own the notes in your
+    # own project; on an assignment they belong to whoever set it, so a student
+    # gets them read-only and uncopyable — but the teacher must not be locked
+    # out of their own material.
+    owns_notes = ctx["is_teacher"] or draft.assignment_id is None
     ctx.update(
         code=draft.code,
         files=draft.file_map(),
         title=draft.title,
         author=ctx["user_name"],
         readonly=False,
-        authoring=False,
+        authoring=owns_notes,
         slug=None,
         shared_at=None,
         draft_slug=draft.slug,
@@ -937,6 +943,85 @@ def teacher_home():
         ctx.update(assignments=live, archived=filed, counts=counts,
                    show_archived=show_archived)
         return render_template("teacher.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.get("/teacher/<slug>/edit")
+def edit_assignment(slug):
+    """Open a published assignment to change it.
+
+    The notes are yours here, so the markdown opens for editing the same way
+    it does in a new project. Handing work out is not supposed to be the last
+    time you can touch it.
+    """
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None or item.teacher_id != user.id:
+            abort(404)
+
+        started = db.query(accounts.Draft).filter_by(assignment_id=item.id).count()
+        ctx = user_context(db)
+        ctx.update(
+            code=item.code,
+            files=item.file_map(),
+            title=item.title,
+            author=ctx["user_name"],
+            readonly=False,
+            authoring=True,          # your notes, your assignment
+            slug=None,
+            shared_at=None,
+            draft_slug=None,
+            assignment_title=item.title,
+            assignment_slug="",      # no Turn in — you are not a student here
+            submitted_at="",
+            editing_assignment=item.slug,
+            editing_started=started,
+        )
+        return render_template("index.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.post("/api/assignment/<slug>")
+def update_assignment(slug):
+    """Save changes to a published assignment.
+
+    This changes what students get when they open the link *from now on*.
+    Anyone already working keeps their copy exactly as it is — their code is
+    theirs, and an edit to the starter must never reach in and overwrite it.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="not allowed"), 403
+        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        if item is None or item.teacher_id != user.id:
+            return jsonify(error="no such assignment"), 404
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code", "")
+        if not isinstance(code, str) or not code.strip():
+            return jsonify(error="There's no code to hand out."), 400
+        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That program is too large."), 413
+
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+
+        item.title = clean(data.get("title"), 200) or item.title
+        item.code = code
+        item.files = json.dumps(files)
+        db.commit()
+
+        started = db.query(accounts.Draft).filter_by(assignment_id=item.id).count()
+        return jsonify(ok=True, title=item.title, already_started=started)
     finally:
         db.close()
 

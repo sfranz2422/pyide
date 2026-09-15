@@ -31,6 +31,7 @@ window.PyIDEAccount = (function () {
       wireAccountMenu();
       wirePublish(read, say);
       wireSave(read, say);
+      wireUpdateAssignment(read, say);
       return { noteEdit: function () {} };
     }
 
@@ -177,6 +178,44 @@ window.PyIDEAccount = (function () {
         btn.disabled = false;
         btn.textContent = label;
         say("\nCouldn't reach the server to save that.\n", "err");
+      });
+    });
+  }
+
+  // ------------------------------------------------ updating an assignment
+  function wireUpdateAssignment(read, say) {
+    var btn = $("update-assignment");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      var label = btn.textContent;
+      btn.textContent = "Saving…";
+      fetch("/api/assignment/" + encodeURIComponent(cfg.editingAssignment), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(read())
+      }).then(function (res) {
+        return res.json().then(function (d) { return { res: res, data: d }; });
+      }).then(function (out) {
+        btn.disabled = false;
+        btn.textContent = label;
+        if (!out.res.ok) {
+          say("\n" + (out.data.error || "Couldn't save that.") + "\n", "err");
+          return;
+        }
+        var n = out.data.already_started || 0;
+        /* Say plainly who this reaches. A teacher fixing a typo needs to know
+           it does not rewrite work already in progress — and equally that
+           students already working will not see the fix. */
+        say("\nAssignment updated. Students who open the link from now on get "
+            + "this version."
+            + (n ? " The " + n + " already working keep their own copy "
+                 + "unchanged — tell them if they need the fix." : "")
+            + "\n", "dim");
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = label;
+        say("\nCouldn't reach the server.\n", "err");
       });
     });
   }

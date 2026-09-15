@@ -43,6 +43,16 @@ A student who isn't signed in can still open an assignment link and do the
 work. They just can't save it or turn it in, and a banner says so. Nobody is
 locked out by a login that won't cooperate five minutes before the bell.
 
+**Assignments stay editable.** Press **Edit** on the dashboard and it opens in
+the editor with your notes unlocked, exactly as when you wrote them. Saving
+changes what students get **when they open the link from now on** — anyone
+already working keeps their own copy untouched, and the message tells you how
+many that is so you know who needs telling.
+
+An edit to the starter must never reach into work in progress, so it doesn't.
+The trade is that a student who started before you fixed a typo still has the
+typo; that is the right way round, but it is a thing to know.
+
 **Turning in** freezes the work as an ordinary share snapshot and records it
 against the assignment. Turning in again replaces it and says so. What you're
 marking can't change under you while a student keeps tinkering — tested
@@ -708,9 +718,55 @@ behaves. The output piping lives there too, because the raw-`write` decision
 and the `flush()` in `input()` are two halves of one fix and would be a puzzle
 apart.
 
-## Possible next steps
+## Still to do
 
-- **Teacher dashboard** — a password-protected list of every shared snapshot
-- **Fork lineage** — record which starter a project was forked from, so
-  submissions can be grouped by assignment later
-- **Autosave** — persist the current buffer to `localStorage`
+### End-of-year cleanup
+
+Archiving hides an assignment and keeps everything, which is right during the
+year and wrong by about August. There should be a way to delete archived
+assignments outright and take their contents with them.
+
+Deleting one archived assignment should remove, in this order:
+
+1. every `submissions` row for it
+2. the `snippets` rows those submissions point at — the frozen copies of
+   handed-in work, which exist only because someone pressed Turn in
+3. every `drafts` row for it — students' working copies
+4. the assignment itself
+
+That is the opposite of what `DELETE /api/assignment/<slug>` does today, which
+deliberately *detaches* student drafts rather than deleting them and refuses
+outright if anyone has turned work in. Both behaviours are wanted; they are
+just for different times of year. Keep them as separate routes rather than
+adding a flag, so a stray click can never reach the destructive one.
+
+Worth building alongside it:
+
+- **Say what will be destroyed before doing it.** "12 submissions from 12
+  students, 18 saved projects." A count is the difference between a decision
+  and a reflex.
+- **Only archived assignments.** Archiving first is the deliberate pause.
+- **Offer a zip of everything first.** A teacher clearing a year probably
+  wants one download containing every submission before it goes.
+- **Warn students in advance.** They can already download a project, but only
+  one at a time from the account menu, and only if they know it is coming. A
+  "these projects will be removed after <date>" banner and a download-all
+  button would make "you had all summer" a fair thing to say.
+
+Deleting student work at the end of a year is also good practice rather than
+merely tidy: it keeps the amount of student data on the server proportional to
+the reason for holding it.
+
+### Other
+
+- **Vendor the libraries.** CodeMirror, marked, DOMPurify and Pyodide all come
+  from CDNs. A school network that blocks one stops the editor loading at all.
+  Kaplay is already vendored in WebIDE for exactly this reason; the same
+  treatment here would leave the app depending on nothing but its own Render
+  instance. Pyodide is ~10 MB, so it is the awkward one.
+- **One account across both editors.** The `users` table was built to be
+  shared and `assignments` already carries an `app` column. WebIDE could use
+  the same sign-in, saved projects and turn-in with no schema change.
+- **Notes on a fork.** A student who forks a project can create a `.md` file
+  but cannot then edit or delete it, because both controls are gated on
+  authoring. Blocking `.md` in "+ File" unless authoring would close it.

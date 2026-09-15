@@ -91,7 +91,10 @@
         <button id="share" class="btn btn-primary">Share</button>
       {% endif %}
 
-      {% if is_teacher %}
+      {% if editing_assignment %}
+        <button id="update-assignment" class="btn btn-primary"
+                title="Save these changes to the assignment.">Update assignment</button>
+      {% elif is_teacher %}
         <button id="publish" class="btn"
                 title="Hand this out to a class as an assignment.">Publish</button>
       {% endif %}
@@ -249,7 +252,9 @@
     isTeacher: {{ 'true' if is_teacher else 'false' }},
     draftSlug: {{ (draft_slug or '') | tojson }},
     assignmentSlug: {{ (assignment_slug or '') | tojson }},
-    submittedAt: {{ (submitted_at or '') | tojson }}
+    submittedAt: {{ (submitted_at or '') | tojson }},
+    editingAssignment: {{ (editing_assignment or '') | tojson }},
+    editingStarted: {{ (editing_started or 0) | tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='zip.js') }}"></script>
