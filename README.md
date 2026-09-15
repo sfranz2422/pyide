@@ -60,8 +60,21 @@ Four environment variables, all in `render.yaml`:
 | | |
 |---|---|
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from a Google Cloud OAuth client |
-| `ALLOWED_EMAIL_DOMAINS` | e.g. `yourschool.org` — who may sign in at all |
+| `ALLOWED_EMAIL_DOMAINS` | who may sign in. **Leave it out entirely to allow any Google account** — that is the sane default. Set it only to restrict, e.g. `mohawk.k12.pa.us`, and note that doing so also shuts out personal Gmail. |
 | `TEACHER_EMAILS` | full addresses that get Publish and the dashboard |
+
+**Do not paste an example domain into `ALLOWED_EMAIL_DOMAINS`.** A placeholder
+left in there refuses every real address, including yours, and the only symptom
+is a refusal at sign-in. If you are not deliberately restricting, the variable
+should not exist. The app prints what it is enforcing on every boot:
+
+```
+[pyide] Google sign-in: ON — any Google account (ALLOWED_EMAIL_DOMAINS is empty)
+[pyide] teachers: sfranz@mohawk.k12.pa.us
+```
+
+Check that line in your Render logs after a deploy — it is faster than finding
+out by failing a login.
 
 In Google Cloud, create an OAuth 2.0 Web application client and set the
 authorised redirect URI to `https://your-app.onrender.com/auth/callback`.

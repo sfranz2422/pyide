@@ -14,6 +14,12 @@
 <main class="center">
   <h1>That didn't work</h1>
   <p>{{ reason }}</p>
+  {% if allowed %}
+    <p class="dim">Accepted right now:
+      {% for d in allowed %}<code>@{{ d }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      If that list looks wrong, it's the <code>ALLOWED_EMAIL_DOMAINS</code>
+      setting on the server — clear it to let any Google account in.</p>
+  {% endif %}
   <p class="dim">You can keep working without signing in — you just won't be
      able to save projects or turn work in.</p>
   <p>

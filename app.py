@@ -227,6 +227,24 @@ app.config.update(
 # sign-in button never renders, and every route below behaves as it did before
 # any of this existed.
 
+def _announce_login_settings():
+    """One line in the logs on boot, so a wrong setting is visible without
+    anyone having to fail a sign-in to discover it."""
+    if not accounts.login_configured():
+        print("[pyide] Google sign-in: OFF "
+              "(set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable)")
+        return
+    domains = accounts.allowed_domains()
+    print("[pyide] Google sign-in: ON — %s" % (
+        ("only " + ", ".join("@" + d for d in domains)) if domains
+        else "any Google account (ALLOWED_EMAIL_DOMAINS is empty)"))
+    teachers = accounts.teacher_emails()
+    print("[pyide] teachers: %s" % (", ".join(teachers) if teachers
+                                    else "NONE SET — nobody can publish"))
+
+
+_announce_login_settings()
+
 oauth = None
 if accounts.login_configured():
     from authlib.integrations.flask_client import OAuth
@@ -320,10 +338,17 @@ def auth_callback():
         return render_template("signin_problem.html",
                                reason="Google didn't confirm that address."), 400
     if not accounts.email_allowed(email):
+        # Name the addresses that WOULD work. Without this the page can only
+        # say "not allowed", which is useless to a student picking the wrong
+        # account and worse for whoever set the variable to a placeholder.
+        allowed = accounts.allowed_domains()
+        wanted = " or ".join("@" + d for d in allowed)
         return render_template(
             "signin_problem.html",
-            reason="%s isn't a school account for this site. Sign in with "
-                   "your school address." % email), 403
+            reason="You signed in as %s, but this site only accepts %s "
+                   "addresses." % (email, wanted),
+            allowed=allowed,
+            tried=email), 403
 
     db = SessionLocal()
     try:
