@@ -87,7 +87,11 @@
         </label>
       {% endif %}
 
-      {% if is_teacher or not assignment_slug %}
+      {#  Share goes away only when Turn in is actually there to replace it.
+          Checking for the assignment instead left a signed-out student on an
+          assignment link with neither — no way to hand anything in at all.
+          Signing in is optional, so it can never be the only route. #}
+      {% if is_teacher or not (draft_slug and assignment_slug) %}
         <button id="share" class="btn btn-primary">Share</button>
       {% endif %}
 
