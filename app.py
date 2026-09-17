@@ -27,6 +27,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 import accounts
 
+APP_NAME = "pyide"          # this editor, in the shared account tables
+
 # --------------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------------
@@ -291,6 +293,9 @@ def inject_user():
         db.close()
 
 
+_redirect_logged = [False]
+
+
 @app.get("/login")
 def login():
     if not oauth:
@@ -299,10 +304,15 @@ def login():
     # link lands back on that assignment rather than on a blank editor.
     nxt = request.args.get("next", "")
     session["after_login"] = nxt if nxt.startswith("/") else ""
+    target = url_for("auth_callback", _external=True, _scheme=_scheme())
+    # Printed once per worker. Google's redirect_uri_mismatch page never says
+    # which URI it objected to, so the exact string to paste into the Cloud
+    # Console's "Authorized redirect URIs" is in the logs after a sign-in try.
+    if not _redirect_logged[0]:
+        _redirect_logged[0] = True
+        print(f"[{APP_NAME}] redirect URI sent to Google: {target}", flush=True)
     try:
-        return oauth.google.authorize_redirect(
-            url_for("auth_callback", _external=True, _scheme=_scheme())
-        )
+        return oauth.google.authorize_redirect(target)
     except Exception:
         # Authlib fetches Google's discovery document on the first sign-in of
         # each worker, so a network blip or a blocked outbound request lands
@@ -677,6 +687,7 @@ def start_draft():
             slug=accounts.new_id(db, accounts.Draft),
             owner_id=user.id,
             assignment_id=None,           # not part of an assignment
+            app=APP_NAME,
             title=clean(data.get("title"), 200) or "Untitled",
             code=code,
             files=json.dumps(files),
@@ -722,7 +733,7 @@ def my_projects():
         if user is None:
             return jsonify(error="not signed in"), 401
         rows = (db.query(accounts.Draft)
-                  .filter_by(owner_id=user.id)
+                  .filter_by(owner_id=user.id, app=APP_NAME)
                   .order_by(accounts.Draft.updated_at.desc())
                   .limit(60).all())
         titles = {a.id: a.title for a in db.query(accounts.Assignment).all()}
@@ -767,6 +778,7 @@ def publish_assignment():
 
         item = accounts.Assignment(
             slug=accounts.new_id(db, accounts.Assignment),
+            app=APP_NAME,
             teacher_id=user.id,
             title=clean(data.get("title"), 200) or "Untitled assignment",
             code=code,
@@ -793,7 +805,8 @@ def open_assignment(slug):
     """
     db = SessionLocal()
     try:
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None:
             abort(404)
 
@@ -824,6 +837,7 @@ def open_assignment(slug):
                 slug=accounts.new_id(db, accounts.Draft),
                 owner_id=user.id,
                 assignment_id=item.id,
+                app=APP_NAME,
                 title=item.title,
                 code=item.code,
                 files=item.files,
@@ -929,7 +943,7 @@ def teacher_home():
             return bounce
         show_archived = request.args.get("archived") == "1"
         items = (db.query(accounts.Assignment)
-                   .filter_by(teacher_id=user.id)
+                   .filter_by(teacher_id=user.id, app=APP_NAME)
                    .order_by(accounts.Assignment.created_at.desc()).all())
         live = [a for a in items if not a.archived]
         filed = [a for a in items if a.archived]
@@ -960,7 +974,8 @@ def edit_assignment(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
 
@@ -1000,7 +1015,8 @@ def update_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
 
@@ -1038,7 +1054,8 @@ def archive_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
         item.archived = 0 if item.archived else 1
@@ -1066,7 +1083,8 @@ def delete_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
 
@@ -1097,7 +1115,8 @@ def teacher_assignment(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(slug=slug).first()
+        item = db.query(accounts.Assignment).filter_by(
+            slug=slug, app=APP_NAME).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
 

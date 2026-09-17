@@ -757,6 +757,22 @@ Deleting student work at the end of a year is also good practice rather than
 merely tidy: it keeps the amount of student data on the server proportional to
 the reason for holding it.
 
+### Checking the two editors stay apart
+
+```bash
+python3 tools/test_two_editors.py
+```
+
+Runs PyIDE and WebIDE against one SQLite database and asserts that neither can
+list, open, edit, archive, delete or accept a turn-in for the other's
+assignments, while both still work normally on their own. Twenty-six checks.
+
+**Run it after touching any route that takes an assignment slug.** The two apps
+share four tables and are kept apart by one `app` column plus a filter on every
+query, and a missing filter is invisible from the dashboards — which is how six
+of them went missing at once in September 2026, until a WebIDE assignment was
+deleted from PyIDE's dashboard and took a teacher's project with it.
+
 ### Other
 
 - **Vendor the libraries.** CodeMirror, marked, DOMPurify and Pyodide all come

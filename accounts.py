@@ -131,6 +131,10 @@ class Draft(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
     assignment_id = Column(Integer, ForeignKey("assignments.id"),
                            index=True, nullable=True)
+    # Which editor this belongs to. PyIDE and WebIDE share this database and
+    # one sign-in, but a Python project cannot be opened in the web editor, so
+    # each app only ever lists and opens its own.
+    app = Column(String(16), nullable=False, default="pyide", index=True)
     title = Column(String(200), nullable=False, default="Untitled")
     code = Column(Text, nullable=False, default="")
     files = Column(Text, nullable=False, default="{}")
@@ -186,6 +190,17 @@ def _as_map(raw) -> dict:
 LATER_COLUMNS = [
     ("assignments", "archived",
      "ALTER TABLE assignments ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"),
+    # Everything that existed before two editors shared these tables was
+    # PyIDE's, so 'pyide' is the only default that makes an existing row true.
+    # BOTH tables need this. Leaving `assignments` out was a real bug: the
+    # column is in the model, so every query selects it, and on a database
+    # whose `assignments` table predates the column that is an immediate
+    # UndefinedColumn on the dashboard, the assignment link and turning in.
+    ("drafts", "app",
+     "ALTER TABLE drafts ADD COLUMN app VARCHAR(16) NOT NULL DEFAULT 'pyide'"),
+    ("assignments", "app",
+     "ALTER TABLE assignments ADD COLUMN app VARCHAR(16) NOT NULL "
+     "DEFAULT 'pyide'"),
 ]
 
 
