@@ -632,6 +632,40 @@ sixty times a second and `inspect.signature` is far too slow for that.
 This one was found by running the starter project, not by testing — the first
 thing that happened on the first keypress. There is now a test for it.
 
+### A list of frames does not get the load root
+
+Kaplay's sprite loader begins `e = pe(e)`, where `pe` prepends the load root —
+but only to a string:
+
+```js
+function pe(t){ return typeof t != "string" || Fn(t) ? t : a.assets.urlPrefix + t }
+```
+
+An array is not a string, so `loadSprite("dino", ["images/dino_0.png", …])`
+skips the root entirely and fetches each frame relative to the page. On a share
+link that means `/s/<slug>/images/dino_0.png` — a 404, a sprite that never
+loads, and a blank canvas. Nothing raises, nothing is logged, and the same code
+with a single path works perfectly.
+
+The bridge applies the root per element instead, so the multi-frame form
+behaves like the single-frame one. Paths that are already a URL or a `data:`
+URI are left alone, which is what keeps exported games working.
+
+This cost a lesson before it was found, and it was in this repo's own guide.
+
+### Mistakes Kaplay accepts but nobody means
+
+`anchor()` takes a name like `"center"`, or an offset between −1 and 1.
+Kaplay's lookup ends in `default: return t`, so any other Vec2 is used as-is —
+which makes `anchor(center())` set the anchor to, say, (200, 150) and draw the
+sprite some five thousand pixels off screen. No error, nothing on the canvas,
+and the line above it, `pos(center())`, is correct. A real student lost a
+lesson to it.
+
+The bridge now writes a note when an anchor lands far outside −1 to 1. This is
+the only check of its kind, and the bar for adding another is the same: Kaplay
+accepts it, nobody could mean it, and the failure is silent.
+
 ### Errors inside a callback
 
 An exception in `onUpdate()` happens sixty times a second, long after the line

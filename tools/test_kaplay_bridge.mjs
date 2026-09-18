@@ -74,6 +74,9 @@ globalThis.kaplay = function (options) {
     text: (...a) => ({ __comp: "text", a }),
     color: (...a) => ({ __comp: "color", a }),
     anchor: (...a) => ({ __comp: "anchor", a }),
+    vec2: (x, y) => ({ x: x, y: y }),
+    center: () => ({ x: 400, y: 300 }),
+    height: () => 600,
     state: (...a) => ({ __comp: "state", a }),
     onKeyPress: (k, fn) => { mine.push(fn); handlers.push(["key", k, fn]); },
     onKeyDown: (k, fn) => { mine.push(fn); handlers.push(["keydown", k, fn]); },
@@ -240,6 +243,56 @@ check("it says the game stopped", /game stopped/.test(errText));
 check("the engine was told to quit", quit > before, "quit calls=" + quit);
 check("it did not report twice", (errText.match(/boom/g) || []).length === 1,
       (errText.match(/boom/g) || []).length + " reports");
+
+// ------------------------- loadRoot and a LIST of frames, which Kaplay skips
+/* Kaplay's loader begins `e = pe(e)`, and pe returns its argument unchanged
+   unless it is a string. So a single path gets the load root and a list of
+   paths silently does not — each frame is fetched relative to the page, which
+   on a share link is /s/<slug>/images/dino_0.png, a 404, and a blank canvas
+   with no error anywhere. Found by a student whose animated sprite never
+   appeared. The bridge applies the root per element instead. */
+calls.length = 0;
+py.runPython(`
+import kaplay as K
+K.kaplay(width=400, height=300)
+K.loadSprite("bean", "images/bean.png")
+K.loadSprite("dino", ["images/dino_0.png", "images/dino_1.png"],
+             anims={"run": {"from": 0, "to": 1}})
+K.loadSprite("far", ["https://example.com/a.png", "data:image/png;base64,AAA"])
+`);
+const sprites = calls.filter((c) => c[0] === "loadSprite");
+check("a single path is left to Kaplay's own loadRoot",
+      sprites[0][2] === "images/bean.png", String(sprites[0][2]));
+check("every frame in a list gets the asset root",
+      JSON.stringify(Array.from(sprites[1][2])) ===
+      '["/static/assets/images/dino_0.png","/static/assets/images/dino_1.png"]',
+      JSON.stringify(Array.from(sprites[1][2])));
+check("a URL or data: frame is left alone",
+      JSON.stringify(Array.from(sprites[2][2])) ===
+      '["https://example.com/a.png","data:image/png;base64,AAA"]');
+
+// ------------------------------- a mistake Kaplay accepts but nobody means
+/* anchor() takes a name, or an offset between -1 and 1. Kaplay's default
+   branch passes any other Vec2 straight through, so `anchor(center())` puts
+   the anchor at (400, 300) and draws the sprite thousands of pixels off
+   screen — with no error and nothing on the canvas, while `pos(center())` on
+   the line above is correct. Found by a real student losing a lesson to it. */
+errText = "";
+py.runPython(`
+import kaplay as K
+K.kaplay(width=800, height=600)      # the error test above stopped the game
+K.add([K.sprite("bean"), K.pos(K.center()), K.anchor(K.center())])
+`);
+check("anchor(center()) is called out", /anchor\(400, 300\)/.test(errText) &&
+      /off screen/.test(errText), errText.trim().slice(0, 42) + "…");
+
+errText = "";
+py.runPython('import kaplay as K\nK.add([K.sprite("bean"), K.anchor("center")])');
+check('anchor("center") stays silent', !errText.trim(), errText.trim());
+
+errText = "";
+py.runPython('import kaplay as K\nK.add([K.sprite("bean"), K.anchor(K.vec2(0, 1))])');
+check("a real offset stays silent", !errText.trim(), errText.trim());
 
 // ------------------------------------------- pressing Run twice in one session
 /* The commonest thing a student does, and it used to crash. Run without Stop

@@ -341,18 +341,8 @@ def kaplay(**options):
     # "images/bean.png") works with no setup. Kaplay resolves every load
     # against this, which is why the Sprites panel inserts paths under
     # images/ and sounds/.
-    # An exported game sets this to "" — every asset it needs is already
-    # inlined as a data: URI, and Kaplay leaves those alone, so an absolute
-    # site path in a file destined for itch.io or a flash drive would only
-    # ever be wrong.
-    root = ASSET_ROOT
-    window = getattr(js, "window", None)
-    if window is not None:
-        override = getattr(window, "__pyideAssetRoot", None)
-        if override is not None:
-            root = override
     try:
-        _ctx.loadRoot(root)
+        _ctx.loadRoot(_asset_root())
     except Exception:
         pass          # a bare Kaplay build without loadRoot; paths still work
 
@@ -405,6 +395,89 @@ class _Debug:
 debug = _Debug()
 
 
+def _asset_root():
+    """Where loadSprite/loadSound paths are resolved from.
+
+    An exported game sets window.__pyideAssetRoot to "" because every asset it
+    needs is already inlined as a data: URI.
+    """
+    window = getattr(js, "window", None)
+    if window is not None:
+        override = getattr(window, "__pyideAssetRoot", None)
+        if override is not None:
+            return override
+    return ASSET_ROOT
+
+
+def _already_located(path):
+    return (path.startswith("http://") or path.startswith("https://")
+            or path.startswith("data:") or path.startswith("/"))
+
+
+def _fix_asset_list(name, args):
+    """Apply the asset root to a LIST of paths, which Kaplay does not.
+
+    Kaplay's loader begins `e = pe(e)`, and `pe` returns its argument unchanged
+    unless it is a string — so a single path gets the load root prepended and a
+    list of paths does not. Each frame is then fetched relative to the page
+    instead, which on a share link means /s/<slug>/images/dino_0.png, a 404,
+    a sprite that never loads, and absolutely nothing on the canvas.
+
+    No error is raised anywhere along that path, which is what makes it so
+    expensive: the program is correct, the documentation is correct, and the
+    screen is empty. So the root is applied here, per element, and the
+    multi-frame form behaves like the single-frame one.
+    """
+    if not name.startswith("load") or len(args) < 2:
+        return args
+    paths = args[1]
+    if not isinstance(paths, (list, tuple)):
+        return args
+    root = _asset_root()
+    fixed = [
+        root + p if isinstance(p, str) and not _already_located(p) else p
+        for p in paths
+    ]
+    return args[:1] + (fixed,) + args[2:]
+
+
+def _warn(message):
+    import sys
+    sys.stderr.write("Note: " + message + "\n")
+
+
+def _sanity_check(name, args):
+    """Catch the mistakes Kaplay accepts but nobody means.
+
+    Only one so far, and it earned its place: anchor() takes a name like
+    "center" or an offset between -1 and 1, but Kaplay's default branch passes
+    any other Vec2 straight through. So `anchor(center())` on a 400x300 canvas
+    sets the anchor to (200, 150) and draws the sprite some five thousand
+    pixels off screen — no error, no warning, nothing on the canvas, and the
+    line above it, `pos(center())`, is correct. That is a whole period lost to
+    a silent success.
+    """
+    if name != "anchor" or len(args) != 1:
+        return
+    value = args[0]
+    if isinstance(value, str):
+        return
+    x = getattr(value, "x", None)
+    y = getattr(value, "y", None)
+    if x is None or y is None:
+        return
+    try:
+        if abs(x) > 1 or abs(y) > 1:
+            _warn(
+                'anchor(%g, %g) is far outside the -1 to 1 range it expects, '
+                "so this object will be drawn off screen. anchor() takes a "
+                'name — anchor("center") — not a position. You may be thinking '
+                "of pos(), which does take center()." % (x, y)
+            )
+    except TypeError:
+        pass
+
+
 def _lookup(name):
     """Fetch one name off the live context, with a readable failure."""
     try:
@@ -450,6 +523,8 @@ def __getattr__(name):
             return attr
 
     def wrapper(*args, **kwargs):
+        _sanity_check(name, args)
+        args = _fix_asset_list(name, args)
         return _wrap(_call(_lookup(name), args, kwargs))
 
     wrapper.__name__ = name
