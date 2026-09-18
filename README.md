@@ -671,6 +671,15 @@ moved from Python       0.122 ms per frame   0.7% of a 60fps frame
 
 Indistinguishable. Kaplay draws either way; only the callbacks are Python.
 
+Objects come back wrapped, so that `btn.add([...])` and `player.onCollide(...)`
+— calls made *on* an object rather than on the context, which Kaplay's docs are
+full of — marshal their arguments properly. The wrapper roughly doubles the
+per-frame cost of touching an object: `o.move(1.5, 0.5)` across 200 objects
+goes from 0.17 ms to 0.38 ms, and the nested `o.pos.x = o.pos.x + 1.5` from
+0.44 ms to 0.66 ms. Still 4% of a frame at the worst, so the trade is worth
+making; only `add`, `use`, `wait`, `loop`, `tween` and the `on…` methods are
+intercepted, and everything else falls straight through.
+
 ### Sprites
 
 51 sprites from the KAPLAY game library are bundled and available by name, so
@@ -851,6 +860,22 @@ Worth building alongside it:
 Deleting student work at the end of a year is also good practice rather than
 merely tidy: it keeps the amount of student data on the server proportional to
 the reason for holding it.
+
+### Checking a guide's code actually runs
+
+```bash
+node tools/test_guide.mjs ../learn_pykaplay.md
+```
+
+Executes every ```python block in a markdown guide through the real bridge, as
+if Run had been pressed, then fires every callback it registered. A block
+passes only if nothing reached stderr.
+
+Worth having because the failures it catches look perfectly fine on the page: a
+function that is not in the bridge's star-import list, a keyword argument
+Kaplay does not take, a callback whose arguments don't line up. It found three
+on its first run, including one that would have broken every game on its second
+Run of a session.
 
 ### Checking the two editors stay apart
 

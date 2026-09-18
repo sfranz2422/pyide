@@ -40,17 +40,21 @@ What the seam actually does, on every call:
 
 PERFORMANCE, MEASURED
 
-Crossing into Python is cheap; reading properties back across the seam is what
-costs. Measured against Pyodide 314.0.7, one frame over 200 game objects:
+Crossing into Python is cheap; reaching back across the seam for properties is
+what costs. Measured against Pyodide 314.0.7, one frame over 200 game objects:
 
-    o.move(1.5, 0.5)                one method call     0.33 ms   2% of a frame
-    p = o.pos; p.x = p.x + 1.5      cache the vector    0.51 ms   3% of a frame
-    o.pos.x = o.pos.x + 1.5         nested every time   1.17 ms   7% of a frame
+    o.move(1.5, 0.5)                one method call     0.38 ms   2.3% of a frame
+    o.pos.x = o.pos.x + 1.5         nested every time   0.66 ms   4.0% of a frame
 
 A frame at 60fps is 16.7 ms, and Kaplay draws in JavaScript at full speed
-regardless. So even the wasteful idiom leaves 93% of the frame free at 200
-objects. Prefer `o.move(...)` where it exists, but not at the cost of clarity —
-none of these are close to a problem at classroom scale.
+regardless, so even the wasteful idiom leaves 96% of the frame free at 200
+objects. About half of that cost is the GameObj wrapper below; without it the
+same two lines measure 0.17 ms and 0.44 ms, and `btn.add([...])` and
+`player.onCollide(...)` do not work at all. That trade was made deliberately
+and with the numbers in hand.
+
+Prefer `o.move(...)` where it exists, but not at the cost of clarity — none of
+these are close to a problem at classroom scale.
 """
 
 from pyodide.ffi import create_proxy, to_js
@@ -166,7 +170,7 @@ def _guard(fn):
         if limit is not None and len(args) > limit:
             args = args[:limit]
         try:
-            return fn(*args, **kwargs)
+            return fn(*[_wrap(a) for a in args], **kwargs)
         except Exception as err:
             _report(err)
             return None
@@ -186,11 +190,83 @@ def _convert(value):
         proxy = create_proxy(_guard(value))
         _proxies.append(proxy)
         return proxy
+    if isinstance(value, GameObj):
+        return value.js          # hand JavaScript the real object, not the wrapper
     if isinstance(value, dict):
         return _js_object({k: _convert(v) for k, v in value.items()})
     if isinstance(value, (list, tuple)):
         return to_js([_convert(v) for v in value])
     # JsProxy and anything else Pyodide already knows how to send
+    return value
+
+
+#: Methods on a game object whose arguments have to cross the bridge: the ones
+#: taking a component list, and every event registrar, which takes a callback.
+#: Everything else — move, jump, pos, isGrounded — is left completely alone, so
+#: the per-frame path stays as fast as it was.
+_MARSHAL = {"add", "use", "wait", "loop", "tween"}
+
+
+def _needs_marshalling(name):
+    return name in _MARSHAL or name.startswith("on")
+
+
+class GameObj:
+    """A Kaplay game object, with its argument-taking methods bridged.
+
+    Kaplay's own documentation is full of calls made *on* an object rather than
+    on the context — `btn.add([text("Ring")])` for a child, and
+    `player.onCollide("coin", ...)`, `enemy.onStateEnter("attack", ...)` for
+    events. Those go straight to JavaScript without passing through this
+    module, so a Python list arrives as an opaque object rather than an array,
+    and a Python callback arrives unguarded and unowned — it can be collected
+    while JavaScript still holds it.
+
+    So the few methods that take lists or callbacks are wrapped, and every
+    other attribute is handed back untouched. That split is deliberate:
+    `o.pos`, `o.move(...)` and `o.isGrounded()` run on every frame and pay
+    nothing but one attribute lookup, while `o.onCollide(...)` runs once.
+    """
+
+    __slots__ = ("_js",)
+
+    def __init__(self, js_obj):
+        object.__setattr__(self, "_js", js_obj)
+
+    def __getattr__(self, name):
+        attr = getattr(object.__getattribute__(self, "_js"), name)
+        if _needs_marshalling(name) and callable(attr):
+            def method(*args, **kwargs):
+                return _wrap(_call(attr, args, kwargs))
+            return method
+        return attr
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_js"), name, value)
+
+    def __repr__(self):
+        return "<Kaplay object>"
+
+    @property
+    def js(self):
+        """The raw JavaScript object, for anything this wrapper gets in the way of."""
+        return object.__getattribute__(self, "_js")
+
+
+def _wrap(value):
+    """Wrap a Kaplay return value if it is a game object, else leave it be.
+
+    Only game objects get wrapped — a vec2 or a colour is left raw so that
+    reading `v.x` costs nothing. `use` is the giveaway: every game object has
+    it, and none of Kaplay's plain values do.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    try:
+        if hasattr(value, "use") and hasattr(value, "add"):
+            return GameObj(value)
+    except Exception:
+        pass
     return value
 
 
@@ -289,6 +365,24 @@ def context():
     return _ctx
 
 
+class _Debug:
+    """Kaplay's debug object, reached through whichever context is live.
+
+    A plain star-imported value would be bound once, at import, to a context
+    that may since have been replaced. This looks it up every time, so
+    `debug.inspect = True` works on the first Run and every Run after it.
+    """
+
+    def __getattr__(self, name):
+        return getattr(context().debug, name)
+
+    def __setattr__(self, name, value):
+        setattr(context().debug, name, value)
+
+
+debug = _Debug()
+
+
 def _lookup(name):
     """Fetch one name off the live context, with a readable failure."""
     try:
@@ -318,15 +412,23 @@ def __getattr__(name):
     if name.startswith("__"):
         raise AttributeError(name)
 
-    # Once the game is running, hand back non-callables (debug, constants)
-    # as themselves; a wrapper would make `debug.inspect = True` impossible.
+    # Once the game is running, hand back non-callables (constants) as
+    # themselves. A name this Kaplay build does not have must NOT raise here:
+    # `from kaplay import *` resolves all of __all__ at once, and on the second
+    # Run of a session the context is still live from the first, so one unknown
+    # name would kill the import line itself rather than the call that used it.
+    # Falling through to the wrapper defers the error to the point of use,
+    # where it can name the function the student actually typed.
     if _ctx is not None:
-        attr = _lookup(name)
-        if not callable(attr):
+        try:
+            attr = _lookup(name)
+        except AttributeError:
+            attr = None
+        if attr is not None and not callable(attr):
             return attr
 
     def wrapper(*args, **kwargs):
-        return _call(_lookup(name), args, kwargs)
+        return _wrap(_call(_lookup(name), args, kwargs))
 
     wrapper.__name__ = name
     wrapper.__qualname__ = name
@@ -343,14 +445,15 @@ def __getattr__(name):
 # few that clash are simply left out of the star-import and used qualified.
 __all__ = [
     # starting up
-    "kaplay", "context", "shutdown", "loadSprite", "loadSound", "loadFont",
+    "kaplay", "context", "shutdown", "debug", "loadSprite", "loadSound", "loadFont",
     "loadSpriteAtlas", "loadBean",
     # making things
     "add", "destroy", "destroyAll", "get", "make", "readd",
     # components
     "sprite", "pos", "area", "body", "anchor", "scale", "rotate", "color",
     "opacity", "outline", "text", "rect", "circle", "z", "fixed", "move",
-    "offscreen", "lifespan", "health", "timer", "stay", "state", "animate",
+    "offscreen", "lifespan", "health", "timer", "stay", "state", "tile",
+    "animate",
     # input
     "onKeyPress", "onKeyDown", "onKeyRelease", "onKeyPressRepeat",
     "onClick", "onMousePress", "onMouseRelease", "onMouseMove",
@@ -368,7 +471,8 @@ __all__ = [
     "wave", "deg2rad", "rad2deg", "clamp",
     # the world
     "width", "height", "center", "dt", "time", "camPos", "camScale",
-    "shake", "flash", "setGravity", "getGravity", "setBackground",
+    "setCamPos", "getCamPos", "setCamScale", "toWorld", "toScreen",
+    "shake", "flash", "setGravity", "getGravity", "setBackground", "addKaboom",
     # `debug` is an object, not a function, so it is reached as
     # kaplay.debug rather than star-imported as a lazy wrapper.
     # levels

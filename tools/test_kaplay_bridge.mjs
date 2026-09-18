@@ -32,12 +32,24 @@ const calls = [];
 let quit = 0;
 
 function makeGameObj(comps) {
+  const children = [];
   return {
-    comps,
+    comps, children,
     pos: { x: 0, y: 0 },
     move(dx, dy) { this.pos.x += dx; this.pos.y += dy; },
     isGrounded() { return this.pos.y >= 400; },
     destroy() { calls.push(["destroy"]); },
+    // the methods that make an object look like a game object to the bridge
+    use(c) { comps.push(c); },
+    add(cs) {
+      const arr = Array.from(cs);
+      calls.push(["child", Array.isArray(cs), arr.length]);
+      const kid = makeGameObj(arr);
+      children.push(kid);
+      return kid;
+    },
+    onCollide(tag, fn) { handlers.push(["collide:" + tag, tag, fn]); },
+    onStateEnter(st, fn) { handlers.push(["state:" + st, st, fn]); },
   };
 }
 
@@ -57,6 +69,11 @@ globalThis.kaplay = function (options) {
     pos: (...a) => ({ __comp: "pos", a }),
     area: (...a) => ({ __comp: "area", a }),
     body: (...a) => ({ __comp: "body", a }),
+    rect: (...a) => ({ __comp: "rect", a }),
+    text: (...a) => ({ __comp: "text", a }),
+    color: (...a) => ({ __comp: "color", a }),
+    anchor: (...a) => ({ __comp: "anchor", a }),
+    state: (...a) => ({ __comp: "state", a }),
     onKeyPress: (k, fn) => handlers.push(["key", k, fn]),
     onKeyDown: (k, fn) => handlers.push(["keydown", k, fn]),
     onUpdate: (t, fn) => handlers.push(["update", t, fn]),
@@ -151,6 +168,30 @@ check("a Python callback ran when JS fired it", inGame("player.pos.y") === -10);
 const enemy = makeGameObj([]);
 fire("update", enemy);
 check("a lambda moved a JS object", enemy.pos.x === -120, "x=" + enemy.pos.x);
+
+// ------------------------------- methods called ON an object, not the context
+/* Kaplay's own docs are full of `btn.add([...])` for a child and
+   `player.onCollide("coin", ...)` for an event. Those calls never pass through
+   this module, so without the GameObj wrapper a Python list arrives as an
+   opaque object and a Python callback arrives unguarded and unowned. */
+py.runPython(`
+import kaplay as K
+CHILD_HITS = []
+btn = K.add([K.rect(100, 40), K.area()])
+label = btn.add([K.text("Ring"), K.pos(10, 10)])
+btn.onCollide("coin", lambda: CHILD_HITS.append("collided"))
+`);
+const childCall = calls.find((c) => c[0] === "child");
+check("a child list arrives as a real JS array", childCall && childCall[1] === true,
+      JSON.stringify(childCall));
+check("the child comes back wrapped, so its own methods work",
+      py.runPython("import kaplay as K; isinstance(label, K.GameObj)"));
+
+const collideHandler = handlers.find((h) => h[0] === "collide:coin");
+check("an object-level event registered", !!collideHandler);
+collideHandler[2]("ignored-arg");
+check("its Python callback ran, extra arg and all",
+      py.runPython("len(CHILD_HITS)") === 1);
 
 // -------------------------------- JavaScript drops extra arguments; so must we
 /* Kaplay hands onKeyDown the key that was pressed, onCollide both objects, and
