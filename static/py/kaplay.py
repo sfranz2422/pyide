@@ -57,7 +57,7 @@ Prefer `o.move(...)` where it exists, but not at the cost of clarity — none of
 these are close to a problem at classroom scale.
 """
 
-from pyodide.ffi import create_proxy, to_js
+from pyodide.ffi import JsProxy, create_proxy, to_js
 import js
 
 __version__ = "1.0"
@@ -223,8 +223,23 @@ def _convert(value):
         return _js_object({k: _convert(v) for k, v in value.items()})
     if isinstance(value, (list, tuple)):
         return to_js([_convert(v) for v in value])
-    # JsProxy and anything else Pyodide already knows how to send
-    return value
+    if isinstance(value, JsProxy):
+        return value            # already JavaScript's own
+
+    # Any other Python object. Handing it over as-is makes Pyodide create a
+    # BORROWED proxy, which it destroys the moment this call returns — so if
+    # Kaplay keeps the value, and Kaplay keeps almost everything, the next
+    # frame that touches it fails with:
+    #
+    #     This borrowed proxy was automatically destroyed at the end of a
+    #     function call. Try using create_proxy or create_once_callable.
+    #
+    # That message is addressed to whoever wrote the bridge, not to a student
+    # who has just watched their coin disappear. So the bridge owns it: an
+    # explicit proxy, kept for the life of the game like every other one.
+    proxy = create_proxy(value)
+    _proxies.append(proxy)
+    return proxy
 
 
 #: Methods on a game object whose arguments have to cross the bridge: the ones

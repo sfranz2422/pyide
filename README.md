@@ -632,6 +632,24 @@ sixty times a second and `inspect.signature` is far too slow for that.
 This one was found by running the starter project, not by testing — the first
 thing that happened on the first keypress. There is now a test for it.
 
+### Python objects the engine keeps
+
+Handing a Python object to JavaScript raw makes Pyodide create a **borrowed**
+proxy, destroyed the instant the call returns. Kaplay keeps almost everything
+it is given, so the next frame that touches such a value dies with:
+
+```
+This borrowed proxy was automatically destroyed at the end of a function call.
+Try using create_proxy or create_once_callable.
+```
+
+That message is advice for whoever wrote the bridge, not for a student who has
+just watched their coin vanish. So the bridge owns anything it cannot convert:
+an explicit proxy, kept for the life of the game like every other one.
+
+The cost is one proxy per unconvertible value — rare, since primitives, lists,
+dicts, callables and game objects are all handled before this point.
+
 ### What a callback hands back
 
 Arguments going *into* a Python callback were converted from the start; the

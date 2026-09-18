@@ -95,6 +95,9 @@ globalThis.kaplay = function (options) {
       }
       return { get: () => [], tile2Pos: () => ({ x: 0, y: 0 }) };
     },
+    // a call that KEEPS what Python handed it, the way Kaplay keeps almost
+    // everything it is given
+    remember(v) { calls.push(["remember", v]); },
     quit: () => {
       quit++;
       // a real engine drops its own handlers and leaves other engines alone
@@ -252,6 +255,32 @@ check("it says the game stopped", /game stopped/.test(errText));
 check("the engine was told to quit", quit > before, "quit calls=" + quit);
 check("it did not report twice", (errText.match(/boom/g) || []).length === 1,
       (errText.match(/boom/g) || []).length + " reports");
+
+// ------------------- a Python object the engine keeps past the call
+/* Passing a Python object to JavaScript raw makes Pyodide create a BORROWED
+   proxy, destroyed the moment the call returns. Kaplay keeps almost
+   everything it is handed, so the next frame that touches it dies with
+
+       This borrowed proxy was automatically destroyed at the end of a
+       function call. Try using create_proxy or create_once_callable.
+
+   which is advice for whoever wrote the bridge, not for a student. So the
+   bridge owns anything it cannot convert. */
+py.runPython(`
+import kaplay as K
+K.kaplay(width=800, height=600)
+class Inventory:
+    def __init__(self):
+        self.coins = 7
+K.remember(Inventory())
+`);
+const remembered = calls.filter((c) => c[0] === "remember").pop();
+let borrowedError = null;
+let coins = null;
+try { coins = remembered[1].coins; }
+catch (e) { borrowedError = String(e.message || e).split("\n")[0]; }
+check("a Python object the engine kept is still usable",
+      borrowedError === null && coins === 7, borrowedError || ("coins=" + coins));
 
 // --------------------------- what a callback hands BACK across the bridge
 /* Arguments into a callback were always converted; the return value was not.
