@@ -58,6 +58,7 @@ globalThis.kaplay = function (options) {
     area: (...a) => ({ __comp: "area", a }),
     body: (...a) => ({ __comp: "body", a }),
     onKeyPress: (k, fn) => handlers.push(["key", k, fn]),
+    onKeyDown: (k, fn) => handlers.push(["keydown", k, fn]),
     onUpdate: (t, fn) => handlers.push(["update", t, fn]),
     setGravity: (g) => calls.push(["setGravity", g]),
     rand: (a, b) => (a + b) / 2,
@@ -150,6 +151,28 @@ check("a Python callback ran when JS fired it", inGame("player.pos.y") === -10);
 const enemy = makeGameObj([]);
 fire("update", enemy);
 check("a lambda moved a JS object", enemy.pos.x === -120, "x=" + enemy.pos.x);
+
+// -------------------------------- JavaScript drops extra arguments; so must we
+/* Kaplay hands onKeyDown the key that was pressed, onCollide both objects, and
+   so on. JavaScript functions ignore arguments they did not ask for, which is
+   why every Kaplay example is written `onKeyDown("left", () => ...)`. The same
+   line in Python is `lambda: ...`, and without this the game dies on the first
+   keypress with "takes 0 positional arguments but 1 was given" — which is
+   exactly how this was found, by running the starter project. */
+py.runPython(`
+import kaplay as K
+SEEN = []
+K.onKeyDown("left", lambda: SEEN.append("no-args"))
+K.onKeyDown("right", lambda key: SEEN.append("got:" + str(key)))
+def takes_two(a, b=None):
+    SEEN.append("two")
+K.onKeyDown("up", takes_two)
+`);
+for (const h of handlers.filter((x) => x[0] === "keydown")) h[2](h[1]);
+const seen = py.runPython("list(SEEN)").toJs();
+check("a 0-argument lambda survives an argument", seen.includes("no-args"), seen.join(", "));
+check("a callback that wants the key still gets it", seen.includes("got:right"));
+check("extra args are trimmed, not padded", seen.includes("two"));
 
 // ------------------------------------------------- an error inside a callback
 errText = "";

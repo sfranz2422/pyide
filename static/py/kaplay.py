@@ -112,20 +112,59 @@ def _report(err):
         pass
 
 
-def _guard(fn):
-    """Wrap a Python callback so an error in it is reported, not swallowed.
+def _accepts(fn):
+    """How many positional arguments fn will take, or None for any number.
 
-    The `_running` check is what makes stopping safe. Kaplay may call a handler
-    again within the same frame it was told to quit, and destroying the proxy
-    out from under it is a use-after-free — which surfaces as an incoherent
-    JavaScript error rather than a stopped game. So a stopped game's callbacks
-    become no-ops and the proxies stay alive until a new game replaces them.
-    It also gives the error reporter its "report once" for free: the first
-    exception stops the game, and every later call returns here immediately.
+    Worked out once, when the callback is wrapped, because this runs on every
+    frame and inspect.signature is far too slow to do sixty times a second.
     """
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return None                      # a builtin or C function: pass it all
+
+    count = 0
+    for p in params:
+        if p.kind is p.VAR_POSITIONAL:   # *args takes everything
+            return None
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD):
+            count += 1
+    return count
+
+
+def _guard(fn):
+    """Wrap a Python callback so it behaves the way JavaScript expects.
+
+    Two jobs.
+
+    **Extra arguments are dropped.** Kaplay calls handlers with whatever it has
+    — onKeyDown hands the callback the key that was pressed, onCollide hands it
+    both objects. A JavaScript function ignores arguments it did not ask for,
+    so every Kaplay example is written `onKeyDown("left", () => ...)` and works.
+    The same line in Python is `lambda: ...`, which raises TypeError: <lambda>
+    takes 0 positional arguments but 1 was given. Since the whole premise here
+    is that Kaplay's documentation applies, the bridge matches JavaScript's
+    behaviour rather than making students count arguments the docs never
+    mention. A callback that *does* want the key still gets it.
+
+    **Errors are reported, not swallowed**, and the `_running` check is what
+    makes stopping safe. Kaplay may call a handler again within the same frame
+    it was told to quit, and destroying the proxy out from under it is a
+    use-after-free — which surfaces as an incoherent JavaScript error rather
+    than a stopped game. So a stopped game's callbacks become no-ops and the
+    proxies stay alive until a new game replaces them. That also gives the
+    error reporter its "report once" for free: the first exception stops the
+    game, and every later call returns here immediately.
+    """
+    limit = _accepts(fn)
+
     def guarded(*args, **kwargs):
         if not _running[0]:
             return None
+        if limit is not None and len(args) > limit:
+            args = args[:limit]
         try:
             return fn(*args, **kwargs)
         except Exception as err:

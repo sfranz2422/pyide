@@ -607,6 +607,31 @@ a problem: SDL installed a document-level `keypress` handler that called
 silently stopped working while Enter and mouse clicks still worked. It read
 like a focus bug. None of that exists now.
 
+### Extra arguments are dropped, the way JavaScript drops them
+
+Kaplay calls a handler with whatever it has: `onKeyDown` hands over the key
+that was pressed, `onCollide` hands over both objects. A JavaScript function
+ignores arguments it did not ask for, which is why every Kaplay example is
+written like this and works:
+
+```javascript
+onKeyDown("left", () => player.move(-300, 0))
+```
+
+The same line in Python is `lambda: player.move(-300, 0)`, and Python does not
+forgive a spare argument — it raises `TypeError: <lambda>() takes 0 positional
+arguments but 1 was given`, on the first keypress, in a callback nobody is
+looking at. Since the whole premise here is that Kaplay's documentation applies
+to what students write, the bridge matches JavaScript's behaviour: a callback
+is called with as many arguments as it will accept, and the rest are dropped.
+A handler that *does* want the key still gets it.
+
+The arity is worked out once, when the callback is wrapped, because this runs
+sixty times a second and `inspect.signature` is far too slow for that.
+
+This one was found by running the starter project, not by testing — the first
+thing that happened on the first keypress. There is now a test for it.
+
 ### Errors inside a callback
 
 An exception in `onUpdate()` happens sixty times a second, long after the line
@@ -629,7 +654,7 @@ npm install pyodide
 node tools/test_kaplay_bridge.mjs
 ```
 
-Twenty-three checks against real Pyodide, the real bootstrap out of
+Twenty-six checks against real Pyodide, the real bootstrap out of
 `runtime.js` and the real bridge, with a stand-in for Kaplay that records what
 JavaScript was actually handed. It cannot tell you the game looks right — that
 needs a GPU and a pair of eyes — but it covers every seam, including the two
