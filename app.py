@@ -55,6 +55,30 @@ for i in range(1, 6):
     print(i, "squared is", i * i)
 '''
 
+# The starter a game project opens on. Importing kaplay is also what tells the
+# editor this is a game rather than a console program, so the import has to be
+# there from the very first line a student sees.
+GAME_CODE = '''from kaplay import *
+
+kaplay(width=800, height=600, background=[24, 24, 40])
+
+# Click Sprites to browse the pictures you can use.
+loadSprite("bean", "images/bean.png")
+
+player = add([
+    sprite("bean"),
+    pos(400, 300),
+    anchor("center"),
+])
+
+SPEED = 300
+
+onKeyDown("left",  lambda: player.move(-SPEED, 0))
+onKeyDown("right", lambda: player.move(SPEED, 0))
+onKeyDown("up",    lambda: player.move(0, -SPEED))
+onKeyDown("down",  lambda: player.move(0, SPEED))
+'''
+
 
 def _database_url() -> str:
     """Render supplies DATABASE_URL; fall back to a local SQLite file."""
@@ -383,6 +407,22 @@ def auth_callback():
 def logout():
     session.clear()
     return redirect(request.args.get("next") or url_for("index"))
+
+
+@app.get("/game")
+def new_game():
+    """A fresh game project, with Kaplay already imported."""
+    return render_template(
+        "index.html",
+        code=GAME_CODE,
+        files={},
+        title="Untitled Game",
+        author="",
+        readonly=False,
+        authoring=True,
+        slug=None,
+        shared_at=None,
+    )
 
 
 @app.get("/")

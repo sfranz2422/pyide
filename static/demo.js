@@ -297,23 +297,18 @@
     canvas.focus();
 
     pushFilesToPython(loaded.files);
-    // SDL owns the keyboard while a game is up, so input() falls back to the
-    // dialog box rather than a field that would collect nothing
-    consoleIO.setEnabled(false);
+    /* Kaplay owns the frame loop, so the program returns almost at once and
+       the game carries on without it — the running flag therefore stays set
+       until Stop, exactly as in the editor. quote_source=False keeps a demo
+       link's promise: an error says where it happened and never shows the
+       line it happened on. */
     try {
-      pyodide.runPython("reset_game_state()");
-      var result = await pyodide.runPythonAsync(
-        "await run_game(" + JSON.stringify(loaded.code) +
-        ", 0, quote_source=False)"
+      await pyodide.runPythonAsync(
+        "_pyide_run_game(" + JSON.stringify(loaded.code) + ", quote_source=False)"
       );
-      if (result === "stopped") write("\n— stopped —\n", "dim");
     } catch (e) {
       write(String(e) + "\n", "err");
-    } finally {
-      // give the keyboard back, or the console's input line stops accepting
-      // typed characters
-      window.PyIDEGame.releaseKeyboard(pyodide, canvas);
-      consoleIO.setEnabled(true);
+      window.PyIDEGame.stop(pyodide);
       setBusy(false, "game");
     }
   }
@@ -324,7 +319,11 @@
     // what ends it
     if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
     if (!pyodide) return;
-    try { pyodide.runPython("request_stop()"); } catch (e) { /* not loaded */ }
+    if (runMode === "game") {
+      window.PyIDEGame.stop(pyodide);
+      write("\n— stopped —\n", "dim");
+      setBusy(false, "game");
+    }
   }
 
   runBtn.addEventListener("click", run);

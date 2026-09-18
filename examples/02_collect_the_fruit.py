@@ -1,55 +1,60 @@
 # Catch the falling fruit with the bean. Miss three and the game ends.
 
-import random
+from kaplay import *
 
-WIDTH = 600
-HEIGHT = 400
+kaplay(width=600, height=400, background=[28, 32, 44])
 
-FRUITS = ['apple', 'grape', 'lemon', 'pineapple', 'watermelon', 'pizza']
+FRUITS = ["apple", "grape", "lemon", "pineapple", "watermelon", "pizza"]
 
-bean = Actor('bean', (300, 360))
-fruit = Actor(random.choice(FRUITS), (300, 0))
+loadSprite("bean", "images/bean.png")
+for name in FRUITS:
+    loadSprite(name, "images/" + name + ".png")
+
+bean = add([sprite("bean"), pos(300, 360), anchor("center"), area()])
+
 score = 0
 missed = 0
-speed = 3
+speed = 180
+
+score_label = add([text("Score: 0", size=30), pos(10, 10)])
+missed_label = add([text("Missed: 0", size=26), pos(10, 46),
+                    color(255, 140, 140)])
+
+fruit = add([sprite(choose(FRUITS)), pos(300, 0), anchor("center"), area()])
 
 
 def drop_new_fruit():
-    fruit.image = random.choice(FRUITS)
-    fruit.x = random.randint(30, WIDTH - 30)
-    fruit.y = 0
+    fruit.use(sprite(choose(FRUITS)))
+    fruit.pos.x = rand(30, width() - 30)
+    fruit.pos.y = 0
 
 
-def update(dt):
+def each_frame():
     global score, missed, speed
 
     if missed >= 3:
         return
 
-    if keyboard.left:
-        bean.x -= 6
-    if keyboard.right:
-        bean.x += 6
-    bean.x = max(30, min(WIDTH - 30, bean.x))
+    if isKeyDown("left"):
+        bean.move(-360, 0)
+    if isKeyDown("right"):
+        bean.move(360, 0)
+    bean.pos.x = max(30, min(width() - 30, bean.pos.x))
 
-    fruit.y += speed
+    fruit.move(0, speed)
 
-    if fruit.colliderect(bean):
+    if fruit.isColliding(bean):
         score += 1
-        speed += 0.2
+        speed += 12
+        score_label.text = "Score: " + str(score)
         drop_new_fruit()
-    elif fruit.y > HEIGHT:
+    elif fruit.pos.y > height():
         missed += 1
+        missed_label.text = "Missed: " + str(missed)
         drop_new_fruit()
+        if missed >= 3:
+            add([text("Game over", size=72), pos(width() / 2, height() / 2),
+                 anchor("center")])
 
 
-def draw():
-    screen.fill((28, 32, 44))
-    bean.draw()
-    fruit.draw()
-    screen.draw.text("Score: " + str(score), (10, 10), fontsize=30, color="white")
-    screen.draw.text("Missed: " + str(missed), (10, 42), fontsize=26, color=(255, 140, 140))
-
-    if missed >= 3:
-        screen.draw.text("Game over", center=(WIDTH / 2, HEIGHT / 2),
-                         fontsize=72, color="white")
+onUpdate(each_frame)

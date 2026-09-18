@@ -1,267 +1,119 @@
-/* PyIDE — Pygame Zero support.
+/* PyIDE — Kaplay support.
  *
- * Pygame Zero's own mainloop is a blocking `while True`, which would freeze the
- * browser tab. This module reimplements that loop as an async loop that yields
- * once per frame, which is the pattern Pyodide's SDL docs prescribe. Everything
- * else — draw(), update(dt), Actor, keyboard, the event handlers — is real
- * Pygame Zero.
+ * Games are written in Python and run on Kaplay, the JavaScript game library.
+ * Python does not draw anything: it builds game objects and answers callbacks,
+ * and Kaplay renders them on the GPU at full speed.
+ *
+ * This replaced Pygame Zero, and the replacement deleted more than it added.
+ * Pygame Zero needed pygame-ce, numpy and pgzero fetched at first run (about
+ * 4 MB), its blocking `while True` mainloop reimplemented as an async loop,
+ * the sprite pack copied file by file into Pyodide's virtual filesystem, an
+ * SDL canvas binding, and a workaround for SDL keeping the keyboard after the
+ * game ended. None of that exists here. Kaplay is 184 KB, owns its own loop,
+ * loads sprites over HTTP like any web page, and gives the keyboard back
+ * because it never took it from the document in the first place.
+ *
+ * What this module does: load the library once, put the Python side of the
+ * bridge where `import kaplay` can find it, and stop a running game.
  */
 
 window.PyIDEGame = (function () {
   "use strict";
 
-  // Installed into Python the first time a game is run.
-  var BOOTSTRAP = [
-    "import asyncio, linecache, sys, types, traceback",
-    "import pygame",
-    "import pgzero, pgzero.game, pgzero.loaders, pgzero.builtins, pgzero.clock",
-    "",
-    "# the bundled window icon can't be loaded under wasm, and the browser tab",
-    "# already has its own favicon",
-    "pgzero.game.PGZeroGame.show_default_icon = lambda self: None",
-    "",
-    "_stop = [False]",
-    "_frames = [0]",
-    "",
-    "def request_stop():",
-    "    _stop[0] = True",
-    "",
-    "def frame_count():",
-    "    return _frames[0]",
-    "",
-    "def _build_module(source, quote_source=True):",
-    "    mod = types.ModuleType('__main__')",
-    "    mod.__dict__.update(pgzero.builtins.__dict__)",
-    "    mod.__file__ = 'main.py'",
-    "    sys.modules['__main__'] = mod",
-    "    # Tracebacks quote the student's own source lines — except on a demo",
-    "    # link, where the source is deliberately not on display. Clearing the",
-    "    # entry matters as much as setting it: an earlier run in the same page",
-    "    # would otherwise leave the code sitting in the cache.",
-    "    if quote_source:",
-    "        linecache.cache['main.py'] = (",
-    "            len(source), None, source.splitlines(True), 'main.py')",
-    "    else:",
-    "        linecache.cache.pop('main.py', None)",
-    "    exec(compile(source, 'main.py', 'exec'), mod.__dict__)",
-    "    return mod",
-    "",
-    "def _report(err, quote_source=True):",
-    "    # Keeps only the student's own frames — pgzero and pygame internals are",
-    "    # noise to a beginner staring at their first missing-sprite error — and",
-    "    # now covers their imported modules too. Shared with console mode so the",
-    "    # same mistake reads the same way in both.",
-    "    _write_traceback(err, quote_source)",
-    "",
-    "async def run_game(source, max_frames=0, quote_source=True):",
-    "    _stop[0] = False",
-    "    _frames[0] = 0",
-    "    # an edited module has to be re-imported here too, or a game keeps",
-    "    # running the version of its helper file from the previous Run",
-    "    _forget_project_modules()",
-    "    pygame.init()",
-    "    # A display surface must exist before the student's code runs: a",
-    "    # module-level Actor(...) loads its image and calls convert_alpha(),",
-    "    # which fails without one. Pygame Zero's own runner does exactly this.",
-    "    # reinit_screen() resizes to the real WIDTH/HEIGHT a moment later.",
-    "    pygame.display.set_mode((100, 100), pgzero.game.DISPLAY_FLAGS)",
-    "    try:",
-    "        mod = _build_module(source, quote_source)",
-    "    except SyntaxError as err:",
-    "        text = (err.text or '').strip()",
-    "        msg = 'SyntaxError on line %d: %s' % (err.lineno or 0, err.msg)",
-    "        if text and quote_source:",
-    "            msg += '\\n    ' + text",
-    "        print(msg, file=sys.stderr)",
-    "        return 'error'",
-    "    except BaseException as err:",
-    "        _report(err, quote_source)",
-    "        return 'error'",
-    "",
-    "    game = pgzero.game.PGZeroGame(mod)",
-    "    clock = pygame.time.Clock()",
-    "    pgzclock = pgzero.clock.clock",
-    "    try:",
-    "        game.reinit_screen()",
-    "        update = game.get_update_func()",
-    "        draw = game.get_draw_func()",
-    "        game.load_handlers()",
-    "    except BaseException as err:",
-    "        _report(err, quote_source)",
-    "        return 'error'",
-    "",
-    "    game.need_redraw = True",
-    "    while not _stop[0]:",
-    "        # cap dt so a backgrounded tab doesn't resume with a huge jump",
-    "        dt = min(clock.tick(60) / 1000.0, 0.05)",
-    "        try:",
-    "            for event in pygame.event.get():",
-    "                if event.type == pygame.QUIT:",
-    "                    return 'quit'",
-    "                if event.type == pygame.KEYDOWN:",
-    "                    game.keyboard._press(event.key)",
-    "                elif event.type == pygame.KEYUP:",
-    "                    game.keyboard._release(event.key)",
-    "                game.dispatch_event(event)",
-    "            pgzclock.tick(dt)",
-    "            if update:",
-    "                update(dt)",
-    "            changed = game.reinit_screen()",
-    "            if changed or update or pgzclock.fired or game.need_redraw:",
-    "                draw()",
-    "                pygame.display.flip()",
-    "                game.need_redraw = False",
-    "        except BaseException as err:",
-    "            _report(err, quote_source)",
-    "            return 'error'",
-    "        _frames[0] += 1",
-    "        if max_frames and _frames[0] >= max_frames:",
-    "            return 'done'",
-    "        await asyncio.sleep(0)",
-    "    return 'stopped'",
-    "",
-    "def reset_game_state():",
-    "    \"\"\"Drop anything the previous run scheduled.",
-    "",
-    "    Loaded sprites and sounds are deliberately left alone: pgzero keeps them",
-    "    as attributes on the loader, and the bundled assets never change during a",
-    "    session, so holding them makes the next run start faster.",
-    "    \"\"\"",
-    "    try:",
-    "        pgzero.clock.clock.unschedule_all()",
-    "    except Exception:",
-    "        pass",
-    "    try:",
-    "        pygame.mixer.stop()",
-    "    except Exception:",
-    "        pass",
-    ""
-  ].join("\n");
+  var LIB = "/static/game/kaplay.js";
+  var SHIM = "/static/py/kaplay.py";
+  var SHIM_PATH = "/lib/kaplay.py";     // inside Pyodide, not the project folder
+  var PROJECT_DIR = "/project";
 
-  var ROOT = "/game";          // bundled sprites and sounds
-  var PROJECT_DIR = "/project"; // the student's own files, same as console mode
-  var ready = false;      // packages + bootstrap installed
-  var assetsLoaded = false;
-  var canvasBound = false;
+  var libLoaded = false;
+  var shimLoaded = false;
 
-  /* A Pygame Zero program is recognised by defining draw() or update() at the
-     top level and never calling them. Nothing in a normal console program
-     looks like that. */
+  /* A Kaplay program is recognised by importing the bridge. That is a much
+     firmer signal than Pygame Zero's old one (defining draw() or update()),
+     which a console program could trip over by accident. */
   function looksLikeGame(source) {
-    return /^[ \t]*def[ \t]+(draw|update)[ \t]*\(/m.test(source);
+    return /^[ \t]*(?:from[ \t]+kaplay[ \t]+import|import[ \t]+kaplay)\b/m
+      .test(source);
   }
 
-  function bindCanvas(pyodide, canvas) {
-    if (canvasBound) return;
-    pyodide._api._skip_unwind_fatal_error = true;
-    pyodide.canvas.setCanvas2D(canvas);
-    canvasBound = true;
+  function loadLibrary() {
+    if (libLoaded) return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var tag = document.createElement("script");
+      tag.src = LIB;
+      tag.onload = function () {
+        if (typeof window.kaplay !== "function") {
+          reject(new Error("kaplay.js loaded but defined nothing."));
+          return;
+        }
+        libLoaded = true;
+        resolve();
+      };
+      tag.onerror = function () {
+        reject(new Error("Could not load " + LIB));
+      };
+      document.head.appendChild(tag);
+    });
   }
 
-  async function loadAssets(pyodide, onProgress) {
-    if (assetsLoaded) return;
-    var manifest = await fetch("/static/assets/manifest.json").then(function (r) {
-      if (!r.ok) throw new Error("asset manifest missing");
-      return r.json();
-    });
+  /* The bridge is a real file fetched at run time rather than a string baked
+     into this script, so it can be read, and blamed, like any other Python:
+     a traceback through it names kaplay.py and a line number that exists. */
+  async function loadShim(pyodide) {
+    if (shimLoaded) return;
+    var res = await fetch(SHIM);
+    if (!res.ok) throw new Error("Could not load the Python side of Kaplay.");
+    var source = await res.text();
 
-    pyodide.FS.mkdirTree(ROOT + "/images");
-    pyodide.FS.mkdirTree(ROOT + "/sounds");
-
-    var jobs = [];
-    manifest.images.forEach(function (img) {
-      jobs.push(["images/" + img.name + ".png", "/static/assets/images/" + img.name + ".png"]);
-    });
-    (manifest.sounds || []).forEach(function (file) {
-      jobs.push(["sounds/" + file, "/static/assets/sounds/" + file]);
-    });
-
-    if (onProgress) onProgress("Loading " + jobs.length + " assets…");
-    await Promise.all(jobs.map(async function (job) {
-      var res = await fetch(job[1]);
-      if (!res.ok) return;
-      var bytes = new Uint8Array(await res.arrayBuffer());
-      pyodide.FS.writeFile(ROOT + "/" + job[0], bytes);
-    }));
-
-    // Sprites are found through pgzero's explicit root, so the working
-    // directory stays on the project folder — that way open('scores.txt')
-    // means the same thing in a game as it does in a console program.
+    pyodide.FS.mkdirTree("/lib");
+    pyodide.FS.writeFile(SHIM_PATH, source);
     pyodide.runPython(
-      "import os, pgzero.loaders\n" +
-      "pgzero.loaders.set_root('" + ROOT + "')\n" +
+      "import sys, os\n" +
+      "if '/lib' not in sys.path:\n" +
+      "    sys.path.insert(0, '/lib')\n" +
+      // Same working directory as a console program, so open('scores.txt')
+      // means the same thing in a game as it does anywhere else.
       "os.makedirs('" + PROJECT_DIR + "', exist_ok=True)\n" +
       "os.chdir('" + PROJECT_DIR + "')\n"
     );
-    assetsLoaded = true;
-    return manifest;
+    shimLoaded = true;
   }
 
-  /* Loads pygame-ce, numpy and pgzero. About 4 MB, so it happens on the first
-     game run rather than at page load — console programs never pay for it. */
   async function ensureReady(pyodide, canvas, onProgress) {
-    bindCanvas(pyodide, canvas);
-    if (ready) {
-      await loadAssets(pyodide, onProgress);
-      return;
-    }
-    if (onProgress) onProgress("Loading the game engine (about 4 MB, one time)…");
-    await pyodide.loadPackage(["pygame-ce", "numpy", "micropip"], {
-      messageCallback: function () {},
-      errorCallback: function () {}
-    });
-    if (onProgress) onProgress("Installing Pygame Zero…");
-    // deps=False: pgzero asks for stock `pygame`, which has no WebAssembly
-    // build. pygame-ce provides the same `pygame` module and is already loaded.
-    await pyodide.runPythonAsync(
-      "import micropip\nawait micropip.install('pgzero', deps=False)"
-    );
-    pyodide.runPython(BOOTSTRAP);
-    ready = true;
-    await loadAssets(pyodide, onProgress);
+    if (onProgress && !libLoaded) onProgress("Loading the game engine…");
+    await loadLibrary();
+    await loadShim(pyodide);
+    // The bridge defaults every game to this canvas, so a student never has to
+    // know the page has one.
+    window.__pyideCanvas = canvas;
   }
 
-  /* Hand the keyboard back to the page when a game finishes.
+  /* End a running game.
    *
-   * Emscripten's SDL installs a document-level keypress handler that calls
-   * preventDefault, and it stays installed after the game loop ends. keydown
-   * still arrives, so Enter and clicks keep working, but no keypress means no
-   * input event — typing into the editor silently does nothing, which reads
-   * like a focus bug rather than a keyboard one. Shutting the display down
-   * removes the handler; Pygame Zero's own run() does exactly this in its
-   * finally block.
+   * Kaplay's quit() stops its loop and releases its listeners. The bridge then
+   * drops the proxies it handed out, because a Python function reachable from
+   * a dead engine is just memory nobody will free.
    *
-   * display.quit() also resizes the canvas to zero, so the last frame is
-   * copied out first and put back afterwards, leaving the picture on screen.
+   * Deliberately leaves the last frame on the canvas: a game that ends with a
+   * score on screen should still show it while the student reads the code.
    */
-  function releaseKeyboard(pyodide, canvas) {
-    if (!pyodide || !canvas) return;
-    var w = canvas.width, h = canvas.height, frame = null;
-    try {
-      if (w && h) frame = canvas.getContext("2d").getImageData(0, 0, w, h);
-    } catch (e) { /* nothing worth keeping */ }
-
+  function stop(pyodide) {
+    if (!pyodide || !shimLoaded) return;
     try {
       pyodide.runPython(
-        "import pygame\n" +
-        "try:\n" +
-        "    pygame.display.quit()\n" +
-        "except Exception:\n" +
-        "    pass\n"
+        "import kaplay as _k\n" +
+        "_k.shutdown()\n"
       );
-    } catch (e) { /* engine never loaded */ }
-
-    if (frame) {
-      canvas.width = w;
-      canvas.height = h;
-      try { canvas.getContext("2d").putImageData(frame, 0, 0); } catch (e) {}
+    } catch (e) {
+      /* Nothing worth surfacing: the student pressed Stop, and whether the
+         engine was mid-teardown is not their problem. */
     }
   }
 
   return {
     looksLikeGame: looksLikeGame,
     ensureReady: ensureReady,
-    releaseKeyboard: releaseKeyboard,
-    isReady: function () { return ready; }
+    stop: stop,
+    isReady: function () { return libLoaded && shimLoaded; }
   };
 })();

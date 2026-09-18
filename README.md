@@ -312,7 +312,7 @@ what they meant.
 Tick **Hide code** before pressing Share and you get a link like
 `/d/k3m9pqr` instead of `/s/k3m9pqr`. It opens a page with a Run button, the
 output, and nothing else: no editor, no tabs, no notes, no fork, no download.
-For a Pygame Zero project the game runs on the canvas exactly as it does in
+For a game project the canvas runs it exactly as it does in
 the editor. Leave the box unticked and sharing behaves exactly as it always
 has, so students hand work in the same way.
 
@@ -539,63 +539,132 @@ and the **`style` attribute** (`position:fixed` can cover the whole editor).
 Neither has any use in class notes. Dropping `FORBID_ATTR` in `static/notes.js`
 brings inline CSS back if you ever want it.
 
-## Pygame Zero
+## Games, in Python, on Kaplay
 
-Students can write Pygame Zero games in the same editor, with no imports and no
-`pgzrun` boilerplate — exactly what they'd write locally:
+Students write games in Python. Kaplay — a JavaScript game library — runs them.
+Python never draws anything: it builds game objects and answers callbacks, and
+Kaplay renders on the GPU.
 
 ```python
-WIDTH = 600
-HEIGHT = 400
-bean = Actor('bean', (300, 200))
+from kaplay import *
 
-def update(dt):
-    if keyboard.right:
-        bean.x += 4
+kaplay(width=800, height=600, background=[24, 24, 40])
+loadSprite("bean", "images/bean.png")
+setGravity(1600)
 
-def draw():
-    screen.fill((120, 190, 230))
-    bean.draw()
+player = add([sprite("bean"), pos(100, 200), area(), body(jumpForce=800), "player"])
+
+def jump():
+    if player.isGrounded():
+        player.jump(800)
+
+onKeyPress("space", jump)
+onUpdate("enemy", lambda e: e.move(-120, 0))
 ```
 
-**Mode is detected automatically.** Defining `draw()` or `update()` at the top
-level switches the editor into game mode: a canvas appears and the toolbar chip
-reads *Game*. Nothing in an ordinary console program looks like that, so it
-doesn't misfire. If it ever guesses wrong, click the chip to lock the mode by
-hand — a dot on the chip means it's locked.
+**The names are Kaplay's own, camelCase and all.** That is deliberate, and it
+is the whole point: every Kaplay tutorial, example and forum answer on the
+internet applies to what a student writes here, with the punctuation changed.
+A snake_case wrapper would look more like Python and leave the class with no
+documentation in the world. `kaplay({ width: 800 })` becomes
+`kaplay(width=800)`; everything else is the same call in the same order.
 
-**Games run until stopped.** The 15-second limit applies to console programs
-only; a game loop is an infinite loop on purpose. Use the red **Stop** button,
-or press Escape.
+**+ Game** in the toolbar starts a project with the import already there.
 
-**Students must click the picture** before the keyboard reaches the game. The
-editor prints a reminder each time a game starts, but it's worth saying aloud on
-day one.
+### How it works
 
-**The keyboard is handed back when a game stops.** Emscripten's SDL installs a
-document-level `keypress` handler that calls `preventDefault`, and it survives
-the game loop ending — which made the editor silently refuse typed characters
-while Enter and mouse clicks still worked, so it looked like a focus bug rather
-than a keyboard one. Shutting the display down removes the handler (Pygame
-Zero's own runner does the same). Since that also blanks the canvas, the last
-frame is copied out and put back, so the picture stays on screen after Stop.
+`static/py/kaplay.py` is the seam, in about 240 lines. `kaplay()` starts the
+engine and keeps the context it returns; every other name resolves against that
+context on demand through the module's `__getattr__`. So the file contains no
+list of Kaplay's API and cannot fall behind it — a function Kaplay adds next
+year is callable from Python the day it ships.
 
-One case this doesn't cover: clicking into the editor while a game is still
-running. The game owns the keyboard until it stops, which is what you want for
-playing, but it means Stop first, then edit.
+On every call the seam converts Python lists to JavaScript arrays (so
+`add([...])` works), dicts and keyword arguments to JavaScript objects (so
+`body(jumpForce=800)` works), and Python functions to something JavaScript can
+invoke (so a plain `def` can be handed to `onKeyPress`).
 
-The first game run downloads about 4 MB (pygame-ce, numpy, Pygame Zero) and is
-cached afterward. Console programs never pay that cost.
+**Mode is detected by the import.** `from kaplay import *` or `import kaplay`
+at the top level means this is a game; anything else is a console program.
+That is a firmer signal than the old one — Pygame Zero was recognised by
+defining `draw()` or `update()`, which an ordinary program could trip over.
+
+### What replacing Pygame Zero deleted
+
+This used to run Pygame Zero. The replacement removed far more than it added:
+
+| | Pygame Zero | Kaplay |
+|---|---|---|
+| downloaded on first game | ~4 MB (pygame-ce, numpy, pgzero) | 184 KB, and it is vendored |
+| the frame loop | its blocking `while True`, reimplemented as an async loop that yields each frame | Kaplay's own |
+| sprites | copied file by file into Pyodide's virtual filesystem | fetched over HTTP like any web page |
+| the canvas | an SDL binding | a `canvas` option |
+| the keyboard afterwards | SDL kept it; the display had to be shut down to get it back, which blanked the canvas, so the last frame was copied out and put back | never taken from the document |
+
+The keyboard workaround is worth remembering as a shape of problem rather than
+a problem: SDL installed a document-level `keypress` handler that called
+`preventDefault` and survived the game loop ending, so typing into the editor
+silently stopped working while Enter and mouse clicks still worked. It read
+like a focus bug. None of that exists now.
+
+### Errors inside a callback
+
+An exception in `onUpdate()` happens sixty times a second, long after the line
+that registered it returned, and JavaScript is what catches it. Left alone that
+is either silence or thousands of identical tracebacks. So the first one is
+printed — trimmed to the student's own frames, like every other error here —
+and the game is stopped.
+
+Stopping is where the subtle bug lived. Kaplay can call a handler in the same
+frame it was told to quit, so freeing the Python callbacks at that moment is a
+use-after-free, and it surfaces as an incoherent JavaScript error rather than a
+stopped game. A stopped game's callbacks are therefore left alive and made
+inert by a flag; they are released when the next `kaplay()` starts, the one
+moment nothing can still hold them. Found by a test, not by reasoning.
+
+### Checking it still works
+
+```bash
+npm install pyodide
+node tools/test_kaplay_bridge.mjs
+```
+
+Twenty-three checks against real Pyodide, the real bootstrap out of
+`runtime.js` and the real bridge, with a stand-in for Kaplay that records what
+JavaScript was actually handed. It cannot tell you the game looks right — that
+needs a GPU and a pair of eyes — but it covers every seam, including the two
+that only misbehave long after the student's program has returned: a callback
+that raises, and Stop.
+
+Measured cost of writing a game in Python rather than JavaScript, 200 objects
+moved every frame, in a real browser:
+
+```
+moved from JavaScript   0.135 ms per frame   0.8% of a 60fps frame
+moved from Python       0.122 ms per frame   0.7% of a 60fps frame
+```
+
+Indistinguishable. Kaplay draws either way; only the callbacks are Python.
 
 ### Sprites
 
 51 sprites from the KAPLAY game library are bundled and available by name, so
-`Actor('bean')` works with no setup. The **Sprites** button opens a searchable
-panel; clicking a sprite drops `Actor('name', (100, 100))` into the code at the
-cursor.
+`loadSprite("bean", "images/bean.png")` works with no setup. The **Sprites** button opens a searchable
+panel; clicking a sprite drops the two lines Kaplay needs:
+
+```python
+loadSprite("bean", "images/bean.png")
+add([sprite("bean"), pos(100, 100)])
+```
+
+Two lines rather than one because Kaplay has to load a sprite before it can be
+used, and forgetting the load is the commonest way a sprite silently fails to
+appear. The sound chips insert `loadSound(...)` and `play(...)` for the same
+reason. Paths are relative to `/static/assets/`, which the bridge sets as
+Kaplay's load root when the game starts.
 
 The button only appears in game mode, so it stays out of the way during console
-work. A student who wants to browse sprites before writing any `draw()` can
+work. A student who wants to browse sprites before writing any game code can
 click the mode chip to lock the editor into Game mode.
 
 `dino` is a nine-frame walk cycle in the original artwork, so the build script
@@ -697,7 +766,8 @@ static/
                         shared by the editor and demo pages
   zip.js                Dependency-free ZIP writer (multi-file downloads)
   demo.js               The demo page: fetch on Run, run, show the output
-  game.js               Pygame Zero: async game loop, asset loading
+  game.js               Kaplay: loads the library, finds the bridge
+  py/kaplay.py          the Python side of Kaplay (shipped to Pyodide)
   notes.js              Markdown notes: render, sanitize
   complete.js           Name completion from Python's ast
   style.css             All styling
@@ -708,7 +778,7 @@ static/
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
-examples/               Pygame Zero, file-handling and notes starters
+examples/               file-handling and notes starters
 ```
 
 `runtime.js` exists because two pages need the same Python: the `input()` shim,

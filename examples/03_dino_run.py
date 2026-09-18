@@ -3,52 +3,47 @@
 # The dino walk cycle is nine separate pictures, dino_0 through dino_8.
 # Flipping between them quickly is what makes it look like walking.
 
-WIDTH = 600
-HEIGHT = 300
+from kaplay import *
+
+kaplay(width=600, height=300, background=[246, 238, 220])
+
+for i in range(9):
+    loadSprite("dino_" + str(i), "images/dino_" + str(i) + ".png")
+loadSprite("spike", "images/spike.png")
+
 GROUND = 240
 
-dino = Actor('dino_0', (100, GROUND))
-spike = Actor('spike', (600, GROUND + 10))
+# A floor to land on, and a gravity to fall under: with a body() component
+# Kaplay does the jumping physics, so there is no jump_speed to keep track of.
+setGravity(1800)
+
+add([rect(width(), 60), pos(0, GROUND + 20), area(), body(isStatic=True),
+     color(90, 74, 58)])
+
+dino = add([sprite("dino_0"), pos(100, GROUND), anchor("bot"), area(), body()])
+spike = add([sprite("spike"), pos(600, GROUND + 10), anchor("bot"), area()])
 
 frame = 0
 frame_timer = 0.0
-jump_speed = 0.0
-on_ground = True
 score = 0
+label = add([text("Jumped: 0", size=30), pos(10, 10), color(60, 50, 40)])
 
 
-def update(dt):
-    global frame, frame_timer, jump_speed, on_ground, score
+def each_frame():
+    global frame, frame_timer, score
 
-    # --- animate the walk cycle ---
-    frame_timer += dt
+    frame_timer += dt()
     if frame_timer > 0.08:
         frame_timer = 0.0
         frame = (frame + 1) % 9
-        dino.image = 'dino_' + str(frame)
+        dino.use(sprite("dino_" + str(frame)))
 
-    # --- jumping ---
-    if keyboard.space and on_ground:
-        jump_speed = -11
-        on_ground = False
-
-    if not on_ground:
-        dino.y += jump_speed
-        jump_speed += 0.6
-        if dino.y >= GROUND:
-            dino.y = GROUND
-            on_ground = True
-
-    # --- the spike slides past ---
-    spike.x -= 5
-    if spike.x < -20:
-        spike.x = WIDTH + 20
+    spike.move(-300, 0)
+    if spike.pos.x < -20:
+        spike.pos.x = width() + 20
         score += 1
+        label.text = "Jumped: " + str(score)
 
 
-def draw():
-    screen.fill((246, 238, 220))
-    screen.draw.filled_rect(Rect((0, GROUND + 20), (WIDTH, HEIGHT)), (90, 74, 58))
-    dino.draw()
-    spike.draw()
-    screen.draw.text("Jumped: " + str(score), (10, 10), fontsize=30, color=(60, 50, 40))
+onUpdate(each_frame)
+onKeyPress("space", lambda: dino.jump(700) if dino.isGrounded() else None)

@@ -1,29 +1,37 @@
 # Move the bean with the arrow keys.
 # Click the picture first so the keys reach the game.
 
-WIDTH = 600
-HEIGHT = 400
+from kaplay import *
 
-bean = Actor('bean', (300, 200))
-SPEED = 4
+kaplay(width=600, height=400, background=[120, 190, 230])
+
+loadSprite("bean", "images/bean.png")
+
+bean = add([
+    sprite("bean"),
+    pos(300, 200),
+    anchor("center"),
+])
+
+SPEED = 240   # pixels per second
+
+# move() is per-second, so the bean travels the same distance on a slow
+# computer as on a fast one. Kaplay multiplies by the frame time for you.
+onKeyDown("left",  lambda: bean.move(-SPEED, 0))
+onKeyDown("right", lambda: bean.move(SPEED, 0))
+onKeyDown("up",    lambda: bean.move(0, -SPEED))
+onKeyDown("down",  lambda: bean.move(0, SPEED))
 
 
-def update(dt):
-    if keyboard.left:
-        bean.x -= SPEED
-    if keyboard.right:
-        bean.x += SPEED
-    if keyboard.up:
-        bean.y -= SPEED
-    if keyboard.down:
-        bean.y += SPEED
-
-    # keep the bean on the screen
-    bean.x = max(0, min(WIDTH, bean.x))
-    bean.y = max(0, min(HEIGHT, bean.y))
+def keep_on_screen():
+    bean.pos.x = max(0, min(width(), bean.pos.x))
+    bean.pos.y = max(0, min(height(), bean.pos.y))
 
 
-def draw():
-    screen.fill((120, 190, 230))
-    bean.draw()
-    screen.draw.text("Use the arrow keys", (10, 10), fontsize=28, color="white")
+onUpdate(keep_on_screen)
+
+add([
+    text("Use the arrow keys", size=28),
+    pos(10, 10),
+    color(255, 255, 255),
+])

@@ -670,38 +670,41 @@
     canvas.focus();
 
     pushFilesToPython();
-    /* SDL takes the keyboard for the canvas while a game is up, so a field in
-       the output pane would sit there collecting nothing. A game that calls
-       input() gets the dialog box instead, which still works. */
-    consoleIO.setEnabled(false);
+    /* Kaplay owns the frame loop, so the student's program finishes almost
+       immediately and the game carries on without it — the opposite of the
+       Pygame Zero runner, whose loop was the program. So this does NOT clear
+       the running flag on success: the game is still up, Stop is still the
+       way out, and setBusy(false) happens in stopRun() or when a callback
+       raises. Only a failure to start unwinds here. */
     try {
-      pyodide.runPython("reset_game_state()");
-      var result = await pyodide.runPythonAsync(
-        "await run_game(" + JSON.stringify(source) + ")"
+      await pyodide.runPythonAsync(
+        "_pyide_run_game(" + JSON.stringify(source) + ")"
       );
-      if (result === "stopped") write("\n— stopped —\n", "dim");
     } catch (e) {
       write(String(e) + "\n", "err");
+      window.PyIDEGame.stop(pyodide);
+      setBusy(false, "game");
     } finally {
       pullFilesFromPython();
-      // give the keyboard back, or the editor — and the console's own input
-      // line — stop accepting typed characters
-      window.PyIDEGame.releaseKeyboard(pyodide, canvas);
-      consoleIO.setEnabled(true);
-      setBusy(false, "game");
-      // the student stopped the game to get back to the code
-      if (!window.PyIDENotes.isMarkdown(active)) editor.focus();
     }
   }
 
   function stopRun() {
     if (!running) return;
+    if (runMode === "game") {
+      window.PyIDEGame.stop(pyodide);
+      write("\n— stopped —\n", "dim");
+      setBusy(false, "game");
+      if (!window.PyIDENotes.isMarkdown(active)) editor.focus();
+      return;
+    }
     /* A program blocked on input() isn't executing, so there is no loop to ask
        to stop — cancelling the read is what ends it, and Python turns that
        into the same "stopped" path a cancelled dialog used to take. */
     if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
-    if (!pyodide) return;
-    try { pyodide.runPython("request_stop()"); } catch (e) { /* not loaded */ }
+    /* Nothing else to do: Stop is only offered for a game or for a program
+       sitting on input(). A console program that is merely computing is ended
+       by the time limit, not by this button, which is why it stays hidden. */
   }
 
   runBtn.addEventListener("click", run);
@@ -751,7 +754,12 @@
         img.name + '.png" alt="" loading="lazy"></span>' +
         '<span class="sprite-name">' + img.name + "</span>";
       cell.addEventListener("click", function () {
-        insertAtCursor("Actor('" + img.name + "', (100, 100))");
+        /* Two lines, because Kaplay needs the sprite loaded before it can
+           be used, and forgetting the load is the commonest way a sprite
+           silently fails to appear. */
+        insertAtCursor(
+          'loadSprite("' + img.name + '", "images/' + img.name + '.png")\n' +
+          'add([sprite("' + img.name + '"), pos(100, 100)])');
       });
       spriteGrid.appendChild(cell);
     });
@@ -767,9 +775,11 @@
         b.className = "chip";
         b.type = "button";
         b.textContent = name;
-        b.title = "Insert sounds." + name + ".play()";
+        b.title = 'Insert loadSound("' + name + '", ...) and play("' + name + '")';
         b.addEventListener("click", function () {
-          insertAtCursor("sounds." + name + ".play()");
+          insertAtCursor(
+            'loadSound("' + name + '", "sounds/' + file + '")\n' +
+            'play("' + name + '")');
         });
         soundList.appendChild(b);
       });
