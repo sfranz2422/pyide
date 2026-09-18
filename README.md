@@ -632,6 +632,31 @@ sixty times a second and `inspect.signature` is far too slow for that.
 This one was found by running the starter project, not by testing — the first
 thing that happened on the first keypress. There is now a test for it.
 
+### What a callback hands back
+
+Arguments going *into* a Python callback were converted from the start; the
+value coming *out* was not. Kaplay calls some callbacks precisely for what they
+return — a level's `tiles` entries are functions returning a component list, one
+per tile. Handed back as a Python list it reaches JavaScript as an opaque
+object, and Kaplay's next move is to set `.parent` on it:
+
+```
+AttributeError: 'list' object has no attribute 'parent'
+and no __dict__ for setting new attributes
+```
+
+which names neither the tile, nor the level, nor the conversion that didn't
+happen. The Levels lesson in this repo's own guide had it.
+
+Only containers are converted on the way out. A returned callable is left
+alone on purpose: converting it would mint a fresh proxy every time the
+callback ran, which at sixty frames a second is a leak rather than a feature.
+
+**The test suite missed this because the stub called every tile factory and
+threw the result away.** Calling a callback is not exercising it — the stub now
+uses what comes back, and asserts it is a real array before touching it.
+Verified by removing the fix and watching three checks fail.
+
 ### A list of frames does not get the load root
 
 Kaplay's sprite loader begins `e = pe(e)`, where `pe` prepends the load root —

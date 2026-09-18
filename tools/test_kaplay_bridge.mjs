@@ -86,6 +86,15 @@ globalThis.kaplay = function (options) {
     width: () => 800,
     // real Kaplay drops its handlers on quit; a stub that keeps them
     // would call freed proxies and blame the bridge for it
+    addLevel(layout, cfg) {
+      const tiles = cfg.tiles;
+      for (const k of Object.keys(tiles)) {
+        const comps = tiles[k]();
+        calls.push(["tile", k, Array.isArray(comps), comps && comps.length]);
+        comps.parent = "level";     // the line the old bridge died on
+      }
+      return { get: () => [], tile2Pos: () => ({ x: 0, y: 0 }) };
+    },
     quit: () => {
       quit++;
       // a real engine drops its own handlers and leaves other engines alone
@@ -243,6 +252,41 @@ check("it says the game stopped", /game stopped/.test(errText));
 check("the engine was told to quit", quit > before, "quit calls=" + quit);
 check("it did not report twice", (errText.match(/boom/g) || []).length === 1,
       (errText.match(/boom/g) || []).length + " reports");
+
+// --------------------------- what a callback hands BACK across the bridge
+/* Arguments into a callback were always converted; the return value was not.
+   A level's tile factories exist to return a component list, one per tile, and
+   a Python list reaching JavaScript raw is an opaque object — Kaplay's next
+   move is `comps.parent = ...`, which fails with
+
+       AttributeError: 'list' object has no attribute 'parent'
+
+   naming neither the tile nor the level. The guide's own Levels lesson had
+   this, and the test suite missed it because the stub called the factories
+   and then threw the result away. It uses it now. */
+calls.length = 0;
+errText = "";
+let levelError = null;
+try {
+  py.runPython(`
+import kaplay as K
+K.kaplay(width=800, height=600)
+lvl = K.addLevel(["==", "=="], {
+    "tileWidth": 64, "tileHeight": 64,
+    "tiles": {"=": lambda: [K.sprite("grass"), K.area(), K.body(isStatic=True)]},
+})
+`);
+} catch (e) {
+  // without the conversion this throws out of JavaScript, not out of Python,
+  // so catching it here is what turns a crashed run into a reported failure
+  levelError = String(e.message || e).split("\n").find((l) => l.trim()) || "threw";
+}
+check("addLevel did not throw", levelError === null, levelError || "");
+const tile = calls.find((c) => c[0] === "tile");
+check("a tile factory's list arrives as a real JS array",
+      tile && tile[2] === true, JSON.stringify(tile));
+check("with all its components", tile && tile[3] === 3, tile && String(tile[3]));
+check("and addLevel raised nothing", !errText.trim(), errText.split("\n")[0]);
 
 // ------------------------- loadRoot and a LIST of frames, which Kaplay skips
 /* Kaplay's loader begins `e = pe(e)`, and pe returns its argument unchanged

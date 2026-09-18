@@ -46,9 +46,19 @@ globalThis.kaplay = () => {
     add: (cs) => obj(Array.from(cs)),
     get: (t) => [obj([])],
     addLevel: (layout, cfg) => {
-      // exercise every tile factory, the way addLevel really would
+      /* Call every tile factory AND use what it gives back, the way the real
+         addLevel does. Merely calling them is not enough: the bug this
+         missed was a Python list returned to JavaScript, which only fails at
+         the moment Kaplay touches it. */
       const tiles = cfg.tiles || (cfg.get && cfg.get("tiles"));
-      if (tiles) for (const k of Object.keys(tiles)) tiles[k]();
+      if (tiles) for (const k of Object.keys(tiles)) {
+        const comps = tiles[k]();
+        if (!Array.isArray(comps)) {
+          throw new Error("tile '" + k + "' returned " + typeof comps +
+                          ", not an array of components");
+        }
+        comps.parent = "level";      // what really blew up
+      }
       return { get: () => [obj([])], tile2Pos: () => ({ x: 0, y: 0 }) };
     },
     addKaboom(){}, destroy(){},

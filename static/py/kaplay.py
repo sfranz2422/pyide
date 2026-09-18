@@ -170,12 +170,39 @@ def _guard(fn):
         if limit is not None and len(args) > limit:
             args = args[:limit]
         try:
-            return fn(*[_wrap(a) for a in args], **kwargs)
+            return _convert_result(fn(*[_wrap(a) for a in args], **kwargs))
         except Exception as err:
             _report(err)
             return None
     guarded.__name__ = getattr(fn, "__name__", "callback")
     return guarded
+
+
+def _convert_result(value):
+    """What a Python callback hands BACK to JavaScript.
+
+    Arguments going into a callback were always converted; the return value
+    was not, and Kaplay calls some callbacks precisely for what they return.
+    A level's tile factories are the case that found this: every entry in
+    `tiles` is a function returning a component list, one per tile. Handed
+    back as a Python list it reaches JavaScript as an opaque object, and
+    Kaplay's first move is to set `.parent` on it:
+
+        AttributeError: 'list' object has no attribute 'parent'
+        and no __dict__ for setting new attributes
+
+    — an error that names neither the tile, nor the level, nor the fact that
+    a list was supposed to become an array.
+
+    Only containers are converted. A returned callable is deliberately left
+    alone: converting it would mint a fresh proxy every time the callback ran,
+    which at sixty frames a second is a leak, not a feature.
+    """
+    if isinstance(value, GameObj):
+        return value.js
+    if isinstance(value, (list, tuple, dict)):
+        return _convert(value)
+    return value
 
 
 def _convert(value):
