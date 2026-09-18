@@ -883,6 +883,30 @@ left to fetch, so `file://` stops mattering.
 Console programs are unchanged: one file downloads as `.py`, a project with
 imports or data files as a `.zip`.
 
+### Putting a game on itch.io
+
+The exported file meets itch.io's requirements as it stands, and needs no zip:
+*"For simple projects that are self contained in a single `.html` file, you
+directly upload the file without zipping it."* Set **Kind of project** to
+*HTML*, upload the `.html`, tick *This file will be played in the browser*.
+
+Their two relevant rules, both already satisfied:
+
+- **Anything loaded from another domain must be HTTPS.** The only external
+  reference is Pyodide, from `https://cdn.jsdelivr.net`. External resources are
+  allowed; insecure ones are not.
+- **No absolute paths**, which would leave the project's directory on their CDN
+  and return 403. Every sprite and sound is a `data:` URI, so there are no paths
+  to get wrong. An exported game also sets Kaplay's load root to `""` rather
+  than this site's asset directory.
+
+Worth knowing why the data URIs are safe: Kaplay's loader tests
+`/^data:\w+\/\w+;base64,.+/` and leaves anything matching it alone, so the
+load root is never prepended to an inlined asset.
+
+Size is a non-issue — itch allows 200 MB for a single file and a small game
+exports at about half a megabyte.
+
 ```bash
 node tools/test_export.mjs
 ```

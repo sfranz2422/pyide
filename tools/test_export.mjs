@@ -115,6 +115,16 @@ check("a later error still reaches the screen",
       html.includes("py.setStderr") && /setStderr[\s\S]{0,120}fail\(/.test(html));
 check("it declares nothing it doesn't use", !html.includes("var errors ="));
 
+/* itch.io hosts a single .html upload directly, and its one rule for anything
+   loaded from another domain is that the domain must be HTTPS. Its other
+   warning is about absolute paths, which would leave the project's directory
+   on their CDN and 403. */
+const fetched = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+check("every external script is HTTPS", fetched.every((u) => u.startsWith("https://")),
+      fetched.join(", "));
+check("the exported game asks for no asset directory",
+      html.includes("window.__pyideAssetRoot = ''"));
+
 console.log();
 const passed = results.every(Boolean);
 console.log(passed ? `ALL PASSED (${results.length} checks)`

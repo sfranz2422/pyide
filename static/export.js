@@ -206,6 +206,8 @@ window.PyIDEExport = (function () {
       "",
       "    // the bridge hands this canvas to kaplay(), same as in the editor",
       "    window.__pyideCanvas = canvas;",
+      "    // every asset is inlined, so there is no asset directory to look in",
+      "    window.__pyideAssetRoot = '';",
       "    canvas.hidden = false;",
       "    statusEl.hidden = true;",
       "    hint.hidden = false;",

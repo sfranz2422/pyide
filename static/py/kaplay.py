@@ -341,8 +341,18 @@ def kaplay(**options):
     # "images/bean.png") works with no setup. Kaplay resolves every load
     # against this, which is why the Sprites panel inserts paths under
     # images/ and sounds/.
+    # An exported game sets this to "" — every asset it needs is already
+    # inlined as a data: URI, and Kaplay leaves those alone, so an absolute
+    # site path in a file destined for itch.io or a flash drive would only
+    # ever be wrong.
+    root = ASSET_ROOT
+    window = getattr(js, "window", None)
+    if window is not None:
+        override = getattr(window, "__pyideAssetRoot", None)
+        if override is not None:
+            root = override
     try:
-        _ctx.loadRoot(ASSET_ROOT)
+        _ctx.loadRoot(root)
     except Exception:
         pass          # a bare Kaplay build without loadRoot; paths still work
 
