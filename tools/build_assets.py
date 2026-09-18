@@ -152,12 +152,17 @@ def build_sounds(src_dir):
 
 
 def load_manifest():
+    """The whole manifest, so anything this tool doesn't build survives.
+
+    The dungeon pack is written by vendor_dungeon.py under its own key. Writing
+    a fresh two-key manifest here would silently delete it, and the Sprites
+    panel would lose half its contents the next time anyone added a sound.
+    """
     try:
         with open(MANIFEST) as fh:
-            data = json.load(fh)
-        return data.get("images", []), data.get("sounds", [])
+            return json.load(fh)
     except Exception:
-        return [], []
+        return {}
 
 
 def main(argv=None):
@@ -178,7 +183,9 @@ def main(argv=None):
             print("%s: no folder at %s" % (label, path), file=sys.stderr)
             return 1
 
-    images, sounds = load_manifest()
+    manifest = load_manifest()
+    images = manifest.get("images", [])
+    sounds = manifest.get("sounds", [])
     skipped = []
 
     if args.sprites:
@@ -189,8 +196,10 @@ def main(argv=None):
         skipped += s
 
     os.makedirs(ASSETS, exist_ok=True)
+    manifest["images"] = images
+    manifest["sounds"] = sounds
     with open(MANIFEST, "w") as fh:
-        json.dump({"images": images, "sounds": sounds}, fh, indent=1)
+        json.dump(manifest, fh, indent=1)
 
     print("sprites: %d%s" % (len(images), "" if args.sprites else "  (unchanged)"))
     print("sounds:  %d%s" % (len(sounds), "" if args.sounds else "  (unchanged)"))
@@ -207,7 +216,9 @@ def main(argv=None):
                 big.append((os.path.basename(path), size))
 
     total = 0
-    for folder in (IMG_OUT, SND_OUT):
+    for folder in (IMG_OUT, SND_OUT, os.path.join(ASSETS, "dungeon")):
+        if not os.path.isdir(folder):
+            continue
         for n in os.listdir(folder):
             fp = os.path.join(folder, n)
             if os.path.isfile(fp):

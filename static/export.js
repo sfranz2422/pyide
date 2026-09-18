@@ -43,9 +43,12 @@ window.PyIDEExport = (function () {
   var LIB = "/static/game/kaplay.js";
   var SHIM = "/static/py/kaplay.py";
 
-  /* Asset paths as they appear in a student's program: the two shapes the
-     Sprites panel inserts, quoted either way round. */
-  var ASSET_RE = /["'](images\/[A-Za-z0-9_\-]+\.png|sounds\/[A-Za-z0-9_\-]+\.wav)["']/g;
+  /* Asset paths as they appear in a student's program: the shapes the Sprites
+     panel inserts, quoted either way round. `dungeon/` is the 0x72 pack, whose
+     animated entries are strips — one file per character, so a character with
+     three animations still costs one inlined image. */
+  var ASSET_RE =
+    /["']((?:images|dungeon)\/[A-Za-z0-9_\-]+\.png|sounds\/[A-Za-z0-9_\-]+\.wav)["']/g;
 
   function referencedAssets(source) {
     var found = {}, m;

@@ -17,6 +17,7 @@
   var authorField = $("author");
   var panel = $("sprites");
   var spriteGrid = $("sprite-grid");
+  var dungeonGrid = $("dungeon-grid");
   var soundList = $("sound-list");
 
   // ---------------------------------------------------------------- editor
@@ -740,6 +741,53 @@
     editor.focus();
   }
 
+  /* How tall a thumbnail may be, and how wide before it is shrunk to fit a
+     third of a 268px panel. */
+  var THUMB_H = 44, THUMB_W = 60;
+
+  /* A cell showing one sprite. `frames` is how many frames sit side by side in
+     the file, so the cell can show just the first one. */
+  function spriteCell(name, dir, w, h, frames, note) {
+    var cell = document.createElement("button");
+    cell.className = "sprite";
+    cell.type = "button";
+    cell.dataset.name = name;
+    cell.title = name + " — " + w + "×" + h +
+      (note ? " — " + note : "") + " — click to insert";
+
+    var scale = Math.min(THUMB_H / h, THUMB_W / w, 3);
+    var box = document.createElement("span");
+    box.className = "sprite-img";
+
+    var window_ = document.createElement("span");
+    window_.className = "sprite-frame";
+    window_.style.width = Math.round(w * scale) + "px";
+    window_.style.height = Math.round(h * scale) + "px";
+
+    var img = document.createElement("img");
+    img.src = "/static/assets/" + dir + "/" + name + ".png";
+    img.alt = "";
+    img.loading = "lazy";
+    img.style.width = Math.round(w * scale) * frames + "px";
+
+    window_.appendChild(img);
+    box.appendChild(window_);
+    cell.appendChild(box);
+
+    if (frames > 1) {
+      var mark = document.createElement("span");
+      mark.className = "sprite-anim";
+      mark.textContent = "▶";
+      cell.appendChild(mark);
+    }
+
+    var label = document.createElement("span");
+    label.className = "sprite-name";
+    label.textContent = name;
+    cell.appendChild(label);
+    return cell;
+  }
+
   async function fillSpritePanel() {
     if (spritesFetched) return;
     spritesFetched = true;
@@ -751,27 +799,25 @@
       return;
     }
 
-    spriteGrid.textContent = "";
-    manifest.images.forEach(function (img) {
-      var cell = document.createElement("button");
-      cell.className = "sprite";
-      cell.type = "button";
-      cell.dataset.name = img.name;
-      cell.title = img.name + " — " + img.w + "×" + img.h + " — click to insert";
-      cell.innerHTML =
-        '<span class="sprite-img"><img src="/static/assets/images/' +
-        img.name + '.png" alt="" loading="lazy"></span>' +
-        '<span class="sprite-name">' + img.name + "</span>";
-      cell.addEventListener("click", function () {
-        /* Two lines, because Kaplay needs the sprite loaded before it can
-           be used, and forgetting the load is the commonest way a sprite
-           silently fails to appear. */
-        insertAtCursor(
-          'loadSprite("' + img.name + '", "images/' + img.name + '.png")\n' +
-          'add([sprite("' + img.name + '"), pos(100, 100)])');
+    /* Both packs are drawn the same way. The only difference is the folder the
+       pictures live in, and that the dungeon pack has animated entries. */
+    function addPack(entries, dir, grid) {
+      entries.forEach(function (entry) {
+        var frames = entry.frames || 1;
+        var names = entry.anims ? Object.keys(entry.anims) : [];
+        var cell = spriteCell(entry.name, dir, entry.w, entry.h, frames,
+                              names.join(", "));
+        cell.addEventListener("click", function () {
+          insertAtCursor(window.PyIDESprites.insertFor(entry, dir));
+        });
+        grid.appendChild(cell);
       });
-      spriteGrid.appendChild(cell);
-    });
+    }
+
+    spriteGrid.textContent = "";
+    addPack(manifest.images || [], "images", spriteGrid);
+    addPack(manifest.dungeon || [], "dungeon", dungeonGrid);
+    $("dungeon-section").hidden = !dungeonGrid.children.length;
 
     var sounds = manifest.sounds || [];
     if (!sounds.length) {
@@ -815,13 +861,25 @@
 
   $("sprite-search").addEventListener("input", function (e) {
     var q = e.target.value.trim().toLowerCase();
-    var shown = 0;
-    Array.prototype.forEach.call(spriteGrid.children, function (cell) {
-      var hit = !q || cell.dataset.name.indexOf(q) >= 0;
-      cell.hidden = !hit;
-      if (hit) shown++;
-    });
-    $("sprite-empty").hidden = shown > 0;
+    var total = 0;
+
+    /* Each pack is filtered on its own so an empty one can take its heading
+       with it: searching "elf" should not leave a "Kaplay pack" label sitting
+       above nothing. */
+    [[spriteGrid, "images-section"], [dungeonGrid, "dungeon-section"]]
+      .forEach(function (pair) {
+        var shown = 0;
+        Array.prototype.forEach.call(pair[0].children, function (cell) {
+          if (!cell.dataset.name) return;      // the "Loading…" placeholder
+          var hit = !q || cell.dataset.name.indexOf(q) >= 0;
+          cell.hidden = !hit;
+          if (hit) shown++;
+        });
+        $(pair[1]).hidden = pair[0].children.length > 0 && shown === 0;
+        total += shown;
+      });
+
+    $("sprite-empty").hidden = total > 0;
   });
 
   $("sprites-close").addEventListener("click", closeSprites);

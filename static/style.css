@@ -742,6 +742,33 @@ body:not(.is-authoring) .notes-body a {
   max-height: 44px;
   image-rendering: pixelated;
 }
+/* One frame of an animation strip, shown through a window the size of that
+   frame. The whole strip is inside, shifted to the left edge, so the cell
+   shows a standing character rather than nine tiny ones in a row.
+   `loading="lazy"` is why this is an <img> in a box and not a background
+   image: the dungeon pack is 142 pictures and most are off-screen. */
+.sprite-frame { display: block; overflow: hidden; }
+.sprite-frame img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+}
+
+/* A corner mark on anything that animates. */
+.sprite-anim {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--accent);
+}
+.sprite { position: relative; }
+
+.sprite-section[hidden] { display: none; }
+.sprite-section:first-child .sprite-subhead { margin-top: 0; }
+
 .sprite-name {
   font-family: var(--mono);
   font-size: 10.5px;

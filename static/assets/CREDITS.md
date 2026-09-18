@@ -37,6 +37,42 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Dungeon sprites
+
+`dungeon/` is **DungeonTileset II by 0x72**, released under
+[CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) — the
+author has put it in the public domain, so attribution is not required. It is
+recorded here anyway, because knowing where an asset came from is worth more
+than the licence requires.
+
+Source: https://0x72.itch.io/dungeontileset-ii (version 1.7)
+
+The pack ships 370 separate PNGs, four to an animation. `tools/vendor_dungeon.py`
+gathers them into 142 sprites: each character becomes one horizontal strip
+carrying all of its animations end to end, and each still tile is copied across
+untouched. So `elf_m_idle_anim_f0..3` and `elf_m_run_anim_f0..3` become one
+`elf_m.png`, eight frames wide, with an `idle` animation over frames 0–3 and a
+`run` over 4–7 — which is what the Sprites panel inserts:
+
+```python
+loadSprite("elf_m", "dungeon/elf_m.png",
+            sliceX=8, anims={
+    "idle": {"from": 0, "to": 3, "speed": 8, "loop": True},
+    "run": {"from": 4, "to": 7, "speed": 10, "loop": True},
+})
+add([sprite("elf_m", anim="idle"), pos(100, 100)])
+```
+
+Two names, `coin` and `bomb`, exist in both packs. Kaplay keeps one sprite per
+name, so the dungeon versions are called `dungeon_coin` and `dungeon_bomb`.
+
+To rebuild from the original download:
+
+```
+python tools/vendor_dungeon.py --frames "path/to/0x72_DungeonTilesetII_v1.7/frames"
+node tools/test_dungeon.mjs
+```
+
 ## Sounds
 
 `sounds/` holds 23 effects. Sounds must be `.wav` — the browser's SDL_mixer has
@@ -47,8 +83,8 @@ files in a folder and re-run:
 python tools/build_assets.py --sounds "path/to/sounds"
 ```
 
-They will appear in the editor's Sprites panel and become available to student
-code as `sounds.<filename>.play()`.
+They appear in the editor's Sprites panel, which inserts
+`loadSound("ding", "sounds/ding.wav")` and `play("ding")`.
 
 Record the license of whatever you add here, the same way the sprites are
 recorded above.

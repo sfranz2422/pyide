@@ -67,6 +67,20 @@ check("it finds only the assets the program names",
       '["images/bean.png","images/ghosty.png","sounds/ding.wav"]',
       X.referencedAssets(GAME).join(" "));
 
+/* The dungeon pack lives in its own folder, and a path the exporter does not
+   recognise is not an error anywhere — it is simply left as a relative path in
+   the exported file, where nothing can fetch it. The game then runs with an
+   invisible hero. */
+const DUNGEON = `loadSprite("dwarf_f", "dungeon/dwarf_f.png",
+            sliceX=9, anims={"idle": {"from": 0, "to": 3}})
+add([sprite("dwarf_f", anim="idle"), pos(100, 100)])`;
+check("it finds dungeon sprites too",
+      JSON.stringify(X.referencedAssets(DUNGEON)) === '["dungeon/dwarf_f.png"]',
+      X.referencedAssets(DUNGEON).join(" "));
+check("and rewrites a dungeon path when it is inlined",
+      X.inlineAssetPaths(DUNGEON, { "dungeon/dwarf_f.png": "data:image/png;base64,AA" })
+        .includes('"data:image/png;base64,AA"'));
+
 const html = await X.buildGamePage(GAME, "Bean Jump");
 console.log("\n  exported size: %s KB\n", (html.length / 1024).toFixed(0));
 

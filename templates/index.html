@@ -207,9 +207,16 @@
       <input id="sprite-search" class="field" type="search" placeholder="Search sprites">
     </div>
     <div class="sprite-scroll">
-      <div id="sprite-grid" class="sprite-grid"><span class="dim">Loading…</span></div>
+      <div id="images-section" class="sprite-section">
+        <div class="sprite-subhead">Kaplay pack</div>
+        <div id="sprite-grid" class="sprite-grid"><span class="dim">Loading…</span></div>
+      </div>
+      <div id="dungeon-section" class="sprite-section" hidden>
+        <div class="sprite-subhead">Dungeon pack</div>
+        <div id="dungeon-grid" class="sprite-grid"></div>
+      </div>
       <p id="sprite-empty" class="dim sprite-empty" hidden>No sprite by that name.</p>
-      <div id="sound-section">
+      <div id="sound-section" class="sprite-section">
         <div class="sprite-subhead">Sounds</div>
         <div id="sound-list" class="chips"></div>
       </div>
@@ -267,6 +274,7 @@
 <script src="{{ url_for('static', filename='export.js') }}"></script>
 <script src="{{ url_for('static', filename='runtime.js') }}"></script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='sprites.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='account.js') }}"></script>

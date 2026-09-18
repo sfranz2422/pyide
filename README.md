@@ -791,9 +791,9 @@ intercepted, and everything else falls straight through.
 
 ### Sprites
 
-51 sprites from the KAPLAY game library are bundled and available by name, so
-`loadSprite("bean", "images/bean.png")` works with no setup. The **Sprites** button opens a searchable
-panel; clicking a sprite drops the two lines Kaplay needs:
+Two packs are bundled, 202 sprites in all, available by name with no setup. The
+**Sprites** button opens a searchable panel — the search covers both packs at
+once — and clicking a sprite drops the two lines Kaplay needs:
 
 ```python
 loadSprite("bean", "images/bean.png")
@@ -805,6 +805,38 @@ used, and forgetting the load is the commonest way a sprite silently fails to
 appear. The sound chips insert `loadSound(...)` and `play(...)` for the same
 reason. Paths are relative to `/static/assets/`, which the bridge sets as
 Kaplay's load root when the game starts.
+
+**Kaplay pack** — 60 sprites from the KAPLAY game library, `images/`.
+
+**Dungeon pack** — 142 sprites from 0x72's DungeonTileset II, `dungeon/`, public
+domain. 42 of them animate: knights, elves, orcs, zombies, a wizard, chests,
+torches, coins. Each animated entry is a single horizontal strip carrying all of
+that character's animations end to end, so clicking one inserts the sliceX/anims
+form instead:
+
+```python
+loadSprite("elf_m", "dungeon/elf_m.png",
+            sliceX=8, anims={
+    "idle": {"from": 0, "to": 3, "speed": 8, "loop": True},
+    "run": {"from": 4, "to": 7, "speed": 10, "loop": True},
+})
+add([sprite("elf_m", anim="idle"), pos(100, 100)])
+```
+
+That is the form Kaplay's own documentation uses, and it is legible: a student
+can change a speed, turn off a loop, or call `.play("run")` from a key handler
+without being told how. The alternative — `loadSprite` with a list of eight
+paths — works, but is a line nobody can read, and exports to eight inlined
+images instead of one.
+
+Cells in the panel show the first frame only, through a window the width of one
+frame, so an eight-frame strip looks like a character rather than a filmstrip.
+A ▶ in the corner marks the ones that animate; the tooltip names the animations.
+
+Two names exist in both packs, so the dungeon versions are `dungeon_coin` and
+`dungeon_bomb` — Kaplay keeps one sprite per name, and a student who loaded both
+would otherwise get whichever came second, with no error to explain it.
+`tools/test_dungeon.mjs` checks no new clash creeps in.
 
 The button only appears in game mode, so it stays out of the way during console
 work. A student who wants to browse sprites before writing any game code can
@@ -829,7 +861,8 @@ python tools/build_assets.py --sounds ~/Desktop/sounds
 ```
 
 Whichever category you leave out is carried over unchanged, so updating sounds
-never disturbs the sprites.
+never disturbs the sprites — and neither ever disturbs the dungeon pack, which
+`tools/vendor_dungeon.py` writes under its own key in the same manifest.
 
 Pointing it at `static/assets/sounds` itself is fine — it re-indexes in place
 rather than trying to copy files onto themselves.
@@ -910,17 +943,21 @@ static/
   zip.js                Dependency-free ZIP writer (multi-file downloads)
   demo.js               The demo page: fetch on Run, run, show the output
   game.js               Kaplay: loads the library, finds the bridge
+  export.js             Exports a game as one self-contained playable .html
   py/kaplay.py          the Python side of Kaplay (shipped to Pyodide)
+  sprites.js            The Python a Sprites-panel click inserts
   notes.js              Markdown notes: render, sanitize
   complete.js           Name completion from Python's ast
   style.css             All styling
   assets/
     manifest.json       Generated — what the sprite panel reads
-    images/             60 sprite PNGs
+    images/             60 sprite PNGs (KAPLAY, MIT)
+    dungeon/            142 sprite PNGs (0x72 DungeonTileset II, CC0)
     sounds/             23 sound effects (.wav only)
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
+  vendor_dungeon.py     Composites the dungeon pack's 370 frames into strips
 examples/               file-handling and notes starters
 ```
 
@@ -1051,6 +1088,33 @@ listeners are rebound on each swap, because they belong to the element.
 The blank picture after Stop is not a choice — losing the context takes the
 last frame with it, and keeping the frame would mean painting it into a 2D
 context, which is then the wrong kind of context for the next game.
+
+### Checking the sprite packs
+
+```bash
+node tools/test_dungeon.mjs
+```
+
+1,285 checks over both packs. Three things can go wrong between a folder of
+pictures and a student's screen, and not one of them announces itself:
+
+- the manifest names a file that isn't there — the loader fails quietly and the
+  character never appears;
+- `sliceX` disagrees with the picture — the strip is cut on the wrong
+  boundaries, so every frame is half one pose and half the next, which looks
+  like an animation bug rather than a data bug;
+- an `anims` range runs past the end of the strip.
+
+So it reads each PNG's IHDR header directly, checks the dimensions agree with
+the manifest, and then runs the exact line the panel inserts — all 202 of them,
+in one program — through the real bridge against a stand-in engine that
+re-checks the arithmetic from the inside. It imports `static/sprites.js` rather
+than restating what the panel does, which is why that file exists on its own.
+
+The strips themselves were checked once, differently: 270 frames compared
+pixel-for-pixel against the original download. All matched. (The pack numbers
+one zombie's frames `f1, f2, f3, f10`, which sorts correctly by number and
+looked wrong only to a checker that assumed they started at zero.)
 
 ### Checking a guide's code actually runs
 
