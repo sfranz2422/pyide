@@ -632,6 +632,38 @@ sixty times a second and `inspect.signature` is far too slow for that.
 This one was found by running the starter project, not by testing — the first
 thing that happened on the first keypress. There is now a test for it.
 
+### Every method on a game object is bridged
+
+Kaplay's documentation is full of calls made *on* an object rather than on the
+context: `btn.add([...])`, `player.onCollide(...)`, `level.get("player")`.
+Left alone those go straight to JavaScript, and everything this module does
+stops applying — a Python list arrives opaque, a callback arrives unowned, and
+what comes back is a raw object that will do the same to the next call made
+on it.
+
+An earlier version bridged only the methods that obviously took lists or
+callbacks. **That produced four separate bugs**, each a raw object escaping
+through a method nobody had listed, each surfacing far from its cause:
+
+| what escaped | how it showed up |
+|---|---|
+| a child's component list | `'list' object has no attribute 'parent'` |
+| a tile factory's return value | the same, from `addLevel` |
+| an unconvertible Python value | `This borrowed proxy was automatically destroyed…` |
+| `level.get("player")[0]` | the same, but only on the first collision |
+
+The last one settled it: a raw object from `get()` meant every later
+`onCollide` on the player bypassed the bridge, so the callback was destroyed
+before the first coin was touched. There is no list of bridged methods any
+more, because a list is a thing to be wrong about.
+
+Measured cost of closing it completely, 200 objects moving every frame:
+**0.48 ms instead of 0.35 ms — 2.9% of a frame instead of 2.1%.** Properties
+are still handed back raw, so `o.pos.x` stays fast.
+
+`get()` now returns a Python list of bridged objects, which is also what a
+student expects: `len()`, indexing and `for obj in get("coin")` all work.
+
 ### Python objects the engine keeps
 
 Handing a Python object to JavaScript raw makes Pyodide create a **borrowed**

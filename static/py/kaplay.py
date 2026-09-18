@@ -43,15 +43,15 @@ PERFORMANCE, MEASURED
 Crossing into Python is cheap; reaching back across the seam for properties is
 what costs. Measured against Pyodide 314.0.7, one frame over 200 game objects:
 
-    o.move(1.5, 0.5)                one method call     0.38 ms   2.3% of a frame
+    o.move(1.5, 0.5)                one method call     0.48 ms   2.9% of a frame
     o.pos.x = o.pos.x + 1.5         nested every time   0.66 ms   4.0% of a frame
 
 A frame at 60fps is 16.7 ms, and Kaplay draws in JavaScript at full speed
 regardless, so even the wasteful idiom leaves 96% of the frame free at 200
-objects. About half of that cost is the GameObj wrapper below; without it the
-same two lines measure 0.17 ms and 0.44 ms, and `btn.add([...])` and
-`player.onCollide(...)` do not work at all. That trade was made deliberately
-and with the numbers in hand.
+objects. Roughly half of that is the GameObj wrapper below; without it the same
+two lines measure 0.17 ms and 0.44 ms — and `btn.add([...])`,
+`player.onCollide(...)` and `level.get(...)` do not work at all. That trade was
+made deliberately and with the numbers in hand.
 
 Prefer `o.move(...)` where it exists, but not at the cost of clarity — none of
 these are close to a problem at classroom scale.
@@ -246,28 +246,29 @@ def _convert(value):
 #: taking a component list, and every event registrar, which takes a callback.
 #: Everything else — move, jump, pos, isGrounded — is left completely alone, so
 #: the per-frame path stays as fast as it was.
-_MARSHAL = {"add", "use", "wait", "loop", "tween"}
-
-
-def _needs_marshalling(name):
-    return name in _MARSHAL or name.startswith("on")
-
-
 class GameObj:
-    """A Kaplay game object, with its argument-taking methods bridged.
+    """A Kaplay game object, with every method bridged.
 
-    Kaplay's own documentation is full of calls made *on* an object rather than
-    on the context — `btn.add([text("Ring")])` for a child, and
-    `player.onCollide("coin", ...)`, `enemy.onStateEnter("attack", ...)` for
-    events. Those go straight to JavaScript without passing through this
-    module, so a Python list arrives as an opaque object rather than an array,
-    and a Python callback arrives unguarded and unowned — it can be collected
-    while JavaScript still holds it.
+    Kaplay's documentation is full of calls made *on* an object rather than on
+    the context — `btn.add([text("Ring")])` for a child,
+    `player.onCollide("coin", ...)` for an event, `level.get("player")` for a
+    lookup. Left to themselves those go straight to JavaScript without passing
+    through this module, and everything the bridge does stops applying: a
+    Python list arrives as an opaque object, a callback arrives unguarded and
+    unowned, and whatever comes back is a raw JavaScript object that will do
+    the same thing to the next call made on it.
 
-    So the few methods that take lists or callbacks are wrapped, and every
-    other attribute is handed back untouched. That split is deliberate:
-    `o.pos`, `o.move(...)` and `o.isGrounded()` run on every frame and pay
-    nothing but one attribute lookup, while `o.onCollide(...)` runs once.
+    **Every method is bridged, not a chosen few.** An earlier version wrapped
+    only the methods that obviously took lists or callbacks, and the result was
+    four separate bugs — each one a raw object escaping through some method
+    nobody had thought of, and each one surfacing much later as an error about
+    proxies that meant nothing to the person playing the game. The one that
+    finished the argument was `level.get("player")[0]`, which handed back a raw
+    object whose every later `onCollide` bypassed the bridge entirely.
+
+    The cost of closing it completely, measured over 200 objects moving each
+    frame: 0.48 ms instead of 0.35 ms, which is 2.9% of a frame instead of
+    2.1%. Properties are still handed back raw, so `o.pos.x` stays fast.
     """
 
     __slots__ = ("_js",)
@@ -277,11 +278,11 @@ class GameObj:
 
     def __getattr__(self, name):
         attr = getattr(object.__getattribute__(self, "_js"), name)
-        if _needs_marshalling(name) and callable(attr):
+        if callable(attr):
             def method(*args, **kwargs):
                 return _wrap(_call(attr, args, kwargs))
             return method
-        return attr
+        return attr        # a property: .pos, .text, .flipX — left raw and fast
 
     def __setattr__(self, name, value):
         setattr(object.__getattribute__(self, "_js"), name, value)
@@ -298,15 +299,29 @@ class GameObj:
 def _wrap(value):
     """Wrap a Kaplay return value if it is a game object, else leave it be.
 
-    Only game objects get wrapped — a vec2 or a colour is left raw so that
-    reading `v.x` costs nothing. `use` is the giveaway: every game object has
-    it, and none of Kaplay's plain values do.
+    A vec2 or a colour is left raw so that reading `v.x` costs nothing. `use`
+    is the giveaway: every game object has it, and none of Kaplay's plain
+    values do.
+
+    **An array of game objects is wrapped element by element**, and becomes an
+    ordinary Python list. `get("coin")` and `level.get("player")` both return
+    one, and `level.get("player")[0]` was handing back a raw JavaScript object
+    — so `player.onCollide("coin", ...)` went straight to Kaplay without
+    passing through this module, the Python callback crossed as a borrowed
+    proxy, and the game died on the first collision with a message about
+    create_proxy that means nothing to anybody playing it.
+
+    A Python list is also the better thing to hand back: len(), indexing and
+    `for obj in get("coin")` all work the way a student expects.
     """
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     try:
+        # the common case first: this runs on every callback argument
         if hasattr(value, "use") and hasattr(value, "add"):
             return GameObj(value)
+        if js.Array.isArray(value):
+            return [_wrap(v) for v in value]
     except Exception:
         pass
     return value

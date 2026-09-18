@@ -93,7 +93,11 @@ globalThis.kaplay = function (options) {
         calls.push(["tile", k, Array.isArray(comps), comps && comps.length]);
         comps.parent = "level";     // the line the old bridge died on
       }
-      return { get: () => [], tile2Pos: () => ({ x: 0, y: 0 }) };
+      return {
+        use(){}, add(){},                     // a level IS a game object
+        get: (tag) => [makeGameObj([tag])],   // and get() hands back more
+        tile2Pos: () => ({ x: 0, y: 0 }),
+      };
     },
     // a call that KEEPS what Python handed it, the way Kaplay keeps almost
     // everything it is given
@@ -255,6 +259,40 @@ check("it says the game stopped", /game stopped/.test(errText));
 check("the engine was told to quit", quit > before, "quit calls=" + quit);
 check("it did not report twice", (errText.match(/boom/g) || []).length === 1,
       (errText.match(/boom/g) || []).length + " reports");
+
+// ------------- an object reached through a method, not through add()
+/* `level.get("player")[0]` used to hand back a raw JavaScript object, because
+   `get` was not one of the few methods being bridged. Every later call on it
+   — `player.onCollide("coin", ...)` above all — then bypassed this module
+   completely: the Python callback crossed as a borrowed proxy, was destroyed
+   when onCollide returned, and the game died on the first coin with a message
+   about create_proxy. The guide's own Levels lesson did exactly this.
+
+   Every method is bridged now, so there is no "few methods" list left to be
+   wrong about. This checks the specific shape that broke. */
+errText = "";
+const collected = [];
+py.runPython(`
+import kaplay as K
+K.kaplay(width=800, height=600)
+lvl = K.addLevel(["@"], {"tileWidth": 64, "tileHeight": 64,
+    "tiles": {"@": lambda: [K.sprite("bean"), K.area(), K.body(), "player"]}})
+found = lvl.get("player")
+hero = found[0]
+IS_LIST = isinstance(found, list)
+IS_WRAPPED = isinstance(hero, K.GameObj)
+hero.onCollide("coin", lambda c: c.destroy())
+`);
+check("get() comes back as a Python list", py.runPython("IS_LIST"));
+check("its items are bridged objects, not raw", py.runPython("IS_WRAPPED"));
+
+const heroHandler = handlers.filter((h) => h[0] === "collide:coin").pop();
+check("a handler registered through it survives the call", !!heroHandler);
+let deadProxy = null;
+try { heroHandler[2](makeGameObj([])); }
+catch (e) { deadProxy = String(e.message || e).split("\n")[0]; }
+check("and still runs when the collision happens",
+      deadProxy === null, deadProxy || "");
 
 // ------------------- a Python object the engine keeps past the call
 /* Passing a Python object to JavaScript raw makes Pyodide create a BORROWED
