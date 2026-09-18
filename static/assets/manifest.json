@@ -1625,5 +1625,93 @@
     }
    }
   }
+ ],
+ "atlases": [
+  {
+   "name": "dungeon",
+   "file": "dungeon.png",
+   "w": 512,
+   "h": 512,
+   "regions": {
+    "wall": {
+     "x": 16,
+     "y": 16,
+     "width": 16,
+     "height": 16
+    },
+    "floor": {
+     "x": 16,
+     "y": 64,
+     "width": 48,
+     "height": 48,
+     "sliceX": 3,
+     "sliceY": 3
+    },
+    "hero": {
+     "x": 128,
+     "y": 196,
+     "width": 144,
+     "height": 28,
+     "sliceX": 9,
+     "anims": {
+      "idle": {
+       "from": 0,
+       "to": 3,
+       "speed": 3,
+       "loop": true
+      },
+      "run": {
+       "from": 4,
+       "to": 7,
+       "speed": 10,
+       "loop": true
+      },
+      "hit": 8
+     }
+    },
+    "ogre": {
+     "x": 16,
+     "y": 336,
+     "width": 256,
+     "height": 32,
+     "sliceX": 8,
+     "anims": {
+      "idle": {
+       "from": 0,
+       "to": 3,
+       "speed": 3,
+       "loop": true
+      },
+      "run": {
+       "from": 4,
+       "to": 7,
+       "speed": 10,
+       "loop": true
+      }
+     }
+    },
+    "chest": {
+     "x": 304,
+     "y": 400,
+     "width": 48,
+     "height": 16,
+     "sliceX": 3,
+     "anims": {
+      "open": {
+       "from": 0,
+       "to": 2,
+       "speed": 20,
+       "loop": false
+      },
+      "close": {
+       "from": 2,
+       "to": 0,
+       "speed": 20,
+       "loop": false
+      }
+     }
+    }
+   }
+  }
  ]
 }

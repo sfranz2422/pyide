@@ -46,9 +46,14 @@ window.PyIDEExport = (function () {
   /* Asset paths as they appear in a student's program: the shapes the Sprites
      panel inserts, quoted either way round. `dungeon/` is the 0x72 pack, whose
      animated entries are strips — one file per character, so a character with
-     three animations still costs one inlined image. */
+     three animations still costs one inlined image.
+
+     The last alternative is a bare filename, which is how a sprite atlas is
+     loaded: `loadSpriteAtlas("dungeon.png", {...})`. It is the loosest of the
+     four and will happily match a quoted string that is not an asset at all —
+     harmlessly, because a path that fetches nothing is left exactly as it was. */
   var ASSET_RE =
-    /["']((?:images|dungeon)\/[A-Za-z0-9_\-]+\.png|sounds\/[A-Za-z0-9_\-]+\.wav)["']/g;
+    /["']((?:images|dungeon)\/[A-Za-z0-9_\-]+\.png|sounds\/[A-Za-z0-9_\-]+\.wav|[A-Za-z0-9_\-]+\.png)["']/g;
 
   function referencedAssets(source) {
     var found = {}, m;

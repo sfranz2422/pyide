@@ -18,6 +18,7 @@
   var panel = $("sprites");
   var spriteGrid = $("sprite-grid");
   var dungeonGrid = $("dungeon-grid");
+  var atlasList = $("atlas-list");
   var soundList = $("sound-list");
 
   // ---------------------------------------------------------------- editor
@@ -819,6 +820,30 @@
     addPack(manifest.dungeon || [], "dungeon", dungeonGrid);
     $("dungeon-section").hidden = !dungeonGrid.children.length;
 
+    /* The atlas: one image holding many sprites, cut out by coordinates. The
+       dungeon pack above is this same artwork already cut up — quicker to use,
+       but it hides where sprites come from, which is the thing the atlas
+       lesson is for. So both are here. */
+    (manifest.atlases || []).forEach(function (atlas) {
+      var card = document.createElement("button");
+      card.className = "atlas-card";
+      card.type = "button";
+      card.dataset.name = atlas.name + " atlas spritesheet";
+      var regions = Object.keys(atlas.regions);
+      card.title = atlas.file + " — " + atlas.w + "×" + atlas.h + " — " +
+                   regions.join(", ") + " — click to insert";
+      card.innerHTML =
+        '<img src="/static/assets/' + atlas.file + '" alt="" loading="lazy">' +
+        '<span class="sprite-name">' + atlas.file + "</span>" +
+        '<p class="atlas-note">' + regions.length +
+        " regions cut out by coordinates: " + regions.join(", ") + "</p>";
+      card.addEventListener("click", function () {
+        insertAtCursor(window.PyIDESprites.insertAtlas(atlas));
+      });
+      atlasList.appendChild(card);
+    });
+    $("atlas-section").hidden = !atlasList.children.length;
+
     var sounds = manifest.sounds || [];
     if (!sounds.length) {
       $("sound-section").hidden = true;
@@ -866,7 +891,8 @@
     /* Each pack is filtered on its own so an empty one can take its heading
        with it: searching "elf" should not leave a "Kaplay pack" label sitting
        above nothing. */
-    [[spriteGrid, "images-section"], [dungeonGrid, "dungeon-section"]]
+    [[spriteGrid, "images-section"], [dungeonGrid, "dungeon-section"],
+     [atlasList, "atlas-section"]]
       .forEach(function (pair) {
         var shown = 0;
         Array.prototype.forEach.call(pair[0].children, function (cell) {

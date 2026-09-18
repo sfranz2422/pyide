@@ -48,5 +48,69 @@ window.PyIDESprites = (function () {
            "pos(100, 100)])";
   }
 
-  return { animsLiteral: animsLiteral, insertFor: insertFor };
+  /* ------------------------------------------------------------ atlases --
+     An atlas is one image holding many sprites, each cut out by pixel
+     coordinates. `loadSpriteAtlas` takes the whole map in one call, so this
+     writes out every region the manifest knows about — which is also every
+     region that has been checked against the picture. A student edits the
+     numbers from there.
+
+     The keys are written in a fixed order rather than whatever order the
+     manifest happens to be in, because `x, y, width, height` reads like a
+     rectangle and any other order reads like a puzzle. */
+  var KEYS = ["x", "y", "width", "height", "sliceX", "sliceY"];
+
+  function pairs(region) {
+    return KEYS.filter(function (k) { return region[k] !== undefined; })
+               .map(function (k) { return '"' + k + '": ' + region[k]; })
+               .join(", ");
+  }
+
+  /* One animation: either a frame number on its own, or a from/to spec. */
+  function animLiteral(spec) {
+    if (typeof spec === "number") return String(spec);
+    var parts = ['"from": ' + spec.from, '"to": ' + spec.to];
+    if (spec.speed !== undefined) parts.push('"speed": ' + spec.speed);
+    if (spec.loop !== undefined) parts.push('"loop": ' + (spec.loop ? "True" : "False"));
+    return "{" + parts.join(", ") + "}";
+  }
+
+  function regionLiteral(name, region) {
+    if (!region.anims) {
+      return '    "' + name + '": {' + pairs(region) + "},";
+    }
+    var anims = Object.keys(region.anims).map(function (key) {
+      return '            "' + key + '": ' + animLiteral(region.anims[key]) + ",";
+    });
+    return '    "' + name + '": {\n' +
+           "        " + pairs(region) + ",\n" +
+           '        "anims": {\n' + anims.join("\n") + "\n" +
+           "        },\n" +
+           "    },";
+  }
+
+  /* `atlas` is a manifest entry: {name, file, w, h, regions}. */
+  function insertAtlas(atlas) {
+    var names = Object.keys(atlas.regions);
+    var body = names.map(function (n) {
+      return regionLiteral(n, atlas.regions[n]);
+    }).join("\n");
+
+    /* Whichever region animates comes out on screen, so the insert does
+       something visible rather than loading an atlas and stopping. */
+    var shown = names.filter(function (n) { return atlas.regions[n].anims; })[0]
+                || names[0];
+    var anim = atlas.regions[shown].anims
+             ? ', anim="' + Object.keys(atlas.regions[shown].anims)[0] + '"'
+             : "";
+
+    return 'loadSpriteAtlas("' + atlas.file + '", {\n' + body + "\n})\n" +
+           'add([sprite("' + shown + '"' + anim + '), pos(100, 100), scale(3)])';
+  }
+
+  return {
+    animsLiteral: animsLiteral,
+    insertFor: insertFor,
+    insertAtlas: insertAtlas
+  };
 })();

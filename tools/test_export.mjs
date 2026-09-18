@@ -77,6 +77,17 @@ add([sprite("dwarf_f", anim="idle"), pos(100, 100)])`;
 check("it finds dungeon sprites too",
       JSON.stringify(X.referencedAssets(DUNGEON)) === '["dungeon/dwarf_f.png"]',
       X.referencedAssets(DUNGEON).join(" "));
+/* A sprite atlas is loaded by bare filename, with no folder in front of it —
+   the one asset path in the whole editor that looks like nothing in
+   particular. Missed by the exporter, a downloaded game would try to fetch
+   `dungeon.png` from a folder that does not exist. */
+const ATLAS = `loadSpriteAtlas("dungeon.png", {
+    "wall": {"x": 16, "y": 16, "width": 16, "height": 16},
+})`;
+check("it finds a sprite atlas loaded by bare filename",
+      JSON.stringify(X.referencedAssets(ATLAS)) === '["dungeon.png"]',
+      X.referencedAssets(ATLAS).join(" "));
+
 check("and rewrites a dungeon path when it is inlined",
       X.inlineAssetPaths(DUNGEON, { "dungeon/dwarf_f.png": "data:image/png;base64,AA" })
         .includes('"data:image/png;base64,AA"'));

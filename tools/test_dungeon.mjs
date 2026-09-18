@@ -85,11 +85,64 @@ check(clash.length === 0, "names used by both packs: " + clash.join(", "));
 const win = {};
 new Function("window", readFileSync(new URL("static/sprites.js", root), "utf8"))(win);
 
+/* ------------------------------------------------------------- the atlas --
+   An atlas region is four numbers, and all four can be wrong without anything
+   saying so. Kaplay's own published example gets two of them wrong for this
+   file: `ogre` is 16 pixels high and `chest` points at empty space. So the
+   region rectangles are checked against the picture's real size here, and the
+   frame arithmetic is checked the same way as a strip's. Whether a region
+   holds the RIGHT sprite is a question for eyes, and tools/vendor_atlas.py
+   writes a proof sheet for that. */
+for (const atlas of manifest.atlases || []) {
+  const path = fileURLToPath(new URL(atlas.file, assets));
+  if (!existsSync(path)) { check(false, atlas.file + " missing"); continue; }
+  bytes += statSync(path).size;
+
+  const size = pngSize(path);
+  check(size && size.w === atlas.w && size.h === atlas.h,
+        atlas.file + ": manifest says " + atlas.w + "×" + atlas.h +
+        ", file is " + (size && size.w + "×" + size.h));
+
+  for (const [name, r] of Object.entries(atlas.regions)) {
+    const sx = r.sliceX || 1, sy = r.sliceY || 1;
+    check(r.x >= 0 && r.y >= 0 &&
+          r.x + r.width <= atlas.w && r.y + r.height <= atlas.h,
+          name + ": (" + r.x + "," + r.y + ") " + r.width + "×" + r.height +
+          " runs outside the atlas");
+    check(r.width % sx === 0 && r.height % sy === 0,
+          name + ": " + r.width + "×" + r.height + " does not divide into " +
+          sx + "×" + sy + " frames");
+    for (const [a, spec] of Object.entries(r.anims || {})) {
+      const ends = typeof spec === "number" ? [spec, spec] : [spec.from, spec.to];
+      check(Math.min(...ends) >= 0 && Math.max(...ends) < sx * sy,
+            name + "." + a + ": frames " + ends.join("–") + " outside " +
+            (sx * sy));
+    }
+  }
+}
+
 const loads = new Map();
+const atlasLoads = new Map();
 function comp(k) { return (...a) => ({ __comp: k, a }); }
 globalThis.kaplay = () => {
   const ctx = {
     loadRoot() {}, loadSound() {},
+    loadSpriteAtlas(src, map) {
+      /* What Kaplay is really handed after the bridge has converted a nested
+         Python dict — three levels deep here, and every level is somewhere a
+         value could arrive as an opaque proxy instead of a number. */
+      const plain = {};
+      for (const [name, r] of Object.entries(map)) {
+        const region = Object.fromEntries(Object.entries(r));
+        if (region.anims) {
+          region.anims = Object.fromEntries(
+            Object.entries(region.anims).map(([k, v]) =>
+              [k, typeof v === "number" ? v : Object.fromEntries(Object.entries(v))]));
+        }
+        plain[name] = region;
+      }
+      atlasLoads.set(src, plain);
+    },
     loadSprite(name, src, opt) {
       /* The check the panel can't do for itself: what Kaplay is actually
          handed. A kwarg that doesn't survive the bridge arrives as undefined
@@ -127,6 +180,10 @@ for (const [dir, entries] of packs) {
   }
 }
 
+for (const atlas of manifest.atlases || []) {
+  all.push(win.PyIDESprites.insertAtlas(atlas));
+}
+
 const status = py.runPython(`_pyide_run_game(${JSON.stringify(all.join("\n"))})`);
 check(status === "ok" && !err.trim(),
       "every insert runs: " + (err.split("\n")[0] || status));
@@ -151,6 +208,25 @@ for (const [dir, e] of expected) {
     check(want && a.from === want.from && a.to === want.to &&
           a.speed === want.speed && a.loop === want.loop,
           e.name + "." + name + ": arrived as " + JSON.stringify(a));
+  }
+}
+
+/* The atlas insert, after a round trip through Python and the bridge. Every
+   number the panel wrote should arrive as the same number. */
+for (const atlas of manifest.atlases || []) {
+  const got = atlasLoads.get(atlas.file);
+  if (!got) { check(false, atlas.file + " never reached loadSpriteAtlas"); continue; }
+  for (const [name, want] of Object.entries(atlas.regions)) {
+    const r = got[name];
+    if (!r) { check(false, name + " missing from the inserted atlas"); continue; }
+    check(["x", "y", "width", "height", "sliceX", "sliceY"]
+            .every(k => want[k] === undefined ? r[k] === undefined : r[k] === want[k]),
+          name + ": arrived as " + JSON.stringify(r).slice(0, 90));
+    for (const [a, spec] of Object.entries(want.anims || {})) {
+      const arrived = (r.anims || {})[a];
+      check(JSON.stringify(arrived) === JSON.stringify(spec),
+            name + "." + a + ": arrived as " + JSON.stringify(arrived));
+    }
   }
 }
 

@@ -838,6 +838,19 @@ Two names exist in both packs, so the dungeon versions are `dungeon_coin` and
 would otherwise get whichever came second, with no error to explain it.
 `tools/test_dungeon.mjs` checks no new clash creeps in.
 
+**The atlas** — `dungeon.png`, the same dungeon artwork as one uncut 512×512
+image, at the root of `assets/` so that `loadSpriteAtlas("dungeon.png", ...)`
+works with the path Kaplay's example and the course site both use. Clicking it
+inserts all five named regions.
+
+It is kept alongside the cut-up pack deliberately. The pack is quicker and
+cannot be got wrong; the atlas is the lesson — where sprites come from, and how
+four numbers turn part of an image into a named sprite. Two of the five
+coordinates Kaplay publishes are wrong for this file (`ogre` is 16 pixels high,
+`chest` points at empty space) and neither raises an error, which is a better
+argument for teaching it than anything in the lesson text.
+`tools/vendor_atlas.py` holds the corrected values and checks them.
+
 The button only appears in game mode, so it stays out of the way during console
 work. A student who wants to browse sprites before writing any game code can
 click the mode chip to lock the editor into Game mode.
@@ -953,11 +966,13 @@ static/
     manifest.json       Generated — what the sprite panel reads
     images/             60 sprite PNGs (KAPLAY, MIT)
     dungeon/            142 sprite PNGs (0x72 DungeonTileset II, CC0)
+    dungeon.png         The same artwork uncut, for loadSpriteAtlas
     sounds/             23 sound effects (.wav only)
     CREDITS.md          Sprite licensing
 tools/
   build_assets.py       Regenerates static/assets from source folders
   vendor_dungeon.py     Composites the dungeon pack's 370 frames into strips
+  vendor_atlas.py       Brings in a sprite atlas and checks its regions
 examples/               file-handling and notes starters
 ```
 
@@ -1095,8 +1110,8 @@ context, which is then the wrong kind of context for the next game.
 node tools/test_dungeon.mjs
 ```
 
-1,285 checks over both packs. Three things can go wrong between a folder of
-pictures and a student's screen, and not one of them announces itself:
+1,315 checks over both packs and the atlas. Three things can go wrong between a
+folder of pictures and a student's screen, and not one of them announces itself:
 
 - the manifest names a file that isn't there — the loader fails quietly and the
   character never appears;
@@ -1106,10 +1121,17 @@ pictures and a student's screen, and not one of them announces itself:
 - an `anims` range runs past the end of the strip.
 
 So it reads each PNG's IHDR header directly, checks the dimensions agree with
-the manifest, and then runs the exact line the panel inserts — all 202 of them,
-in one program — through the real bridge against a stand-in engine that
-re-checks the arithmetic from the inside. It imports `static/sprites.js` rather
-than restating what the panel does, which is why that file exists on its own.
+the manifest, and then runs the exact line the panel inserts — all 202 of them
+plus the atlas, in one program — through the real bridge against a stand-in
+engine that re-checks the arithmetic from the inside. It imports
+`static/sprites.js` rather than restating what the panel does, which is why that
+file exists on its own.
+
+The atlas gets the same treatment, one level deeper: every region rectangle
+checked against the image's real size, every `anims` range against its frame
+count, and the whole nested dict compared after its round trip through Python.
+What it cannot check is whether a region holds the *right* sprite —
+`tools/vendor_atlas.py --proof` writes a picture of all five for a human.
 
 The strips themselves were checked once, differently: 270 frames compared
 pixel-for-pixel against the original download. All matched. (The pack numbers

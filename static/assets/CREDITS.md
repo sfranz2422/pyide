@@ -73,6 +73,33 @@ python tools/vendor_dungeon.py --frames "path/to/0x72_DungeonTilesetII_v1.7/fram
 node tools/test_dungeon.mjs
 ```
 
+### dungeon.png — the same artwork, uncut
+
+`dungeon.png` at the top of `assets/` is the sprite atlas that ships with
+KAPLAY's examples: one 512×512 image holding the whole tileset, which
+`loadSpriteAtlas` cuts up by pixel coordinates. Same CC0 artwork; it sits at
+the root of `assets/` rather than in a folder so that
+`loadSpriteAtlas("dungeon.png", ...)` — the path in KAPLAY's example and on the
+course site — works exactly as written.
+
+It is kept alongside the cut-up pack because it is what Lesson 12 teaches:
+where sprites come from, and how a rectangle of an image becomes a named
+sprite. The five named regions are in `manifest.json`, and two of them are
+**not** the values KAPLAY publishes:
+
+| region | published | here | why |
+|---|---|---|---|
+| `ogre` | `y: 320` | `y: 336` | 320 is 16px above the ogres — half an ogre and a strip of floor |
+| `chest` | `y: 304` | `y: 400` | 304 is empty space — the sprite loads with nothing in it |
+
+Neither mistake raises an error. `tools/vendor_atlas.py` checks every region is
+in bounds, divides evenly and has pixels in every frame, and `--proof` writes a
+picture of all five for a human to look at:
+
+```
+python tools/vendor_atlas.py --file "path/to/dungeon.png" --proof /tmp/proof.png
+```
+
 ## Sounds
 
 `sounds/` holds 23 effects. Sounds must be `.wav` — the browser's SDL_mixer has

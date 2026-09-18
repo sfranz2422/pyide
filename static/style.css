@@ -766,6 +766,36 @@ body:not(.is-authoring) .notes-body a {
 }
 .sprite { position: relative; }
 
+/* The atlas is one big picture, not a grid cell — showing it at 44px would
+   make it a smudge. It gets the full width of the panel. */
+.atlas-card {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.atlas-card:hover { border-color: var(--accent); background: var(--sprite-hover); }
+.atlas-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.atlas-card[hidden] { display: none; }
+.atlas-card img {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+.atlas-card .sprite-name { display: block; margin-top: 6px; }
+.atlas-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .sprite-section[hidden] { display: none; }
 .sprite-section:first-child .sprite-subhead { margin-top: 0; }
 
