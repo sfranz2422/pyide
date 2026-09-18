@@ -293,14 +293,26 @@ def kaplay(**options):
     """
     global _ctx
 
-    # Safe to free the previous game's callbacks here and nowhere else: that
-    # engine has been quit, so nothing can still be holding them.
-    for proxy in _proxies:
-        try:
-            proxy.destroy()
-        except Exception:
-            pass          # already gone; a stale proxy is not worth a crash
-    _proxies.clear()
+    # End the previous game before starting this one. Its loop keeps running
+    # otherwise: pressing Run twice would leave two engines drawing to one
+    # canvas, both reading the keyboard.
+    shutdown()
+
+    # The previous game's callbacks are deliberately NOT freed — not here, not
+    # in shutdown(), not anywhere. They are kept alive, and inert, for as long
+    # as the page lives.
+    #
+    # This is the third time this exact bug was found, which is the argument
+    # for the rule. Freeing a proxy that JavaScript still holds crashes with
+    # "Object has already been destroyed", and every attempt to prove nothing
+    # still holds it has been wrong: Kaplay can call a handler in the frame it
+    # was told to quit, a queued animation frame can land after quit() returns,
+    # and pressing Run twice never quit the first engine at all. Each time the
+    # reasoning looked sound and the student got an incomprehensible crash.
+    #
+    # What leaking costs: a few hundred bytes per callback, for the lifetime of
+    # a browser tab, reclaimed on reload. Fifty Runs of a ten-handler game is
+    # well under a megabyte. That is a very cheap price for never crashing.
     _running[0] = True
 
     starter = getattr(js, "kaplay", None) or getattr(js, "kaboom", None)

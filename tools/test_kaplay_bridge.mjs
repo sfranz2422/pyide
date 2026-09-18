@@ -55,6 +55,7 @@ function makeGameObj(comps) {
 
 const handlers = [];
 globalThis.kaplay = function (options) {
+  const mine = [];                       // handlers belonging to THIS engine
   calls.push(["kaplay", JSON.parse(JSON.stringify(options ?? {}))]);
   return {
     loadRoot: (r) => calls.push(["loadRoot", r]),
@@ -74,15 +75,22 @@ globalThis.kaplay = function (options) {
     color: (...a) => ({ __comp: "color", a }),
     anchor: (...a) => ({ __comp: "anchor", a }),
     state: (...a) => ({ __comp: "state", a }),
-    onKeyPress: (k, fn) => handlers.push(["key", k, fn]),
-    onKeyDown: (k, fn) => handlers.push(["keydown", k, fn]),
-    onUpdate: (t, fn) => handlers.push(["update", t, fn]),
+    onKeyPress: (k, fn) => { mine.push(fn); handlers.push(["key", k, fn]); },
+    onKeyDown: (k, fn) => { mine.push(fn); handlers.push(["keydown", k, fn]); },
+    onUpdate: (t, fn) => { mine.push(fn); handlers.push(["update", t, fn]); },
     setGravity: (g) => calls.push(["setGravity", g]),
     rand: (a, b) => (a + b) / 2,
     width: () => 800,
     // real Kaplay drops its handlers on quit; a stub that keeps them
     // would call freed proxies and blame the bridge for it
-    quit: () => { quit++; handlers.length = 0; },
+    quit: () => {
+      quit++;
+      // a real engine drops its own handlers and leaves other engines alone
+      for (const fn of mine) {
+        const i = handlers.findIndex((h) => h[h.length - 1] === fn);
+        if (i >= 0) handlers.splice(i, 1);
+      }
+    },
   };
 };
 const fire = (kind, ...args) => {
@@ -233,6 +241,34 @@ check("the engine was told to quit", quit > before, "quit calls=" + quit);
 check("it did not report twice", (errText.match(/boom/g) || []).length === 1,
       (errText.match(/boom/g) || []).length + " reports");
 
+// ------------------------------------------- pressing Run twice in one session
+/* The commonest thing a student does, and it used to crash. Run without Stop
+   left the first engine alive while kaplay() freed the Python callbacks its
+   handlers still pointed at; the next frame called into freed memory and said
+   "Object has already been destroyed". So: starting a game must end the
+   previous one BEFORE releasing anything it owns. */
+const TWICE = `
+from kaplay import *
+kaplay(width=800, height=600)
+player = add([sprite("bean"), pos(100, 200), area(), body()])
+onKeyPress("space", lambda: player.move(0, -10))
+onUpdate("enemy", lambda e: e.move(-120, 0))
+`;
+errText = "";
+py.runPython(`_pyide_run_game(${JSON.stringify(TWICE)})`);
+const engine1 = handlers.map((h) => h[h.length - 1]);
+const quitsBefore = quit;
+
+py.runPython(`_pyide_run_game(${JSON.stringify(TWICE)})`);
+check("a second Run quits the first engine", quit > quitsBefore,
+      "quits: " + quitsBefore + " -> " + quit);
+
+let crashed = null;
+try { engine1[0]("space"); } catch (e) { crashed = String(e.message || e).split("\n")[0]; }
+check("a handler the old engine still holds is inert, not freed",
+      crashed === null, crashed || "");
+check("the second game itself still works", !errText.trim(), errText.split("\n")[0]);
+
 // ------------------------------------------------------------------- Stop
 py.runPython(`
 import kaplay as K
@@ -267,10 +303,14 @@ check("shutdown twice is harmless",
       (() => { try { py.runPython("import kaplay as K\nK.shutdown()"); return true; }
                catch { return false; } })());
 
+/* Proxies are never freed while the page lives — see the comment in kaplay().
+   Three separate crashes came from freeing one that JavaScript still held, so
+   the rule now is simply that nothing is ever freed. */
+const heldBefore = py.runPython("import kaplay as K\nlen(K._proxies)");
 py.runPython("import kaplay as K\nK.kaplay(width=100)");
-check("a new game releases the previous proxies",
-      py.runPython("import kaplay as K\nlen(K._proxies)") === 0,
-      py.runPython("import kaplay as K\nlen(K._proxies)") + " held now");
+check("a new game does NOT free the old callbacks",
+      py.runPython("import kaplay as K\nlen(K._proxies)") >= heldBefore,
+      heldBefore + " -> " + py.runPython("import kaplay as K\nlen(K._proxies)"));
 
 console.log();
 const passed = results.every(Boolean);

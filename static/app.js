@@ -942,13 +942,44 @@
      runs. */
   /* Download sits in the toolbar for a signed-out student and in the account
      menu for a signed-in one, so bind whichever is actually on the page. */
-  function onDownload() {
+  async function onDownload() {
     var base = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
+    var source = mainSource();
+
+    /* A game downloads as one playable .html file rather than as source.
+       main.py on its own needs Kaplay, the bridge, a canvas and a Python
+       interpreter to do anything, none of which a student has at home — so
+       what came back from Download was a file that could not be opened. */
+    if (currentMode(source) === "game") {
+      var was = runLabel.textContent;
+      runBtn.disabled = true;
+      runLabel.textContent = "Packing…";
+      try {
+        var html = await window.PyIDEExport.buildGamePage(
+          source, $("title").value || "Game", function (msg) {
+            runLabel.textContent = msg.length > 14 ? "Packing…" : msg;
+          });
+        window.PyIDEExport.downloadGamePage(base + ".html", html);
+        write("\nSaved " + base + ".html — double-click it to play. " +
+              "It needs the internet the first time it runs.\n", "dim");
+      } catch (e) {
+        write("\nCould not pack the game: " + e.message + "\n", "err");
+      } finally {
+        runBtn.disabled = running;
+        runLabel.textContent = was;
+      }
+      return;
+    }
+
+    /* One file downloads as one file; a project with imports or data files
+       downloads as a zip. Handing over main.py alone would silently drop the
+       module it imports, and the student would find out at home when nothing
+       runs. */
     var extras = dataFiles();
     var names = Object.keys(extras);
 
     if (!names.length) {
-      var blob = new Blob([mainSource()], { type: "text/x-python" });
+      var blob = new Blob([source], { type: "text/x-python" });
       var a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = base + ".py";
@@ -959,7 +990,7 @@
       return;
     }
 
-    var entries = [{ name: MAIN, data: mainSource() }];
+    var entries = [{ name: MAIN, data: source }];
     names.sort().forEach(function (n) {
       entries.push({ name: n, data: extras[n] });
     });

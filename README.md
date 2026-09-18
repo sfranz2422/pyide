@@ -861,6 +861,41 @@ Deleting student work at the end of a year is also good practice rather than
 merely tidy: it keeps the amount of student data on the server proportional to
 the reason for holding it.
 
+## Download: a game comes back playable
+
+A game downloads as **one `.html` file**. Double-click it and it plays — no
+Python installed, no server started, nothing unzipped. Inside are the student's
+program, `kaplay.js`, the Python bridge, and every sprite and sound the program
+actually loads, all inlined; only Pyodide comes from a CDN.
+
+That last part is the one caveat: **the first run of an exported game needs the
+internet**, and takes a few seconds while Python starts. Embedding Pyodide too
+would make every export about 20 MB, which is fine for one showcase game and
+absurd for a class set. A two-sprite, one-sound game exports at about 490 KB.
+
+**Why one file and not a folder.** A folder opened from disk is a `file://`
+page, and browsers refuse to fetch anything next to it — no images, no sounds,
+and WebGL will not build a texture from a local file even when the image does
+load. A zip would therefore need a local web server to be any use, which is
+exactly the obstacle this removes. With everything inlined there is nothing
+left to fetch, so `file://` stops mattering.
+
+Console programs are unchanged: one file downloads as `.py`, a project with
+imports or data files as a `.zip`.
+
+```bash
+node tools/test_export.mjs
+```
+
+Builds an export with a stub `fetch` reading from `static/`, then checks it:
+one document, engine and bridge inlined, asset paths turned into data URIs,
+unused assets left behind, Pyodide the only external reference, and nothing
+inside a `<script>` block able to end it early. Nineteen checks.
+
+That last one is worth having. `kaplay.js` contains a literal `<script` and no
+`</script`, so inlining it happens to be safe today — the export now escapes
+any `</script` rather than depending on that staying true.
+
 ### Checking a guide's code actually runs
 
 ```bash
