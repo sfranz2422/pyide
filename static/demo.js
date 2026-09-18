@@ -281,9 +281,12 @@
     await repaint();
 
     try {
-      await window.PyIDEGame.ensureReady(pyodide, canvas, function (msg) {
+      /* A new canvas each time: Kaplay loses the WebGL context when it quits,
+         and a canvas that has lost one can never render again. */
+      canvas = await window.PyIDEGame.ensureReady(pyodide, function (msg) {
         status(msg);
       });
+      bindCanvas(canvas);
     } catch (e) {
       status("");
       write("The game engine could not load.\n" + e + "\n", "err");
@@ -329,12 +332,18 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
 
-  canvas.addEventListener("keydown", function (e) {
-    if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
-      e.preventDefault();
-    }
-  });
-  canvas.addEventListener("mousedown", function () { canvas.focus(); });
+  /* Re-bound after every canvas swap — the listeners belong to the element,
+     and the element is replaced for each new game. */
+  function bindCanvas(el) {
+    el.addEventListener("keydown", function (e) {
+      if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
+        e.preventDefault();
+      }
+    });
+    el.addEventListener("mousedown", function () { el.focus(); });
+  }
+
+  bindCanvas(canvas);
 
   document.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {

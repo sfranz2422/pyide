@@ -896,6 +896,29 @@ That last one is worth having. `kaplay.js` contains a literal `<script` and no
 `</script`, so inlining it happens to be safe today — the export now escapes
 any `</script` rather than depending on that staying true.
 
+### Run, Stop, Run
+
+```bash
+node tools/test_canvas_cycle.mjs
+```
+
+The cycle a student repeats all lesson, and the one that has now hidden two
+separate bugs — both of which let the first game run perfectly and broke the
+second, which is the worst possible shape for a bug in a classroom.
+
+**Kaplay's `quit()` ends by calling `WEBGL_lose_context.loseContext()`,** and a
+canvas whose context has been deliberately lost can never hand out a working
+one again: `getContext` returns the lost one forever. Reusing the element meant
+the second game started, registered its handlers, ran its loop, and drew to
+nothing — Stop turned the picture white and Run after that appeared to do
+nothing at all. So every game gets a brand new canvas element, the same way
+WebIDE replaces its preview iframe rather than reassigning `srcdoc`. The key
+listeners are rebound on each swap, because they belong to the element.
+
+The blank picture after Stop is not a choice — losing the context takes the
+last frame with it, and keeping the frame would mean painting it into a 2D
+context, which is then the wrong kind of context for the next game.
+
 ### Checking a guide's code actually runs
 
 ```bash

@@ -653,9 +653,13 @@
     await repaint();
 
     try {
-      await window.PyIDEGame.ensureReady(pyodide, canvas, function (msg) {
+      /* ensureReady hands back a NEW canvas each time — the previous one is
+         dead once Kaplay has lost its WebGL context. Rebinding here is what
+         keeps focus() and the key handlers pointing at the live element. */
+      canvas = await window.PyIDEGame.ensureReady(pyodide, function (msg) {
         status(msg);
       });
+      bindCanvas(canvas);
     } catch (e) {
       status("");
       write("The game engine could not load.\n" + e + "\n", "err");
@@ -710,13 +714,18 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
 
-  // Keys must reach the canvas, not scroll the page, while a game is running.
-  canvas.addEventListener("keydown", function (e) {
-    if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
-      e.preventDefault();
-    }
-  });
-  canvas.addEventListener("mousedown", function () { canvas.focus(); });
+  /* Re-bound after every canvas swap, because the listeners belong to the
+     element and the element is replaced for each new game. */
+  function bindCanvas(el) {
+    el.addEventListener("keydown", function (e) {
+      if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
+        e.preventDefault();
+      }
+    });
+    el.addEventListener("mousedown", function () { el.focus(); });
+  }
+
+  bindCanvas(canvas);
 
   // --------------------------------------------------------- sprite panel
   var spritesFetched = false;

@@ -79,23 +79,56 @@ window.PyIDEGame = (function () {
     shimLoaded = true;
   }
 
-  async function ensureReady(pyodide, canvas, onProgress) {
+  /* Every game gets a brand new canvas element.
+   *
+   * Not an optimisation — a correctness requirement, and its absence was a
+   * bug with a very confusing shape: the first game ran, Stop turned the
+   * picture white, and Run after that did nothing at all.
+   *
+   * Kaplay's quit() ends by calling WEBGL_lose_context.loseContext(). A canvas
+   * whose WebGL context has been deliberately lost can never hand out a
+   * working one again — getContext returns the lost context forever, so the
+   * element is dead for rendering from that moment. Reusing it meant the
+   * second game started, registered its handlers, ran its loop, and drew to
+   * nothing.
+   *
+   * So the element is replaced rather than reused, the same way WebIDE
+   * replaces its preview iframe instead of reassigning srcdoc.
+   */
+  function freshCanvas() {
+    var old = document.getElementById("canvas");
+    var next = document.createElement("canvas");
+    next.id = old.id;
+    next.className = old.className;
+    next.width = old.width;
+    next.height = old.height;
+    next.tabIndex = old.tabIndex;
+    next.title = old.title;
+    old.parentNode.replaceChild(next, old);
+    window.__pyideCanvas = next;
+    return next;
+  }
+
+  async function ensureReady(pyodide, onProgress) {
     if (onProgress && !libLoaded) onProgress("Loading the game engine…");
     await loadLibrary();
     await loadShim(pyodide);
     // The bridge defaults every game to this canvas, so a student never has to
     // know the page has one.
-    window.__pyideCanvas = canvas;
+    return freshCanvas();
   }
 
   /* End a running game.
    *
-   * Kaplay's quit() stops its loop and releases its listeners. The bridge then
-   * drops the proxies it handed out, because a Python function reachable from
-   * a dead engine is just memory nobody will free.
+   * Kaplay's quit() stops its loop and releases its listeners. The bridge
+   * marks its Python callbacks inert but deliberately does not free them —
+   * see the comment in kaplay() for the three crashes that rule came from.
    *
-   * Deliberately leaves the last frame on the canvas: a game that ends with a
-   * score on screen should still show it while the student reads the code.
+   * The picture goes blank, and that is not a choice — losing the WebGL
+   * context is part of how Kaplay shuts down, and it takes the last frame with
+   * it. Keeping the frame would mean copying it out before quitting and
+   * painting it into a 2D context, which would then be the wrong kind of
+   * context for the next game to render into.
    */
   function stop(pyodide) {
     if (!pyodide || !shimLoaded) return;
@@ -113,6 +146,7 @@ window.PyIDEGame = (function () {
   return {
     looksLikeGame: looksLikeGame,
     ensureReady: ensureReady,
+    freshCanvas: freshCanvas,
     stop: stop,
     isReady: function () { return libLoaded && shimLoaded; }
   };
