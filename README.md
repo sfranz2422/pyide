@@ -973,6 +973,7 @@ tools/
   build_assets.py       Regenerates static/assets from source folders
   vendor_dungeon.py     Composites the dungeon pack's 370 frames into strips
   vendor_atlas.py       Brings in a sprite atlas and checks its regions
+  bench_bridge.mjs      What the bridge costs per frame, measured
 examples/               file-handling and notes starters
 ```
 
@@ -1103,6 +1104,55 @@ listeners are rebound on each swap, because they belong to the element.
 The blank picture after Stop is not a choice — losing the context takes the
 last frame with it, and keeping the frame would mean painting it into a 2D
 context, which is then the wrong kind of context for the next game.
+
+### Tweens, and the Promise that wasn't
+
+```bash
+node tools/test_tween.mjs
+node tools/bench_bridge.mjs
+```
+
+Tweens work — numbers, positions, easing curves, thirty at once, started from
+inside a callback. Two things had to be fixed first, and the second is the more
+interesting.
+
+**`easings` was not exported.** A tween without an easing curve moves at a flat
+rate, which is the one motion that looks like nothing, so this was most of the
+point of having tweens. All thirty-one curves are now reachable as
+`easings.easeOutBounce` and friends, through the same lazy lookup `debug` uses
+so that Run-twice keeps working.
+
+**`tween()` was not returning the tween.** Kaplay's controller carries a `then`
+method so JavaScript can write `tween(...).then(...)`. Pyodide takes any object
+with a `then` to be a Promise and converts it, so what arrived in Python was a
+`PyodideFuture` and the controller was gone:
+
+```python
+slide = tween(0, 400, 1.0, move_it)
+slide.cancel()          # cancels a Future. The tween carries on regardless.
+```
+
+Nothing raises. The tween runs to the end while the code that cancelled it
+believes otherwise — the worst shape a bug can have, and invisible to any test
+that only asks whether an error was thrown. So every check in `test_tween.mjs`
+asks what *arrived*: the values the setter was handed, whether the Python
+inside `.then()` really ran, whether `cancel()` **called from Python** actually
+stopped anything.
+
+The fix is a JavaScript trampoline in `_call`: it runs the call, and if the
+result is thenable it rebuilds it without `then`, bound to the original, so
+Pyodide sees a plain object. `Controller` then puts `.then()` back on the
+Python side pointing at `onEnd`, where it belongs.
+
+Two things that fix cost, both found by measurement rather than reasoning:
+
+- **`this` is lost** when a method is handed to another JavaScript function, so
+  the receiver is now passed to the trampoline explicitly. Without it
+  `o.move(1, 0)` moved nothing, silently. `test_kaplay_bridge.mjs` caught it.
+- **Arguments must be spread, not boxed.** Passing them as an array cost
+  0.96 ms/frame at 200 objects against 0.55 baseline; spreading them costs
+  0.64. `bench_bridge.mjs` is where those numbers come from — run it after
+  touching anything on that path.
 
 ### Checking the sprite packs
 

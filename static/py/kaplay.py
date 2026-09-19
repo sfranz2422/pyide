@@ -41,17 +41,24 @@ What the seam actually does, on every call:
 PERFORMANCE, MEASURED
 
 Crossing into Python is cheap; reaching back across the seam for properties is
-what costs. Measured against Pyodide 314.0.7, one frame over 200 game objects:
+what costs. One frame over 200 game objects, from tools/bench_bridge.mjs:
 
-    o.move(1.5, 0.5)                one method call     0.48 ms   2.9% of a frame
-    o.pos.x = o.pos.x + 1.5         nested every time   0.66 ms   4.0% of a frame
+    o.move(1.5, 0.5)                one method call     0.64 ms   3.8% of a frame
+    o.pos.x = o.pos.x + 1.5         nested every time   0.54 ms   3.2% of a frame
 
 A frame at 60fps is 16.7 ms, and Kaplay draws in JavaScript at full speed
-regardless, so even the wasteful idiom leaves 96% of the frame free at 200
-objects. Roughly half of that is the GameObj wrapper below; without it the same
-two lines measure 0.17 ms and 0.44 ms — and `btn.add([...])`,
-`player.onCollide(...)` and `level.get(...)` do not work at all. That trade was
-made deliberately and with the numbers in hand.
+regardless, so this leaves 96% of the frame free at 200 objects.
+
+Two deliberate costs are in those numbers, both bought with the numbers in
+hand. The GameObj wrapper below is roughly half of the method-call figure, and
+without it `btn.add([...])`, `player.onCollide(...)` and `level.get(...)` do
+not work at all. The trampoline in _call is the other: 0.64 ms against 0.55 ms
+without it, which is half a per cent of a frame, and without it
+`tween(...).cancel()` silently does nothing.
+
+Run bench_bridge.mjs again after touching anything on that path. Every call a
+running game makes goes through _call, so a few microseconds here is
+milliseconds a second in a student's game.
 
 Prefer `o.move(...)` where it exists, but not at the cost of clarity — none of
 these are close to a problem at classroom scale.
@@ -277,10 +284,11 @@ class GameObj:
         object.__setattr__(self, "_js", js_obj)
 
     def __getattr__(self, name):
-        attr = getattr(object.__getattribute__(self, "_js"), name)
+        owner = object.__getattribute__(self, "_js")
+        attr = getattr(owner, name)
         if callable(attr):
             def method(*args, **kwargs):
-                return _wrap(_call(attr, args, kwargs))
+                return _wrap(_call(attr, args, kwargs, owner))
             return method
         return attr        # a property: .pos, .text, .flipX — left raw and fast
 
@@ -320,6 +328,8 @@ def _wrap(value):
         # the common case first: this runs on every callback argument
         if hasattr(value, "use") and hasattr(value, "add"):
             return GameObj(value)
+        if getattr(value, "__pykaplayController", None):
+            return Controller(value)
         if js.Array.isArray(value):
             return [_wrap(v) for v in value]
     except Exception:
@@ -327,17 +337,124 @@ def _wrap(value):
     return value
 
 
-def _call(fn, args, kwargs):
+#: A JavaScript trampoline that stops Pyodide mistaking a Kaplay controller
+#: for a Promise. Built once, lazily, because building it costs a compile.
+_TRAMPOLINE = None
+
+_TRAMPOLINE_SOURCE = """
+(fn, self, ...args) => {
+  // `self` is the object the function was fetched from, passed explicitly:
+  // handing a method to another JavaScript function loses its `this`, and
+  // Kaplay's methods very much use theirs. Without this, `o.move(1, 0)`
+  // silently moved nothing.
+  const v = self === undefined || self === null ? fn(...args)
+                                                : fn.apply(self, args);
+  if (v === null || typeof v !== "object" || typeof v.then !== "function") {
+    return v;
+  }
+  // Rebuild it without `then`. Methods are bound so they still act on the
+  // real controller; the rest are forwarded live, so reading `paused` reads
+  // the tween's own flag and setting it pauses the tween.
+  const out = {};
+  for (const k in v) {
+    if (k === "then") continue;
+    if (typeof v[k] === "function") out[k] = v[k].bind(v);
+    else Object.defineProperty(out, k, {
+      get: () => v[k],
+      set: (x) => { v[k] = x; },
+      enumerable: true,
+    });
+  }
+  if (typeof out.onEnd !== "function") out.onEnd = (cb) => v.then(cb);
+  out.__pykaplayController = true;
+  return out;
+}
+"""
+
+
+def _trampoline():
+    global _TRAMPOLINE
+    if _TRAMPOLINE is None:
+        from pyodide.code import run_js
+        _TRAMPOLINE = run_js(_TRAMPOLINE_SOURCE)
+    return _TRAMPOLINE
+
+
+class Controller:
+    """What `tween()`, `wait()` and `loop()` hand back.
+
+    THE PROBLEM THIS EXISTS FOR
+
+    Kaplay's controllers carry a `then` method, purely so JavaScript can write
+    `tween(...).then(() => ...)`. Pyodide takes any object with a `then` to be
+    a Promise and converts it — so without this, `tween(...)` came back to
+    Python as a `PyodideFuture`, and the controller was simply gone:
+
+        slide = tween(0, 400, 1.0, move_it)
+        slide.cancel()          # cancels a Future. The tween keeps going.
+
+    Nothing raises. The tween runs to the end while the code that cancelled it
+    carries on believing otherwise — which is the worst shape a bug can have,
+    and the reason this is worth a class of its own.
+
+    So the trampoline above strips `then` on the JavaScript side, and this puts
+    it back on the Python side pointing at `onEnd`, where it belongs.
+    """
+
+    __slots__ = ("_js",)
+
+    def __init__(self, js_obj):
+        object.__setattr__(self, "_js", js_obj)
+
+    def __getattr__(self, name):
+        owner = object.__getattribute__(self, "_js")
+        attr = getattr(owner, name)
+        if callable(attr):
+            def method(*args, **kwargs):
+                return _wrap(_call(attr, args, kwargs, owner))
+            return method
+        return attr
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_js"), name, value)
+
+    def then(self, callback):
+        """Run something once this finishes. Chainable, as in Kaplay's docs."""
+        self.onEnd(callback)
+        return self
+
+    def __repr__(self):
+        return "<Kaplay controller>"
+
+    @property
+    def js(self):
+        return object.__getattribute__(self, "_js")
+
+
+def _call(fn, args, kwargs, owner=None):
     """Call a Kaplay function with Python arguments.
 
     Keyword arguments become a trailing JavaScript config object, which is how
     Kaplay takes options everywhere: kaplay(width=800) and body(jumpForce=800)
     both land as { ... } in the right position.
+
+    `owner` is the JavaScript object the function came off, and it matters:
+    the call goes through a trampoline (see Controller), and a method handed to
+    another JavaScript function arrives without its `this`. Pyodide binds the
+    receiver when Python calls the method directly; once the call is made from
+    inside the trampoline instead, the binding has to be passed along by hand.
+    Missing it does not raise — `o.move(1, 0)` simply moves nothing.
     """
     converted = [_convert(a) for a in args]
     if kwargs:
         converted.append(_js_object({k: _convert(v) for k, v in kwargs.items()}))
-    return fn(*converted)
+
+    # Through the trampoline rather than straight to `fn`, so that a Kaplay
+    # controller does not arrive in Python disguised as a Promise. See
+    # Controller for what goes wrong without it. The trampoline returns
+    # everything else untouched, and the cost of the extra hop is measured in
+    # tools/test_tween.mjs.
+    return _trampoline()(fn, owner, *converted)
 
 
 def kaplay(**options):
@@ -450,6 +567,35 @@ class _Debug:
 
 
 debug = _Debug()
+
+
+class _Easings:
+    """Kaplay's easing curves — `easings.easeOutBounce` and the other thirty.
+
+    An easing curve is what makes a tween worth using: it decides whether a
+    thing slides in evenly, arrives slowing down, or overshoots and springs
+    back. Without these, `tween()` can only move in a straight line at a
+    constant rate, which is the one motion that looks like nothing.
+
+    Same trick as `debug` above, for the same reason: looked up through
+    whichever context is live, rather than bound once at import to a context
+    that may since have been replaced by pressing Run again.
+    """
+
+    def __getattr__(self, name):
+        curves = getattr(context(), "easings", None)
+        if curves is None:
+            raise AttributeError("easings needs kaplay() to have been called")
+        curve = getattr(curves, name, None)
+        if curve is None:
+            raise AttributeError(
+                "No easing called '%s'. They are named like easeOutBounce, "
+                "easeInQuad, easeInOutSine — or use easings.linear for no "
+                "easing at all." % name)
+        return curve
+
+
+easings = _Easings()
 
 
 def _asset_root():
@@ -582,7 +728,7 @@ def __getattr__(name):
     def wrapper(*args, **kwargs):
         _sanity_check(name, args)
         args = _fix_asset_list(name, args)
-        return _wrap(_call(_lookup(name), args, kwargs))
+        return _wrap(_call(_lookup(name), args, kwargs, context()))
 
     wrapper.__name__ = name
     wrapper.__qualname__ = name
@@ -615,7 +761,7 @@ __all__ = [
     # the loop and events
     "onUpdate", "onDraw", "onCollide", "onCollideUpdate", "onCollideEnd",
     "onHover", "onHoverUpdate", "onHoverEnd",
-    "wait", "loop", "tween",
+    "wait", "loop", "tween", "easings",
     # scenes
     "scene", "go", "onSceneLeave", "getSceneName",
     # sound
