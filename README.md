@@ -43,6 +43,17 @@ A student who isn't signed in can still open an assignment link and do the
 work. They just can't save it or turn it in, and a banner says so. Nobody is
 locked out by a login that won't cooperate five minutes before the bell.
 
+**You clicking your own handout link** opens the assignment to edit, not a copy
+of it. That was not true at first, and the failure is a good example of the kind
+worth hunting: the author got a student's draft of their own assignment, which
+appeared in their project list looking like a duplicate, counted them among the
+students who had started but not turned in, and accepted edits that reached
+nobody — because students read the assignment, not somebody's draft of it.
+Nothing errored. The URL changed from `/a/` to `/p/` and the page looked
+exactly right. Add `?preview=1` to the link to get the student's view on
+purpose; `tools/test_assignment_flow.py` checks all three cases, and checks
+what each one left in the database rather than only where it redirected.
+
 **Assignments stay editable.** Press **Edit** on the dashboard and it opens in
 the editor with your notes unlocked, exactly as when you wrote them. Saving
 changes what students get **when they open the link from now on** — anyone
@@ -974,6 +985,7 @@ tools/
   vendor_dungeon.py     Composites the dungeon pack's 370 frames into strips
   vendor_atlas.py       Brings in a sprite atlas and checks its regions
   bench_bridge.mjs      What the bridge costs per frame, measured
+  test_assignment_flow.py  Who gets what from /a/<slug>, in both editors
 examples/               file-handling and notes starters
 ```
 
@@ -1203,6 +1215,21 @@ function that is not in the bridge's star-import list, a keyword argument
 Kaplay does not take, a callback whose arguments don't line up. It found three
 on its first run, including one that would have broken every game on its second
 Run of a session.
+
+### Checking who gets what from the handout link
+
+```bash
+python3 tools/test_assignment_flow.py
+```
+
+One URL, `/a/<slug>`, has to do three different things depending on who opens
+it: a student gets their own copy and the same one every time, somebody signed
+out gets an editable copy that saves nothing, and the author gets the assignment
+itself. Twenty-six checks across both editors.
+
+Every check looks at **what the opening left in the database**, not only where
+it redirected — because "it returned a 302" was true for the whole time the
+author was silently being given a student's draft of their own work.
 
 ### Checking the two editors stay apart
 

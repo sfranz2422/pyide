@@ -120,8 +120,15 @@ print("\nWebIDE must not reach PyIDE's assignment:")
 cannot_reach(web, py_slug, "PY assignment", py)
 
 print("\nEach editor still works on its own:")
-check("webide opens its own link", web.get("/a/" + web_slug).status_code == 302)
-check("pyide opens its own link", py.get("/a/" + py_slug).status_code == 302)
+# Where it goes matters, not just that it goes: this client is signed in as the
+# author, and the author must land on the assignment rather than on a copy of
+# it. See tools/test_assignment_flow.py for why.
+check("webide opens its own link, to the assignment",
+      web.get("/a/" + web_slug).headers.get("Location", "")
+         .endswith("/teacher/" + web_slug + "/edit"))
+check("pyide opens its own link, to the assignment",
+      py.get("/a/" + py_slug).headers.get("Location", "")
+         .endswith("/teacher/" + py_slug + "/edit"))
 check("webide edits its own",
       web.get("/teacher/" + web_slug + "/edit").status_code == 200)
 check("pyide edits its own",
