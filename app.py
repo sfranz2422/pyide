@@ -73,10 +73,27 @@ player = add([
 
 SPEED = 300
 
-onKeyDown("left",  lambda: player.move(-SPEED, 0))
-onKeyDown("right", lambda: player.move(SPEED, 0))
-onKeyDown("up",    lambda: player.move(0, -SPEED))
-onKeyDown("down",  lambda: player.move(0, SPEED))
+
+# Put the key above the function it runs. A lambda works too, and is shorter
+# for one line — but only a function can hold more than one.
+@onKeyDown("left")
+def go_left():
+    player.move(-SPEED, 0)
+
+
+@onKeyDown("right")
+def go_right():
+    player.move(SPEED, 0)
+
+
+@onKeyDown("up")
+def go_up():
+    player.move(0, -SPEED)
+
+
+@onKeyDown("down")
+def go_down():
+    player.move(0, SPEED)
 '''
 
 

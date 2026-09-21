@@ -1,145 +1,300 @@
-/* PyIDE — Kaplay support.
+/* PyIDE — kaypy support.
  *
- * Games are written in Python and run on Kaplay, the JavaScript game library.
- * Python does not draw anything: it builds game objects and answers callbacks,
- * and Kaplay renders them on the GPU at full speed.
+ * Games are written in Python and run on kaypy, which is pygame-ce all the way
+ * down. There is no JavaScript engine and no bridge: the code a student writes
+ * here is the same code that runs on their desktop with `python game.py`, byte
+ * for byte, because it is the same package.
  *
- * This replaced Pygame Zero, and the replacement deleted more than it added.
- * Pygame Zero needed pygame-ce, numpy and pgzero fetched at first run (about
- * 4 MB), its blocking `while True` mainloop reimplemented as an async loop,
- * the sprite pack copied file by file into Pyodide's virtual filesystem, an
- * SDL canvas binding, and a workaround for SDL keeping the keyboard after the
- * game ended. None of that exists here. Kaplay is 184 KB, owns its own loop,
- * loads sprites over HTTP like any web page, and gives the keyboard back
- * because it never took it from the document in the first place.
+ * WHAT THIS REPLACED, AND WHY
  *
- * What this module does: load the library once, put the Python side of the
- * bridge where `import kaplay` can find it, and stop a running game.
+ * Before this, Python built game objects and a 480-line bridge marshalled every
+ * call into Kaplay, the JavaScript library. It worked, and the four worst bugs
+ * this project has had all came from that seam: callbacks arriving as borrowed
+ * proxies that were freed too early, a tile factory's return value reaching
+ * JavaScript as an opaque object, a lambda's arity not matching what Kaplay
+ * passed it, and a controller that came back as a Promise so `.cancel()`
+ * cancelled nothing. None of those can happen now, because nothing crosses a
+ * language boundary. The bridge is deleted.
+ *
+ * WHAT MAKES IT POSSIBLE
+ *
+ * Pyodide ships pygame-ce 2.5.7 — the same build pygbag hands kaypy for its own
+ * web export — and supports SDL through a canvas. kaypy's frame loop is already
+ * an `async` coroutine that yields with `await asyncio.sleep(0)`, and it already
+ * takes its `sys.platform == "emscripten"` branch here, because that is what
+ * Pyodide reports. So the browser is a target kaypy already knew about.
+ *
+ * WHAT THIS MODULE DOES
+ *
+ * Loads pygame-ce, writes the vendored kaypy package into Pyodide's filesystem,
+ * gives SDL a canvas, fetches the sprites and sounds the program actually names,
+ * and stops a running game.
  */
 
 window.PyIDEGame = (function () {
   "use strict";
 
-  var LIB = "/static/game/kaplay.js";
-  var SHIM = "/static/py/kaplay.py";
-  var SHIM_PATH = "/lib/kaplay.py";     // inside Pyodide, not the project folder
+  var BUNDLE = "/static/py/kaplay_bundle.json";   // the engine, as one file
+  var PKG_DIR = "/lib/kaplay";                    // inside Pyodide
   var PROJECT_DIR = "/project";
+  var ASSET_ROOT = "/static/assets/";
 
-  var libLoaded = false;
-  var shimLoaded = false;
+  /* Asset paths as a student writes them. The same four shapes the Sprites
+     panel inserts: images/, dungeon/, sounds/, and a bare filename, which is
+     how a sprite atlas is loaded — `loadSpriteAtlas("dungeon.png", {...})`. */
+  var ASSET_RE =
+    /["']((?:images|dungeon)\/[A-Za-z0-9_\-]+\.png|sounds\/[A-Za-z0-9_\-]+\.wav|[A-Za-z0-9_\-]+\.png)["']/g;
 
-  /* A Kaplay program is recognised by importing the bridge. That is a much
-     firmer signal than Pygame Zero's old one (defining draw() or update()),
-     which a console program could trip over by accident. */
+  var engineReady = false;
+  var fetched = {};        // asset path -> true, so a second Run re-fetches nothing
+
+  /* ------------------------------------------------------- the keyboard --
+   *
+   * SDL takes the keyboard by putting keydown/keyup/keypress listeners on
+   * `document`, and it never takes them off. They are still there after the
+   * game stops, still swallowing keys that were meant for the editor — which
+   * is a student pressing Stop and then finding they cannot type.
+   *
+   * This is not a new problem. PyIDE hit it under Pygame Zero and needed a
+   * workaround then; Kaplay never had it, because a JavaScript library listens
+   * on the element it was given rather than on the whole document. Coming back
+   * to SDL brings it back.
+   *
+   * It does not reproduce in every browser — five Run/Stop cycles in one
+   * Chromium build typed fine — which is the worst kind of bug to leave in: it
+   * works on the machine you test on and not on the one in the classroom.
+   *
+   * So the listeners are tracked as SDL registers them, and lifted off while
+   * no game is running. Not disabled, not shadowed: removed, and put back on
+   * the next Run. `document.addEventListener` is wrapped once, before
+   * pygame-ce is ever loaded, because a listener that is never seen going on
+   * cannot be taken off.
+   */
+  var sdlKeyListeners = [];       // [type, fn, opts] that SDL put on document
+  var listenersAreOn = true;
+  var watchingDocument = false;
+  var gameWindowOpen = false;     // is a game being set up or running?
+
+  /* Only what SDL registers, and only while a game is up.
+   *
+   * The wrapper below cannot ask a listener who added it, so it goes by when:
+   * anything that puts a key listener on `document` between "a game is
+   * starting" and "the game has stopped" is SDL's, and nothing else is.
+   *
+   * That window matters, because PyIDE listens on `document` too — Ctrl+Enter
+   * runs, Escape stops, Escape closes the account menu. Those go on at page
+   * load, before any game, so they are not caught. But "before any game" is
+   * an accident of load order, and relying on it means the day someone adds a
+   * keyboard shortcut from a click handler, pressing Stop would quietly take
+   * Ctrl+Enter away with it — a bug that looks like nothing at all, and that
+   * only shows up in the one thing a student does after Stop. Bounding the
+   * window is one line and settles it.
+   */
+  var nativeAdd = null, nativeRemove = null;
+
+  function watchKeyListeners() {
+    if (watchingDocument) return;
+    watchingDocument = true;
+
+    nativeAdd = document.addEventListener.bind(document);
+    nativeRemove = document.removeEventListener.bind(document);
+    document.addEventListener = function (type, fn, opts) {
+      if (gameWindowOpen && /^key(down|up|press)$/.test(type)) {
+        sdlKeyListeners.push([type, fn, opts]);
+      }
+      return nativeAdd(type, fn, opts);
+    };
+  }
+
+  /* Hand the keyboard to the game, or back to the editor.
+   *
+   * Through nativeAdd, deliberately, and not through the wrapper above: a
+   * listener put back here is one already on the list, and going through the
+   * wrapper would add it a second time. That grows the list by three on every
+   * Run, and a browser hides it — the DOM ignores a listener registered twice
+   * with the same type and function, so nothing misbehaves and the array just
+   * gets longer all lesson. It showed up here only because
+   * tools/test_run_stop_cycle.mjs counts registrations rather than
+   * deduplicating them the way a browser does.
+   */
+  function keyboardToGame(on) {
+    if (on === listenersAreOn) return;
+    sdlKeyListeners.forEach(function (entry) {
+      if (on) nativeAdd(entry[0], entry[1], entry[2]);
+      else nativeRemove(entry[0], entry[1], entry[2]);
+    });
+    listenersAreOn = on;
+  }
+
+  /* A kaypy program is recognised by importing it. Unchanged from the Kaplay
+     days, and still a much firmer signal than Pygame Zero's old one (defining
+     draw() or update()), which a console program could trip over by accident. */
   function looksLikeGame(source) {
     return /^[ \t]*(?:from[ \t]+kaplay[ \t]+import|import[ \t]+kaplay)\b/m
       .test(source);
   }
 
-  function loadLibrary() {
-    if (libLoaded) return Promise.resolve();
-    return new Promise(function (resolve, reject) {
-      var tag = document.createElement("script");
-      tag.src = LIB;
-      tag.onload = function () {
-        if (typeof window.kaplay !== "function") {
-          reject(new Error("kaplay.js loaded but defined nothing."));
-          return;
-        }
-        libLoaded = true;
-        resolve();
-      };
-      tag.onerror = function () {
-        reject(new Error("Could not load " + LIB));
-      };
-      document.head.appendChild(tag);
-    });
+  /* pygame-ce is a compiled C extension, so it comes from Pyodide's own
+     package set rather than from PyPI — micropip could not use a PyPI wheel
+     here even if it fetched one. It is the single biggest thing a game run
+     downloads, and the browser caches it after the first time. */
+  async function loadPygame(pyodide, say) {
+    // Before the load, not after: SDL registers its listeners during
+    // pygame.display.set_mode(), and one that is never seen going on cannot
+    // be taken off again.
+    watchKeyListeners();
+    gameWindowOpen = true;          // from here until stop(), key listeners are SDL's
+    if (pyodide.__pyideHasPygame) return;
+    if (say) say("Loading the game engine…");
+    await pyodide.loadPackage("pygame-ce");
+    pyodide.__pyideHasPygame = true;
   }
 
-  /* The bridge is a real file fetched at run time rather than a string baked
-     into this script, so it can be read, and blamed, like any other Python:
-     a traceback through it names kaplay.py and a line number that exists. */
-  async function loadShim(pyodide) {
-    if (shimLoaded) return;
-    var res = await fetch(SHIM);
-    if (!res.ok) throw new Error("Could not load the Python side of Kaplay.");
-    var source = await res.text();
+  /* The engine, written into Pyodide's filesystem as real files.
+   *
+   * Real files rather than a string exec'd into a module, so a traceback
+   * through the engine names kaplay/engine.py and a line number that exists —
+   * and so `import kaplay` is an ordinary import with nothing clever about it.
+   *
+   * One fetch, not twenty-eight: tools/vendor_kaypy.py bundles the package
+   * into a single JSON file for exactly this.
+   */
+  async function loadEngine(pyodide, say) {
+    if (engineReady) return;
+    if (say) say("Unpacking kaypy…");
 
-    pyodide.FS.mkdirTree("/lib");
-    pyodide.FS.writeFile(SHIM_PATH, source);
+    var res = await fetch(BUNDLE);
+    if (!res.ok) {
+      throw new Error("Could not load the game engine. Has "
+                      + "tools/vendor_kaypy.py been run?");
+    }
+    var files = await res.json();
+
+    Object.keys(files).forEach(function (rel) {
+      var full = PKG_DIR + "/" + rel;
+      var dir = full.slice(0, full.lastIndexOf("/"));
+      pyodide.FS.mkdirTree(dir);
+      pyodide.FS.writeFile(full, files[rel]);
+    });
+
     pyodide.runPython(
       "import sys, os\n" +
       "if '/lib' not in sys.path:\n" +
       "    sys.path.insert(0, '/lib')\n" +
       // Same working directory as a console program, so open('scores.txt')
-      // means the same thing in a game as it does anywhere else.
+      // means the same thing in a game as it does anywhere else — and so
+      // loadSprite("images/bean.png") resolves against the assets below.
       "os.makedirs('" + PROJECT_DIR + "', exist_ok=True)\n" +
       "os.chdir('" + PROJECT_DIR + "')\n"
     );
-    shimLoaded = true;
+    engineReady = true;
   }
 
-  /* Every game gets a brand new canvas element.
+  /* The sprites and sounds the program names, fetched into the filesystem.
    *
-   * Not an optimisation — a correctness requirement, and its absence was a
-   * bug with a very confusing shape: the first game ran, Stop turned the
-   * picture white, and Run after that did nothing at all.
+   * kaypy opens assets as real files — `pygame.image.load(path)` — so they have
+   * to exist before the program runs. Only the ones it actually mentions: the
+   * two packs and the sounds come to about 5 MB together, and nobody's game
+   * uses all of them.
    *
-   * Kaplay's quit() ends by calling WEBGL_lose_context.loseContext(). A canvas
-   * whose WebGL context has been deliberately lost can never hand out a
-   * working one again — getContext returns the lost context forever, so the
-   * element is dead for rendering from that moment. Reusing it meant the
-   * second game started, registered its handlers, ran its loop, and drew to
-   * nothing.
-   *
-   * So the element is replaced rather than reused, the same way WebIDE
-   * replaces its preview iframe instead of reassigning srcdoc.
+   * A path that is mentioned but missing is deliberately left alone, so the
+   * game fails the way it would anywhere else — kaypy raises a FileNotFoundError
+   * naming the path, which is a better error than anything invented here.
    */
-  function freshCanvas() {
+  async function loadAssets(pyodide, source, say) {
+    var wanted = {}, m;
+    ASSET_RE.lastIndex = 0;
+    while ((m = ASSET_RE.exec(source)) !== null) {
+      if (!fetched[m[1]]) wanted[m[1]] = true;
+    }
+    var paths = Object.keys(wanted);
+    if (!paths.length) return;
+
+    if (say) say("Fetching " + paths.length
+                 + (paths.length === 1 ? " picture…" : " pictures and sounds…"));
+
+    await Promise.all(paths.map(async function (path) {
+      try {
+        var res = await fetch(ASSET_ROOT + path);
+        if (!res.ok) return;              // let kaypy report the missing file
+        var bytes = new Uint8Array(await res.arrayBuffer());
+        var full = PROJECT_DIR + "/" + path;
+        var dir = full.slice(0, full.lastIndexOf("/"));
+        pyodide.FS.mkdirTree(dir);
+        pyodide.FS.writeFile(full, bytes);
+        fetched[path] = true;
+      } catch (e) {
+        /* Same again: a fetch that fails leaves the file absent, and the
+           Python error names it. */
+      }
+    }));
+  }
+
+  /* Every game gets a brand new canvas element, and SDL is pointed at it.
+   *
+   * The id matters: Pyodide's SDL support requires the element to be called
+   * "canvas", and setCanvas2D is how it is handed over. Without both, the
+   * pygame.display.set_mode() inside kaplay() fails.
+   *
+   * Replacing rather than reusing carries over from the Kaplay days for a
+   * different but related reason: SDL keeps state about the surface it was
+   * given, and a second game on a used canvas is the kind of thing that works
+   * on one browser and not another. A fresh element costs nothing.
+   */
+  function freshCanvas(pyodide) {
     var old = document.getElementById("canvas");
     var next = document.createElement("canvas");
-    next.id = old.id;
+    next.id = "canvas";                     // SDL insists on this exact id
     next.className = old.className;
     next.width = old.width;
     next.height = old.height;
     next.tabIndex = old.tabIndex;
     next.title = old.title;
     old.parentNode.replaceChild(next, old);
-    window.__pyideCanvas = next;
+    if (pyodide && pyodide.canvas && pyodide.canvas.setCanvas2D) {
+      pyodide.canvas.setCanvas2D(next);
+    }
     return next;
   }
 
-  async function ensureReady(pyodide, onProgress) {
-    if (onProgress && !libLoaded) onProgress("Loading the game engine…");
-    await loadLibrary();
-    await loadShim(pyodide);
-    // The bridge defaults every game to this canvas, so a student never has to
-    // know the page has one.
-    return freshCanvas();
+  async function ensureReady(pyodide, onProgress, source) {
+    await loadPygame(pyodide, onProgress);
+    await loadEngine(pyodide, onProgress);
+    if (source) await loadAssets(pyodide, source, onProgress);
+
+    /* Pyodide's own opt-in for SDL: without it, a main loop that hands control
+       back to the browser is treated as a fatal unwind. Documented as
+       experimental, and it is what makes a frame loop possible at all. */
+    try { pyodide._api._skip_unwind_fatal_error = true; } catch (e) { /* older */ }
+
+    keyboardToGame(true);           // the game is about to want the keys
+    return freshCanvas(pyodide);
   }
 
   /* End a running game.
    *
-   * Kaplay's quit() stops its loop and releases its listeners. The bridge
-   * marks its Python callbacks inert but deliberately does not free them —
-   * see the comment in kaplay() for the three crashes that rule came from.
-   *
-   * The picture goes blank, and that is not a choice — losing the WebGL
-   * context is part of how Kaplay shuts down, and it takes the last frame with
-   * it. Keeping the frame would mean copying it out before quitting and
-   * painting it into a 2D context, which would then be the wrong kind of
-   * context for the next game to render into.
+   * kaypy's loop checks `_running` once a frame, so clearing it lets
+   * run_async() return normally and the await in app.js resolves. Nothing is
+   * torn down violently, which is the whole difference from the Kaplay days:
+   * there is no WebGL context to lose, so the last frame stays on screen
+   * instead of the picture going white.
    */
   function stop(pyodide) {
-    if (!pyodide || !shimLoaded) return;
+    // First, and whatever else happens: give the keyboard back. A student who
+    // has pressed Stop wants to type, and that must not depend on the engine
+    // shutting down tidily.
+    keyboardToGame(false);
+    gameWindowOpen = false;         // key listeners from here on are PyIDE's own
+    if (!pyodide || !engineReady) return;
     try {
       pyodide.runPython(
-        "import kaplay as _k\n" +
-        "_k.shutdown()\n"
+        "import kaplay.engine as _ke\n" +
+        "if _ke._engine is not None:\n" +
+        "    _ke._engine._running = False\n"
       );
     } catch (e) {
-      /* Nothing worth surfacing: the student pressed Stop, and whether the
-         engine was mid-teardown is not their problem. */
+      /* The student pressed Stop. Whether the engine was mid-frame is not
+         their problem. */
     }
   }
 
@@ -148,6 +303,6 @@ window.PyIDEGame = (function () {
     ensureReady: ensureReady,
     freshCanvas: freshCanvas,
     stop: stop,
-    isReady: function () { return libLoaded && shimLoaded; }
+    isReady: function () { return engineReady; }
   };
 })();

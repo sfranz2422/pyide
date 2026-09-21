@@ -550,11 +550,13 @@ and the **`style` attribute** (`position:fixed` can cover the whole editor).
 Neither has any use in class notes. Dropping `FORBID_ATTR` in `static/notes.js`
 brings inline CSS back if you ever want it.
 
-## Games, in Python, on Kaplay
+## Games, in Python, on kaypy
 
-Students write games in Python. Kaplay — a JavaScript game library — runs them.
-Python never draws anything: it builds game objects and answers callbacks, and
-Kaplay renders on the GPU.
+Students write games in Python, and the engine underneath is Python too.
+**kaypy** ([PyPI](https://pypi.org/project/kaypy/),
+[source](https://github.com/sfranz2422/kaypy)) is a Kaplay-shaped game engine
+built on pygame-ce. There is no JavaScript in a game any more and nothing
+crosses a language boundary.
 
 ```python
 from kaplay import *
@@ -565,11 +567,13 @@ setGravity(1600)
 
 player = add([sprite("bean"), pos(100, 200), area(), body(jumpForce=800), "player"])
 
+
+@onKeyPress("space")
 def jump():
     if player.isGrounded():
         player.jump(800)
 
-onKeyPress("space", jump)
+
 onUpdate("enemy", lambda e: e.move(-120, 0))
 ```
 
@@ -582,223 +586,121 @@ documentation in the world. `kaplay({ width: 800 })` becomes
 
 **+ Game** in the toolbar starts a project with the import already there.
 
+**The same file runs off the website.** `pip install kaypy`, and the game a
+student wrote in this editor runs with `python game.py` on their own machine —
+same engine, same version, no export step. `kaypy web game.py` builds it into a
+standalone web page. That is the thing the JavaScript version could never do,
+and it is worth more than everything below.
+
 ### How it works
 
-`static/py/kaplay.py` is the seam, in about 240 lines. `kaplay()` starts the
-engine and keeps the context it returns; every other name resolves against that
-context on demand through the module's `__getattr__`. So the file contains no
-list of Kaplay's API and cannot fall behind it — a function Kaplay adds next
-year is callable from Python the day it ships.
+Pyodide loads **pygame-ce** from its own package set (a compiled C extension,
+so it cannot come from PyPI), and `static/game.js` writes the vendored kaypy
+package into Pyodide's filesystem as real files. Then `import kaplay` is an
+ordinary import, and a traceback through the engine names `kaplay/engine.py`
+and a line number that exists.
 
-On every call the seam converts Python lists to JavaScript arrays (so
-`add([...])` works), dicts and keyword arguments to JavaScript objects (so
-`body(jumpForce=800)` works), and Python functions to something JavaScript can
-invoke (so a plain `def` can be handed to `onKeyPress`).
+kaypy's frame loop is already an `async` coroutine that yields with
+`await asyncio.sleep(0)`, and it already takes its `sys.platform ==
+"emscripten"` branch here, because that is what Pyodide reports. The browser
+was a target it already knew about — it is the same platform pygbag builds for.
+
+**The engine is vendored, not installed at runtime.** `tools/vendor_kaypy.py`
+copies it out of a working copy and writes `static/py/kaplay_bundle.json`: one
+file, ~120 KB, cached like any other static asset. The reasons are in that
+script's docstring, and the short version is that a class starts all at once —
+twenty students running `micropip.install("kaypy")` at 8:05 would pull about
+27 MB from PyPI, most of it a sound file the browser never opens. Checking for
+a new release happens on the server instead, once a day, and shows up on the
+teacher dashboard.
+
+Vendoring from a working copy rather than from PyPI is also deliberate: fix
+something in `~/kaypy`, run the script, press Run — before publishing anything.
 
 **Mode is detected by the import.** `from kaplay import *` or `import kaplay`
 at the top level means this is a game; anything else is a console program.
-That is a firmer signal than the old one — Pygame Zero was recognised by
-defining `draw()` or `update()`, which an ordinary program could trip over.
+That is a firmer signal than Pygame Zero's, which was recognised by defining
+`draw()` or `update()` — something an ordinary program could trip over.
 
-### What replacing Pygame Zero deleted
+### The JavaScript bridge, and why it is gone
 
-This used to run Pygame Zero. The replacement removed far more than it added:
+Before this, games ran on Kaplay, the JavaScript library, and about 480 lines
+of `static/py/kaplay.py` marshalled every call across the boundary. It worked.
+It is also where the four worst bugs this project has had came from, and they
+share a shape worth remembering:
 
-| | Pygame Zero | Kaplay |
-|---|---|---|
-| downloaded on first game | ~4 MB (pygame-ce, numpy, pgzero) | 184 KB, and it is vendored |
-| the frame loop | its blocking `while True`, reimplemented as an async loop that yields each frame | Kaplay's own |
-| sprites | copied file by file into Pyodide's virtual filesystem | fetched over HTTP like any web page |
-| the canvas | an SDL binding | a `canvas` option |
-| the keyboard afterwards | SDL kept it; the display had to be shut down to get it back, which blanked the canvas, so the last frame was copied out and put back | never taken from the document |
-
-The keyboard workaround is worth remembering as a shape of problem rather than
-a problem: SDL installed a document-level `keypress` handler that called
-`preventDefault` and survived the game loop ending, so typing into the editor
-silently stopped working while Enter and mouse clicks still worked. It read
-like a focus bug. None of that exists now.
-
-### Extra arguments are dropped, the way JavaScript drops them
-
-Kaplay calls a handler with whatever it has: `onKeyDown` hands over the key
-that was pressed, `onCollide` hands over both objects. A JavaScript function
-ignores arguments it did not ask for, which is why every Kaplay example is
-written like this and works:
-
-```javascript
-onKeyDown("left", () => player.move(-300, 0))
-```
-
-The same line in Python is `lambda: player.move(-300, 0)`, and Python does not
-forgive a spare argument — it raises `TypeError: <lambda>() takes 0 positional
-arguments but 1 was given`, on the first keypress, in a callback nobody is
-looking at. Since the whole premise here is that Kaplay's documentation applies
-to what students write, the bridge matches JavaScript's behaviour: a callback
-is called with as many arguments as it will accept, and the rest are dropped.
-A handler that *does* want the key still gets it.
-
-The arity is worked out once, when the callback is wrapped, because this runs
-sixty times a second and `inspect.signature` is far too slow for that.
-
-This one was found by running the starter project, not by testing — the first
-thing that happened on the first keypress. There is now a test for it.
-
-### Every method on a game object is bridged
-
-Kaplay's documentation is full of calls made *on* an object rather than on the
-context: `btn.add([...])`, `player.onCollide(...)`, `level.get("player")`.
-Left alone those go straight to JavaScript, and everything this module does
-stops applying — a Python list arrives opaque, a callback arrives unowned, and
-what comes back is a raw object that will do the same to the next call made
-on it.
-
-An earlier version bridged only the methods that obviously took lists or
-callbacks. **That produced four separate bugs**, each a raw object escaping
-through a method nobody had listed, each surfacing far from its cause:
-
-| what escaped | how it showed up |
+| what went wrong at the seam | how it showed up |
 |---|---|
-| a child's component list | `'list' object has no attribute 'parent'` |
-| a tile factory's return value | the same, from `addLevel` |
-| an unconvertible Python value | `This borrowed proxy was automatically destroyed…` |
-| `level.get("player")[0]` | the same, but only on the first collision |
+| a callback arrived as a borrowed proxy, freed too early | `This borrowed proxy was automatically destroyed…`, one frame later |
+| a tile factory returned a Python list | `'list' object has no attribute 'parent'`, naming neither the tile nor the level |
+| a lambda's arity did not match what Kaplay passed it | `TypeError` on the first keypress, in a callback nobody was watching |
+| `tween()` came back as a Promise | `.cancel()` cancelled nothing, silently, for ever |
 
-The last one settled it: a raw object from `get()` meant every later
-`onCollide` on the player bypassed the bridge, so the callback was destroyed
-before the first coin was touched. There is no list of bridged methods any
-more, because a list is a thing to be wrong about.
+Every one of them is silent or misattributed, and every one of them is
+impossible now, because there is no boundary to arrive across. The bridge is
+deleted.
 
-Measured cost of closing it completely, 200 objects moving every frame:
-**0.48 ms instead of 0.35 ms — 2.9% of a frame instead of 2.1%.** Properties
-are still handed back raw, so `o.pos.x` stays fast.
+Two other bridge-era problems went with it. Kaplay's sprite loader prepended
+the load root only to a string, so `loadSprite("dino", [...])` fetched every
+frame relative to the page — a 404 and a blank canvas, from code that worked
+with a single path. And `anchor()` fell through to `default: return t`, so
+`anchor(center())` drew a sprite five thousand pixels off screen with no error
+at all. kaypy has neither behaviour.
 
-`get()` now returns a Python list of bridged objects, which is also what a
-student expects: `len()`, indexing and `for obj in get("coin")` all work.
+What has *not* changed is the one genuinely good idea in that bridge: a
+callback is called with as many arguments as it will accept, and the rest are
+dropped, exactly as JavaScript does. `lambda: player.move(-300, 0)` works when
+Kaplay would hand it a key. That lives in kaypy's `callutil.call_flexible` now,
+and it is why Kaplay's documentation still translates line for line.
 
-### Python objects the engine keeps
+### What came back with SDL: the keyboard
 
-Handing a Python object to JavaScript raw makes Pyodide create a **borrowed**
-proxy, destroyed the instant the call returns. Kaplay keeps almost everything
-it is given, so the next frame that touches such a value dies with:
+pygame draws through SDL, and under Emscripten SDL takes the keyboard by
+putting `keydown`, `keyup` and `keypress` listeners on `document` — and never
+takes them off. After Stop they are still there, still swallowing keystrokes
+meant for the editor. A student presses Stop and cannot type.
 
-```
-This borrowed proxy was automatically destroyed at the end of a function call.
-Try using create_proxy or create_once_callable.
-```
+This is not a new problem; PyIDE hit it under Pygame Zero and needed a
+workaround then. Kaplay never had it, because a JavaScript library listens on
+the element it was given. Coming back to SDL brings it back.
 
-That message is advice for whoever wrote the bridge, not for a student who has
-just watched their coin vanish. So the bridge owns anything it cannot convert:
-an explicit proxy, kept for the life of the game like every other one.
+`game.js` wraps `document.addEventListener` **before pygame-ce is ever
+loaded** — one that is never seen going on cannot be taken off — and lifts
+SDL's listeners off while no game is running, putting them back on the next
+Run. Two details that are easy to get wrong and are held down by tests:
 
-The cost is one proxy per unconvertible value — rare, since primitives, lists,
-dicts, callables and game objects are all handled before this point.
+- **The capture is bounded to the game window.** PyIDE listens on `document`
+  too: Ctrl+Enter runs, Escape stops, Escape closes the account menu. Those go
+  on at page load, before any game, so they happen not to be caught — but "it
+  happens not to" is not a property worth relying on, and the day someone adds
+  a shortcut from a click handler, Stop would take Ctrl+Enter with it.
+- **Putting them back does not go through the wrapper.** Re-registering
+  through it re-tracks them, so the list grows by three on every Run. A
+  browser hides that completely, since the DOM ignores a listener added twice
+  with the same type and function.
 
-### What a callback hands back
-
-Arguments going *into* a Python callback were converted from the start; the
-value coming *out* was not. Kaplay calls some callbacks precisely for what they
-return — a level's `tiles` entries are functions returning a component list, one
-per tile. Handed back as a Python list it reaches JavaScript as an opaque
-object, and Kaplay's next move is to set `.parent` on it:
-
-```
-AttributeError: 'list' object has no attribute 'parent'
-and no __dict__ for setting new attributes
-```
-
-which names neither the tile, nor the level, nor the conversion that didn't
-happen. The Levels lesson in this repo's own guide had it.
-
-Only containers are converted on the way out. A returned callable is left
-alone on purpose: converting it would mint a fresh proxy every time the
-callback ran, which at sixty frames a second is a leak rather than a feature.
-
-**The test suite missed this because the stub called every tile factory and
-threw the result away.** Calling a callback is not exercising it — the stub now
-uses what comes back, and asserts it is a real array before touching it.
-Verified by removing the fix and watching three checks fail.
-
-### A list of frames does not get the load root
-
-Kaplay's sprite loader begins `e = pe(e)`, where `pe` prepends the load root —
-but only to a string:
-
-```js
-function pe(t){ return typeof t != "string" || Fn(t) ? t : a.assets.urlPrefix + t }
-```
-
-An array is not a string, so `loadSprite("dino", ["images/dino_0.png", …])`
-skips the root entirely and fetches each frame relative to the page. On a share
-link that means `/s/<slug>/images/dino_0.png` — a 404, a sprite that never
-loads, and a blank canvas. Nothing raises, nothing is logged, and the same code
-with a single path works perfectly.
-
-The bridge applies the root per element instead, so the multi-frame form
-behaves like the single-frame one. Paths that are already a URL or a `data:`
-URI are left alone, which is what keeps exported games working.
-
-This cost a lesson before it was found, and it was in this repo's own guide.
-
-### Mistakes Kaplay accepts but nobody means
-
-`anchor()` takes a name like `"center"`, or an offset between −1 and 1.
-Kaplay's lookup ends in `default: return t`, so any other Vec2 is used as-is —
-which makes `anchor(center())` set the anchor to, say, (200, 150) and draw the
-sprite some five thousand pixels off screen. No error, nothing on the canvas,
-and the line above it, `pos(center())`, is correct. A real student lost a
-lesson to it.
-
-The bridge now writes a note when an anchor lands far outside −1 to 1. This is
-the only check of its kind, and the bar for adding another is the same: Kaplay
-accepts it, nobody could mean it, and the failure is silent.
-
-### Errors inside a callback
-
-An exception in `onUpdate()` happens sixty times a second, long after the line
-that registered it returned, and JavaScript is what catches it. Left alone that
-is either silence or thousands of identical tracebacks. So the first one is
-printed — trimmed to the student's own frames, like every other error here —
-and the game is stopped.
-
-Stopping is where the subtle bug lived. Kaplay can call a handler in the same
-frame it was told to quit, so freeing the Python callbacks at that moment is a
-use-after-free, and it surfaces as an incoherent JavaScript error rather than a
-stopped game. A stopped game's callbacks are therefore left alive and made
-inert by a flag; they are released when the next `kaplay()` starts, the one
-moment nothing can still hold them. Found by a test, not by reasoning.
+It did not reproduce in every browser — five Run/Stop cycles in one Chromium
+build typed fine — which is the worst kind of bug to leave alone: it works on
+the machine you test on and not on the one in the classroom.
 
 ### Checking it still works
 
 ```bash
-npm install pyodide
-node tools/test_kaplay_bridge.mjs
+python3 tools/test_game_runtime.py        # the engine, the bundle, the starter
+python3 tools/test_guide.py               # every lesson in the guide, played
+node    tools/test_run_stop_cycle.mjs     # Run -> Stop -> Run, and the keyboard
 ```
 
-Twenty-six checks against real Pyodide, the real bootstrap out of
-`runtime.js` and the real bridge, with a stand-in for Kaplay that records what
-JavaScript was actually handed. It cannot tell you the game looks right — that
-needs a GPU and a pair of eyes — but it covers every seam, including the two
-that only misbehave long after the student's program has returned: a callback
-that raises, and Stop.
+The first two run the real kaypy, imported out of the bundle the browser
+actually downloads, with SDL on its dummy driver. `test_guide.py` does not
+merely execute each lesson: it plays it — holding down every key the lesson
+registered a handler for, clicking, building every scene, and running the
+timers out — because calling a handler by hand proves its body works and
+proves nothing about whether it is reachable.
 
-Measured cost of writing a game in Python rather than JavaScript, 200 objects
-moved every frame, in a real browser:
-
-```
-moved from JavaScript   0.135 ms per frame   0.8% of a 60fps frame
-moved from Python       0.122 ms per frame   0.7% of a 60fps frame
-```
-
-Indistinguishable. Kaplay draws either way; only the callbacks are Python.
-
-Objects come back wrapped, so that `btn.add([...])` and `player.onCollide(...)`
-— calls made *on* an object rather than on the context, which Kaplay's docs are
-full of — marshal their arguments properly. The wrapper roughly doubles the
-per-frame cost of touching an object: `o.move(1.5, 0.5)` across 200 objects
-goes from 0.17 ms to 0.38 ms, and the nested `o.pos.x = o.pos.x + 1.5` from
-0.44 ms to 0.66 ms. Still 4% of a frame at the worst, so the trade is worth
-making; only `add`, `use`, `wait`, `loop`, `tween` and the `on…` methods are
-intercepted, and everything else falls straight through.
+What none of them can do is tell you the game looks right. SDL drawing to a
+canvas needs a browser; that is confirmed by hand with kaypy's own
+`tools/smoke_pyodide.html`.
 
 ### Sprites
 
@@ -814,8 +716,19 @@ add([sprite("bean"), pos(100, 100)])
 Two lines rather than one because Kaplay has to load a sprite before it can be
 used, and forgetting the load is the commonest way a sprite silently fails to
 appear. The sound chips insert `loadSound(...)` and `play(...)` for the same
-reason. Paths are relative to `/static/assets/`, which the bridge sets as
-Kaplay's load root when the game starts.
+reason.
+
+**How a path becomes a file.** kaypy opens assets the way any Python program
+does — `pygame.image.load("images/bean.png")` — so the file has to exist before
+the program runs. `game.js` reads the source, picks out every asset path it
+names, fetches just those from `/static/assets/` and writes them into Pyodide's
+filesystem under the game's working directory. Only the ones actually
+mentioned: the two packs and the sounds come to about 5 MB together and nobody's
+game uses all of them.
+
+A path that is mentioned but missing is deliberately left alone, so the game
+fails the way it would anywhere else — kaypy raises a `FileNotFoundError`
+naming the path, which is a better error than anything invented here.
 
 **Kaplay pack** — 60 sprites from the KAPLAY game library, `images/`.
 
@@ -845,9 +758,19 @@ frame, so an eight-frame strip looks like a character rather than a filmstrip.
 A ▶ in the corner marks the ones that animate; the tooltip names the animations.
 
 Two names exist in both packs, so the dungeon versions are `dungeon_coin` and
-`dungeon_bomb` — Kaplay keeps one sprite per name, and a student who loaded both
-would otherwise get whichever came second, with no error to explain it.
-`tools/test_dungeon.mjs` checks no new clash creeps in.
+`dungeon_bomb` — one sprite per name, and a student who loaded both would
+otherwise get whichever came second, with no error to explain it.
+
+**The atlas is a third source of names in that same namespace**, which took a
+while to notice: its `ogre` region collided with the pack's `ogre`, so loading
+`dungeon/ogre.png` (eight frames, `idle` and `run`) and then the atlas — which
+is exactly what Lesson 12 does — replaced it with the atlas's four-frame ogre,
+and `play("run")` stopped working with nothing pointing at the line that broke
+it. The pack's is now `dungeon_ogre`; the atlas keeps its names because they
+are the ones Kaplay's published example uses and the guide teaches.
+`tools/vendor_dungeon.py` now takes the atlas's region names into account when
+it renames, and `tools/test_dungeon.py` checks all three sources against each
+other so no new clash creeps in.
 
 **The atlas** — `dungeon.png`, the same dungeon artwork as one uncut 512×512
 image, at the root of `assets/` so that `loadSpriteAtlas("dungeon.png", ...)`
@@ -966,9 +889,13 @@ static/
                         shared by the editor and demo pages
   zip.js                Dependency-free ZIP writer (multi-file downloads)
   demo.js               The demo page: fetch on Run, run, show the output
-  game.js               Kaplay: loads the library, finds the bridge
+  game.js               kaypy: loads pygame-ce, unpacks the engine, the canvas,
+                        the assets, and the keyboard
   export.js             Exports a game as one self-contained playable .html
-  py/kaplay.py          the Python side of Kaplay (shipped to Pyodide)
+  py/kaplay/            The vendored kaypy engine (generated)
+  py/kaplay_bundle.json The same thing as one file, which is what the browser
+                        downloads (generated)
+  py/kaypy.json         Which kaypy version is vendored, and from where
   sprites.js            The Python a Sprites-panel click inserts
   notes.js              Markdown notes: render, sanitize
   complete.js           Name completion from Python's ast
@@ -984,7 +911,7 @@ tools/
   build_assets.py       Regenerates static/assets from source folders
   vendor_dungeon.py     Composites the dungeon pack's 370 frames into strips
   vendor_atlas.py       Brings in a sprite atlas and checks its regions
-  bench_bridge.mjs      What the bridge costs per frame, measured
+  vendor_kaypy.py       Copies the kaypy engine in and bundles it for the browser
   test_assignment_flow.py  Who gets what from /a/<slug>, in both editors
 examples/               file-handling and notes starters
 ```
@@ -1039,13 +966,26 @@ the reason for holding it.
 
 A game downloads as **one `.html` file**. Double-click it and it plays — no
 Python installed, no server started, nothing unzipped. Inside are the student's
-program, `kaplay.js`, the Python bridge, and every sprite and sound the program
-actually loads, all inlined; only Pyodide comes from a CDN.
+program, the kaypy engine, the shared Python bootstrap out of `runtime.js`, and
+every sprite and sound the program actually loads; only Pyodide and pygame-ce
+come from a CDN.
 
-That last part is the one caveat: **the first run of an exported game needs the
-internet**, and takes a few seconds while Python starts. Embedding Pyodide too
-would make every export about 20 MB, which is fine for one showcase game and
-absurd for a class set. A two-sprite, one-sound game exports at about 490 KB.
+**The program goes in unchanged**, and that is the one real difference from the
+JavaScript exporter this replaced. That one had to find every asset path in the
+source and swap it for a `data:` URI, because Kaplay fetched assets over HTTP
+and a `file://` page can fetch nothing — so the program inside a downloaded
+game was not quite the program the student wrote. kaypy opens assets as
+ordinary files, so the fix is to put the file where the program says it is: the
+assets are decoded into Pyodide's filesystem at exactly the paths the program
+names, before it runs. `loadSprite("bean", "images/bean.png")` means the same
+thing in a downloaded game as in the editor, on a desktop, and in the guide.
+
+The caveat: **the first run of an exported game needs the internet**, and takes
+several seconds while Python and pygame-ce load. The browser caches both
+afterwards. Embedding them would make every export tens of megabytes, which is
+fine for one showcase game and absurd for a class set — and pygame-ce could not
+be embedded another way in any case, being a compiled C extension that has to
+be Pyodide's own build. A two-sprite, one-sound game exports at about 420 KB.
 
 **Why one file and not a folder.** A folder opened from disk is a `file://`
 page, and browsers refuse to fetch anything next to it — no images, no sounds,
@@ -1067,16 +1007,15 @@ directly upload the file without zipping it."* Set **Kind of project** to
 Their two relevant rules, both already satisfied:
 
 - **Anything loaded from another domain must be HTTPS.** The only external
-  reference is Pyodide, from `https://cdn.jsdelivr.net`. External resources are
-  allowed; insecure ones are not.
+  domain is `https://cdn.jsdelivr.net`, which serves Pyodide and — fetched by
+  Pyodide itself at run time, so it appears in no `src` attribute — pygame-ce.
+  External resources are allowed; insecure ones are not.
 - **No absolute paths**, which would leave the project's directory on their CDN
-  and return 403. Every sprite and sound is a `data:` URI, so there are no paths
-  to get wrong. An exported game also sets Kaplay's load root to `""` rather
-  than this site's asset directory.
-
-Worth knowing why the data URIs are safe: Kaplay's loader tests
-`/^data:\w+\/\w+;base64,.+/` and leaves anything matching it alone, so the
-load root is never prepended to an inlined asset.
+  and return 403. The exported page fetches no asset at all: every sprite and
+  sound is carried as base64 inside the document and decoded into Pyodide's own
+  filesystem before the game runs, so the only URL in the whole file is
+  Pyodide's. The paths the student's program uses — `images/bean.png` — are
+  paths inside that filesystem and never reach the network.
 
 Size is a non-issue — itch allows 200 MB for a single file and a small game
 exports at about half a megabyte.
@@ -1085,91 +1024,97 @@ exports at about half a megabyte.
 node tools/test_export.mjs
 ```
 
-Builds an export with a stub `fetch` reading from `static/`, then checks it:
-one document, engine and bridge inlined, asset paths turned into data URIs,
-unused assets left behind, Pyodide the only external reference, and nothing
-inside a `<script>` block able to end it early. Nineteen checks.
+Two files, and neither covers the other.
 
-That last one is worth having. `kaplay.js` contains a literal `<script` and no
-`</script`, so inlining it happens to be safe today — the export now escapes
-any `</script` rather than depending on that staying true.
+`test_export.mjs` builds an export with a stub `fetch` reading from `static/`
+and then reads it: one document, the engine and the bootstrap inlined, the
+program carried unchanged, exactly the named assets carried and the unused ones
+left behind, Pyodide the only external reference, the setup and the frame loop
+run as two steps with the loop awaited, and nothing inside a `<script>` block
+able to end it early. Forty-four checks.
+
+`test_export_runs.py` takes the same built page apart and **runs what is inside
+it**: the engine it carries is unpacked and imported, the assets it carries are
+written where the page says it writes them, and the program is run by the same
+two calls — on real pygame-ce, against real sprite and sound files. It ends by
+checking that a sprite which was *not* carried fails loudly and by name, rather
+than leaving a blank screen.
+
+The split is deliberate and each half has a hole the other fills. Move the
+assets one directory away and both fail. Delete the `await` in front of the
+frame loop and only the static one notices, because the replay makes the two
+calls itself. Neither can tell you the game is visible; that needs a browser.
+
+An exported game is the one thing here that nobody watches fail — it is
+downloaded, taken home, and opened on a machine with no console open and nobody
+to ask — which is why it gets two tests rather than one.
 
 ### Run, Stop, Run
 
 ```bash
-node tools/test_canvas_cycle.mjs
+node tools/test_run_stop_cycle.mjs
 ```
 
-The cycle a student repeats all lesson, and the one that has now hidden two
-separate bugs — both of which let the first game run perfectly and broke the
+The cycle a student repeats all lesson, and the one that has now hidden three
+separate bugs — each of which let the first game run perfectly and broke the
 second, which is the worst possible shape for a bug in a classroom.
 
-**Kaplay's `quit()` ends by calling `WEBGL_lose_context.loseContext()`,** and a
-canvas whose context has been deliberately lost can never hand out a working
-one again: `getContext` returns the lost one forever. Reusing the element meant
-the second game started, registered its handlers, ran its loop, and drew to
-nothing — Stop turned the picture white and Run after that appeared to do
-nothing at all. So every game gets a brand new canvas element, the same way
-WebIDE replaces its preview iframe rather than reassigning `srcdoc`. The key
-listeners are rebound on each swap, because they belong to the element.
+**The keyboard.** SDL's `document` listeners outlive the game, so Stop leaves
+the editor unable to type. The mechanism and the two subtleties in the fix are
+described under *What came back with SDL*, above; this file is what holds them
+down. Three cycles, and after each one the test asks whether the editor can
+type — plus a Stop pressed twice, a Run pressed while already running, and a
+keyboard shortcut registered after a Run, which must survive the next Stop.
 
-The blank picture after Stop is not a choice — losing the context takes the
-last frame with it, and keeping the frame would mean painting it into a 2D
-context, which is then the wrong kind of context for the next game.
+**A canvas is never reused.** This carries over from the Kaplay days, where
+`quit()` called `WEBGL_lose_context.loseContext()` and a canvas whose context
+had been deliberately lost could never hand out a working one again — the
+second game ran, drew to nothing, and looked like it had not started. SDL has
+no context to lose, so that exact failure is gone, but SDL does keep state
+about the surface it was given, and a second game on a used canvas is the kind
+of thing that works in one browser and not another. A fresh element costs
+nothing. The id must be exactly `"canvas"` and it must be handed over with
+`pyodide.canvas.setCanvas2D`, or the `pygame.display.set_mode()` inside
+`kaplay()` fails.
 
-### Tweens, and the Promise that wasn't
+**Stopping does not tear anything down.** kaypy's loop checks `_running` once
+a frame, so clearing it lets `run_async()` return normally and the `await` in
+`app.js` resolves. Nothing is killed mid-frame — and because there is no WebGL
+context to lose, the last frame stays on screen instead of the picture going
+white, which is what used to happen.
+
+### Tweens
+
+Tweens are kaypy's now, and so are their tests:
 
 ```bash
-node tools/test_tween.mjs
-node tools/bench_bridge.mjs
+cd ~/kaypy && python3 tests/test_tween.py
 ```
 
-Tweens work — numbers, positions, easing curves, thirty at once, started from
-inside a callback. Two things had to be fixed first, and the second is the more
-interesting.
-
-**`easings` was not exported.** A tween without an easing curve moves at a flat
-rate, which is the one motion that looks like nothing, so this was most of the
-point of having tweens. All thirty-one curves are now reachable as
-`easings.easeOutBounce` and friends, through the same lazy lookup `debug` uses
-so that Run-twice keeps working.
-
-**`tween()` was not returning the tween.** Kaplay's controller carries a `then`
-method so JavaScript can write `tween(...).then(...)`. Pyodide takes any object
-with a `then` to be a Promise and converts it, so what arrived in Python was a
-`PyodideFuture` and the controller was gone:
+They are worth a note here anyway, because the bug they were written for was a
+bridge bug and is a good example of what that seam did. Kaplay's tween
+controller carries a `then` method so JavaScript can write
+`tween(...).then(...)`. **Pyodide converts any object with a `then` into a
+`PyodideFuture`**, so what arrived in Python was a Future and the controller
+was gone:
 
 ```python
 slide = tween(0, 400, 1.0, move_it)
-slide.cancel()          # cancels a Future. The tween carries on regardless.
+slide.cancel()          # cancelled a Future. The tween carried on regardless.
 ```
 
-Nothing raises. The tween runs to the end while the code that cancelled it
-believes otherwise — the worst shape a bug can have, and invisible to any test
-that only asks whether an error was thrown. So every check in `test_tween.mjs`
-asks what *arrived*: the values the setter was handed, whether the Python
-inside `.then()` really ran, whether `cancel()` **called from Python** actually
-stopped anything.
+Nothing raised. The tween ran to the end while the code that cancelled it
+believed otherwise — invisible to any test that only asks whether an error was
+thrown. It needed a JavaScript trampoline that rebuilt the result without
+`then`, and a `Controller` class to put `.then()` back on the Python side.
 
-The fix is a JavaScript trampoline in `_call`: it runs the call, and if the
-result is thenable it rebuilds it without `then`, bound to the original, so
-Pyodide sees a plain object. `Controller` then puts `.then()` back on the
-Python side pointing at `onEnd`, where it belongs.
-
-Two things that fix cost, both found by measurement rather than reasoning:
-
-- **`this` is lost** when a method is handed to another JavaScript function, so
-  the receiver is now passed to the trampoline explicitly. Without it
-  `o.move(1, 0)` moved nothing, silently. `test_kaplay_bridge.mjs` caught it.
-- **Arguments must be spread, not boxed.** Passing them as an array cost
-  0.96 ms/frame at 200 objects against 0.55 baseline; spreading them costs
-  0.64. `bench_bridge.mjs` is where those numbers come from — run it after
-  touching anything on that path.
+All of that is deleted. `tween()` returns a `Tween`, which is an ordinary
+Python object, and `.cancel()` cancels it.
 
 ### Checking the sprite packs
 
 ```bash
-node tools/test_dungeon.mjs
+python3 tools/test_dungeon.py
 ```
 
 1,315 checks over both packs and the atlas. Three things can go wrong between a
@@ -1203,18 +1148,38 @@ looked wrong only to a checker that assumed they started at zero.)
 ### Checking a guide's code actually runs
 
 ```bash
-node tools/test_guide.mjs ../learn_pykaplay.md
+python3 tools/test_guide.py                    # ../learn_pykaplay.md
+python3 tools/test_guide.py ../some_other.md   # or any markdown file
 ```
 
-Executes every ```python block in a markdown guide through the real bridge, as
-if Run had been pressed, then fires every callback it registered. A block
-passes only if nothing reached stderr.
+Every fenced ```python block that imports *and* calls `kaplay` is a whole
+lesson. Each one is executed the way pressing Run executes it — and then
+**played**: every key the lesson registered a handler for is held down and
+released, the mouse is clicked, every scene is built, and the timers are run
+out. A lesson passes only if nothing raised.
 
-Worth having because the failures it catches look perfectly fine on the page: a
-function that is not in the bridge's star-import list, a keyword argument
-Kaplay does not take, a callback whose arguments don't line up. It found three
-on its first run, including one that would have broken every game on its second
-Run of a session.
+The playing is the point. Calling `fn()` directly proves a function's body
+works; it does not prove the function is reachable. A handler registered for a
+key name the engine does not know, or attached to an object destroyed on the
+first frame, is silently never called in the classroom — and calling it by
+hand hides exactly that. The same goes for time: a `wait(1, ...)` body would
+never run in a test whose frames take no measurable time, so the clock is run
+out by hand at the end. And a "you win" scene is not reachable by mashing
+keys, so every scene is built directly, with zeros for its arguments.
+
+This replaced a version that booted Pyodide and ran each lesson against four
+hundred lines of hand-written JavaScript pretending to be Kaplay. That
+stand-in was the test's weakest point: it answered every call, so a lesson
+could only fail by raising, and anything the stand-in got wrong was a bug the
+test could never see because the test *was* the bug. There is no stand-in now.
+`import kaplay` imports kaypy, out of the same bundle the browser downloads,
+so a lesson that runs here is a lesson that runs in front of a class.
+
+A failure names the line in the markdown, not a line in a file that does not
+exist. A failure whose traceback never passes through the lesson or the engine
+is reported as **this test** being broken rather than the guide — which is not
+hypothetical: while it was being written, the harness read `eng.width` as a
+number when it is a method, and three perfectly good lessons were marked FAIL.
 
 ### Checking who gets what from the handout link
 

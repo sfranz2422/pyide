@@ -655,12 +655,13 @@
     await repaint();
 
     try {
-      /* ensureReady hands back a NEW canvas each time — the previous one is
-         dead once Kaplay has lost its WebGL context. Rebinding here is what
-         keeps focus() and the key handlers pointing at the live element. */
+      /* ensureReady hands back a NEW canvas each time, and points SDL at it.
+         Rebinding here is what keeps focus() and the key handlers on the live
+         element. The source goes along so it can fetch the sprites and sounds
+         this particular program names, and only those. */
       canvas = await window.PyIDEGame.ensureReady(pyodide, function (msg) {
         status(msg);
-      });
+      }, source);
       bindCanvas(canvas);
     } catch (e) {
       status("");
@@ -676,21 +677,29 @@
     canvas.focus();
 
     pushFilesToPython();
-    /* Kaplay owns the frame loop, so the student's program finishes almost
-       immediately and the game carries on without it — the opposite of the
-       Pygame Zero runner, whose loop was the program. So this does NOT clear
-       the running flag on success: the game is still up, Stop is still the
-       way out, and setBusy(false) happens in stopRun() or when a callback
-       raises. Only a failure to start unwinds here. */
     try {
-      await pyodide.runPythonAsync(
+      /* Two steps, because they fail differently. The first runs the program
+         top to bottom, the way `python game.py` does — kaplay() builds the
+         engine and everything after it registers handlers. An error there is
+         an error in the student's setup and stops the run.
+
+         The second awaits the frame loop, which is a Python coroutine now and
+         does not return until the game ends or Stop is pressed. That is the
+         opposite of the Kaplay days, when JavaScript owned the loop and this
+         returned in milliseconds while the game carried on — and it is
+         better: a game that ends by itself now puts the Run button back
+         without being told. */
+      var status_ = await pyodide.runPythonAsync(
         "_pyide_run_game(" + JSON.stringify(source) + ")"
       );
+      if (status_ === "ok") {
+        await pyodide.runPythonAsync("await _pyide_drive_game()");
+      }
     } catch (e) {
       write(String(e) + "\n", "err");
+    } finally {
       window.PyIDEGame.stop(pyodide);
       setBusy(false, "game");
-    } finally {
       pullFilesFromPython();
     }
   }
@@ -698,9 +707,13 @@
   function stopRun() {
     if (!running) return;
     if (runMode === "game") {
+      /* Ask, don't tear down. Stop clears the engine's `running` flag; the
+         loop notices on its next frame, returns, and the await in runGame
+         resolves — and ITS finally is what puts the toolbar back. Calling
+         setBusy here as well would be a second, earlier answer to the same
+         question, and the two would disagree for a frame. */
       window.PyIDEGame.stop(pyodide);
       write("\n— stopped —\n", "dim");
-      setBusy(false, "game");
       if (!window.PyIDENotes.isMarkdown(active)) editor.focus();
       return;
     }
@@ -1040,9 +1053,12 @@
     var source = mainSource();
 
     /* A game downloads as one playable .html file rather than as source.
-       main.py on its own needs Kaplay, the bridge, a canvas and a Python
-       interpreter to do anything, none of which a student has at home — so
-       what came back from Download was a file that could not be opened. */
+       main.py on its own needs the engine, a canvas and a Python interpreter
+       to do anything, none of which a student has at home — so what came back
+       from Download would be a file that could not be opened.
+
+       The .html carries all three. It also carries the program byte for byte,
+       so opening the file in an editor shows the student their own code. */
     if (currentMode(source) === "game") {
       var was = runLabel.textContent;
       runBtn.disabled = true;

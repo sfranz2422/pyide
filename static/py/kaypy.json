@@ -1,8 +1,8 @@
 {
- "version": "0.1.1",
- "commit": "f095d15",
+ "version": "0.3.0",
+ "commit": "4fa2a87",
  "source": "/sessions/clever-practical-dijkstra/mnt/kaypy",
- "vendored_at": "2026-09-21T16:30:55Z",
- "files": 26,
- "bytes": 92096
+ "vendored_at": "2026-09-21T19:37:56Z",
+ "files": 28,
+ "bytes": 119219
 }

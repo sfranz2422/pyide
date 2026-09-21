@@ -558,6 +558,26 @@
    }
   },
   {
+   "name": "dungeon_ogre",
+   "w": 32,
+   "h": 36,
+   "frames": 8,
+   "anims": {
+    "idle": {
+     "from": 0,
+     "to": 3,
+     "speed": 8,
+     "loop": true
+    },
+    "run": {
+     "from": 4,
+     "to": 7,
+     "speed": 10,
+     "loop": true
+    }
+   }
+  },
+  {
    "name": "dwarf_f",
    "w": 16,
    "h": 28,
@@ -987,26 +1007,6 @@
      "from": 0,
      "to": 3,
      "speed": 8,
-     "loop": true
-    }
-   }
-  },
-  {
-   "name": "ogre",
-   "w": 32,
-   "h": 36,
-   "frames": 8,
-   "anims": {
-    "idle": {
-     "from": 0,
-     "to": 3,
-     "speed": 8,
-     "loop": true
-    },
-    "run": {
-     "from": 4,
-     "to": 7,
-     "speed": 10,
      "loop": true
     }
    }

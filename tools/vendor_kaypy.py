@@ -48,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PYIDE = os.path.dirname(HERE)
 DEST = os.path.join(PYIDE, "static", "py", "kaplay")
 STAMP = os.path.join(PYIDE, "static", "py", "kaypy.json")
+BUNDLE = os.path.join(PYIDE, "static", "py", "kaplay_bundle.json")
 
 SKIP_DIRS = {"__pycache__", "starter"}
 
@@ -118,6 +119,19 @@ def main():
     files = copy_engine(src_pkg, DEST)
     total = sum(os.path.getsize(os.path.join(DEST, f)) for f in files)
 
+    # One file instead of twenty-eight. The browser writes the whole package
+    # into Pyodide's filesystem before a game runs, and twenty students all
+    # fetching twenty-eight files at 8:05 is twenty-eight times the round
+    # trips for no reason. The bundle is ~120 KB of JSON and caches like any
+    # other static asset.
+    bundle = {}
+    for rel in files:
+        with open(os.path.join(DEST, rel)) as fh:
+            bundle[rel.replace(os.sep, "/")] = fh.read()
+    with open(BUNDLE, "w") as f:
+        json.dump(bundle, f)
+        f.write("\n")
+
     stamp = {
         "version": version,
         "commit": read_commit(src),
@@ -133,6 +147,8 @@ def main():
     print("kaypy %s%s -> static/py/kaplay/"
           % (version, " (" + stamp["commit"] + ")" if stamp["commit"] else ""))
     print("  %d files, %.0f KB" % (len(files), total / 1024))
+    print("  bundled for the browser: static/py/kaplay_bundle.json (%.0f KB)"
+          % (os.path.getsize(BUNDLE) / 1024))
     print("  starter assets left behind on purpose; PyIDE serves its own")
 
     missing = [n for n in ("__init__.py", "engine.py") if n not in files]

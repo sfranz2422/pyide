@@ -132,7 +132,17 @@ def main():
     # coin in the same game would silently get whichever loaded second, and
     # would see a sprite that is simply the wrong picture with no error to
     # explain it. Renaming here, once, is cheaper than a lesson about it.
+    #
+    # The atlas is the third source of names and lands in the same namespace.
+    # `ogre` is in it and was in this pack too, so loading the pack's ogre and
+    # then the atlas — which is what Lesson 12 does — replaced an eight-frame
+    # ogre with a four-frame one, and `play("run")` stopped working with no
+    # error at the line that broke it. The atlas keeps its names, because they
+    # are the ones Kaplay's published example uses and the guide teaches; the
+    # pack gives way, the same as it does to the images pack.
     taken = {e["name"] for e in manifest.get("images", [])}
+    for atlas in manifest.get("atlases", []):
+        taken |= set(atlas.get("regions", {}))
 
     def unique(name):
         return "dungeon_" + name if name in taken else name

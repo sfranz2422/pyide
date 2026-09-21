@@ -6,6 +6,9 @@ only the language underneath (real, native Python, via pygame-ce) is new.
 from .vec2 import vec2, Vec2
 from .engine import Engine, current_engine, rand, randi, choose
 from .debugmod import debug
+from .easings import easings
+from .helpers import (time, destroy, destroyAll, isKeyDown, rgb, lerp,
+                      clamp, chance, wave, deg2rad, rad2deg)
 from .level import addLevel, Level
 from .kaboom import addKaboom
 
@@ -15,7 +18,8 @@ from .comps.sprite import sprite
 from .comps.shapes import rect, circle, text
 from .comps.area import area
 from .comps.body import body
-from .comps.transform import anchor, scale, color, opacity, outline, z, fixed
+from .comps.transform import (anchor, scale, rotate, color, opacity, outline,
+                              z, fixed)
 from .comps.state import state
 from .comps.move import move, offscreen, tile
 from .callutil import register_or_decorate
@@ -26,13 +30,15 @@ __all__ = [
     "setGravity", "setBackground",
     "add", "get", "addLevel", "addKaboom",
     "pos", "sprite", "rect", "circle", "text", "area", "body",
-    "anchor", "scale", "color", "opacity", "outline", "z", "fixed",
+    "anchor", "scale", "rotate", "color", "opacity", "outline", "z", "fixed",
     "move", "offscreen", "tile", "state",
     "onUpdate", "onKeyDown", "onKeyPress", "onKeyRelease", "onClick",
-    "wait", "loop",
+    "wait", "loop", "tween", "easings", "onCollide",
     "scene", "go",
-    "width", "height", "center", "dt", "vec2",
-    "rand", "randi", "choose",
+    "width", "height", "center", "dt", "vec2", "Vec2",
+    "rand", "randi", "choose", "chance", "lerp", "clamp", "wave",
+    "time", "destroy", "destroyAll", "isKeyDown", "rgb",
+    "deg2rad", "rad2deg",
     "mousePos", "toWorld",
     "setCamPos", "setCamScale", "shake",
     "play",
@@ -119,6 +125,50 @@ def wait(seconds, fn=None):
 
 def loop(seconds, fn=None):
     return register_or_decorate(fn, lambda f: current_engine().timers.loop(seconds, f))
+
+
+def onCollide(tag_a, tag_b, fn=None):
+    """Every time anything tagged `tag_a` touches anything tagged `tag_b`.
+
+        onCollide("bullet", "enemy", lambda b, e: (b.destroy(), e.destroy()))
+
+        @onCollide("player", "spike")
+        def hurt(player, spike):
+            go("gameover")
+
+    The object-free form of `obj.onCollide(tag, fn)`, for when the pair
+    matters and neither object is one you are holding — bullets and enemies
+    that both appear and vanish while the game runs. The handler is given
+    both objects, in the order the tags were named.
+
+    Registered against objects as they appear, so it covers ones created
+    later, which is the whole reason to prefer it over wiring each bullet up
+    as it is made.
+    """
+    from .callutil import register_or_decorate
+
+    def register(f):
+        current_engine().events.on_collide_tags(tag_a, tag_b, f)
+        return f
+
+    return register_or_decorate(fn, register)
+
+
+def tween(start, end, duration, setter, ease=None):
+    """Change a value smoothly over time.
+
+        tween(100, 600, 0.5, lambda x: setattr(box.pos, "x", x))
+        tween(1.0, 0.0, 1.0, fade).then(lambda: print("gone"))
+        tween(box.pos, target, 0.8, move_box, easings.easeOutBounce)
+
+    Works on numbers, on vec2 positions and on colour tuples. The fifth
+    argument is the shape of the motion — see `easings`; without one it moves
+    at a flat rate, which is the one motion that looks like nothing.
+
+    Not a decorator, unlike the events: the function it takes is a setter that
+    receives each value along the way, not a handler that runs once.
+    """
+    return current_engine().timers.tween(start, end, duration, setter, ease)
 
 
 # ---- scenes -----------------------------------------------------------------
