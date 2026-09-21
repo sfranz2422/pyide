@@ -986,6 +986,95 @@ def _require_teacher(db):
     return user, None
 
 
+# ---------------------------------------------------------------- kaypy
+# The game engine is vendored, not installed at runtime, because a class
+# arrives all at once: micropip.install("kaypy") would be 1.36 MB per student
+# per session, of which 92 KB is engine and 2.4 MB is a sound file the browser
+# never opens. See tools/vendor_kaypy.py.
+#
+# The cost of that choice is that a new release does not arrive on its own, so
+# this is the thing that notices. Once a day, from the server, and only while
+# the dashboard is actually being looked at: students never touch PyPI, and a
+# day when nobody opens the dashboard costs nothing at all.
+
+KAYPY_STAMP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "static", "py", "kaypy.json")
+PYPI_KAYPY = "https://pypi.org/pypi/kaypy/json"
+PYPI_CHECK_SECONDS = 24 * 60 * 60
+
+# (checked_at, latest_version_or_None). Module-level rather than a table: it is
+# a cache, it costs nothing to lose, and a restart simply asks again. Two
+# gunicorn workers means at most two requests a day, which is nobody's problem.
+_kaypy_pypi = [0.0, None]
+
+
+def _vendored_kaypy():
+    try:
+        with open(KAYPY_STAMP) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _version_tuple(text):
+    """Enough version parsing for '0.1.1' against '0.2.0'.
+
+    Deliberately not `packaging`: this compares two versions of one package,
+    both written by the same person in the same shape. Anything it cannot read
+    falls back to "different means newer", which errs toward telling you.
+    """
+    parts = []
+    for chunk in str(text).split("."):
+        digits = re.match(r"\d+", chunk)
+        if digits is None:
+            break
+        parts.append(int(digits.group()))
+    return tuple(parts)
+
+
+def _latest_kaypy():
+    """What PyPI says, at most once a day, and never at the cost of the page."""
+    import time
+
+    now = time.time()
+    if now - _kaypy_pypi[0] < PYPI_CHECK_SECONDS:
+        return _kaypy_pypi[1]
+
+    # Stamp the time before the request, not after: a PyPI that is down or slow
+    # must not mean trying again on every single dashboard load.
+    _kaypy_pypi[0] = now
+    try:
+        import requests
+        res = requests.get(PYPI_KAYPY, timeout=4)
+        if res.ok:
+            _kaypy_pypi[1] = res.json()["info"]["version"]
+    except Exception:
+        pass                       # no network, no PyPI, no matter
+    return _kaypy_pypi[1]
+
+
+def kaypy_status():
+    """What the dashboard shows about the engine PyIDE is serving."""
+    stamp = _vendored_kaypy()
+    here = stamp.get("version")
+    if not here:
+        return {"vendored": None,
+                "note": "No engine vendored yet — run tools/vendor_kaypy.py"}
+
+    latest = _latest_kaypy()
+    newer = bool(latest and latest != here and
+                 (_version_tuple(latest) > _version_tuple(here)
+                  or not _version_tuple(latest)))
+    return {
+        "vendored": here,
+        "commit": stamp.get("commit"),
+        "vendored_at": stamp.get("vendored_at", "")[:10],
+        "latest": latest,
+        "newer": newer,
+        "ahead": bool(latest and not newer and latest != here),
+    }
+
+
 @app.get("/teacher")
 def teacher_home():
     db = SessionLocal()
@@ -1007,7 +1096,7 @@ def teacher_home():
 
         ctx = user_context(db)
         ctx.update(assignments=live, archived=filed, counts=counts,
-                   show_archived=show_archived)
+                   show_archived=show_archived, kaypy=kaypy_status())
         return render_template("teacher.html", **ctx)
     finally:
         db.close()

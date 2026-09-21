@@ -76,6 +76,31 @@
       {% endif %}
     </section>
   {% endif %}
+
+  {#  The game engine PyIDE serves. It is vendored rather than installed in
+      each student's browser, so a new release does not arrive on its own —
+      this is the thing that notices. PyPI is asked at most once a day, from
+      the server, and only while this page is being looked at. #}
+  {% if kaypy %}
+    <section class="engine {{ 'engine-new' if kaypy.newer }}">
+      {% if kaypy.newer %}
+        <p><strong>kaypy {{ kaypy.latest }} is out.</strong>
+          PyIDE is serving {{ kaypy.vendored }}. Update with:</p>
+        <p><code>python3 tools/vendor_kaypy.py --from ~/kaypy</code>, then deploy.</p>
+      {% elif kaypy.vendored %}
+        <p>Game engine: <strong>kaypy {{ kaypy.vendored }}</strong>{%
+            if kaypy.commit %} ({{ kaypy.commit }}){% endif %}{%
+            if kaypy.vendored_at %}, vendored {{ kaypy.vendored_at }}{% endif %}.
+          {% if kaypy.ahead %}Ahead of PyPI, which has {{ kaypy.latest }}.
+          {% elif kaypy.latest %}Up to date with PyPI.
+          {% else %}PyPI could not be reached, so this may not be the newest.
+          {% endif %}
+        </p>
+      {% else %}
+        <p><strong>No game engine vendored.</strong> {{ kaypy.note }}</p>
+      {% endif %}
+    </section>
+  {% endif %}
 </main>
 
 <script>

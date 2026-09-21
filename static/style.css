@@ -1055,3 +1055,32 @@ body:not(.is-authoring) .notes-body a {
 }
 .center h1 { margin: 0; font-size: 22px; }
 .center p { margin: 0; color: var(--muted); max-width: 40ch; line-height: 1.6; }
+
+/* ------------------------------------------------- the engine PyIDE serves */
+/* Ordinarily a footnote — which version is vendored, and whether PyPI has a
+   newer one. It only raises its voice when there is something to do. */
+.engine {
+  margin-top: 36px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.engine p { margin: 0 0 4px; }
+.engine p:last-child { margin-bottom: 0; }
+.engine code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.engine-new {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 13.5px;
+}
