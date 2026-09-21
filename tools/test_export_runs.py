@@ -20,18 +20,17 @@ does.
 
 WHAT IS FAITHFUL HERE, AND WHAT IS NOT
 
-Faithful: the engine files, the asset bytes, the program text and the Python
-bootstrap all come out of a real export built by the real export.js. Nothing
-is re-derived. The two calls are the two calls.
+Faithful: the engine files, the asset bytes and the program text all come out
+of a real export built by the real export.js, which fills in kaypy's own page
+template. Nothing is re-derived. The two calls the page makes — kaypy's
+webrun.run() and webrun.drive() — are the two calls made here, out of the
+engine the page carried rather than out of this repo.
 
 Not faithful, and deliberately so:
 
-  * The page writes to /project and /lib. This cannot, so both are relocated
-    into a temporary directory. That the page uses those exact paths, and that
-    they are the ones the bootstrap chdirs into, is checked in test_export.mjs
-    — where it is a string comparison and needs no root.
-  * Pyodide's `js` module is stubbed. It exists in the bootstrap for input(),
-    which an exported game has no editor for.
+  * The page writes to /lib and /project. This cannot, so both are relocated
+    into a temporary directory. The page's own declarations are what say where
+    they go, so pointing the exporter elsewhere still fails here.
   * SDL is on its dummy driver, so this cannot tell you the game is visible.
     Only a browser can.
   * The two calls are made directly, so nothing here can see how the PAGE
@@ -49,7 +48,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import types
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -113,17 +111,16 @@ globalThis.fetch = async (url) => {
   try {
     const buf = readFileSync(ROOT + url);
     return { ok: true, text: async () => buf.toString("utf8"),
+             json: async () => JSON.parse(buf.toString("utf8")),
              arrayBuffer: async () =>
                buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) };
   } catch { return { ok: false, text: async () => "",
+                     json: async () => ({}),
                      arrayBuffer: async () => new ArrayBuffer(0) }; }
 };
 globalThis.btoa = (s) => Buffer.from(s, "binary").toString("base64");
 globalThis.window = {};
 globalThis.document = { createElement: () => ({ style: {} }) };
-new Function("window","document","fetch",
-  readFileSync(ROOT + "/static/runtime.js","utf8"))
-  (globalThis.window, globalThis.document, globalThis.fetch);
 new Function("window","document","fetch","btoa",
   readFileSync(ROOT + "/static/export.js","utf8"))
   (globalThis.window, globalThis.document, globalThis.fetch, globalThis.btoa);
@@ -160,34 +157,41 @@ def declared(name):
 engine = declared("ENGINE")
 assets = declared("ASSETS")
 program = declared("PROGRAM")
-bootstrap = declared("BOOTSTRAP")
 
 check("it carries the whole engine", len(engine) > 20, "%d files" % len(engine))
+check("including kaypy's own runner, which the page calls", "webrun.py" in engine,
+      "no separate bootstrap any more — the page calls kaplay.webrun")
 check("it carries the assets the program names",
       sorted(assets) == ["images/bean.png", "sounds/ding.wav"], " ".join(sorted(assets)))
 check("it carries the program unchanged", program == GAME)
 
 # ------------------------------------------------- unpack it, as the page does
 root = work / "root"
-project = root / "project"        # where the bootstrap will chdir to
 
 # Where things go is read OUT OF THE PAGE, not decided here.
 #
 # An earlier version of this file wrote the assets into the project directory
-# because that is where they belong — which meant that pointing export.js at
-# some other directory changed nothing and every check still passed. A replay
-# that supplies the answer it is checking is not a replay. Both destinations
-# now come from the page's own source, so moving either one lands the files
-# somewhere the program does not look, and the game fails here the way it
-# would on a student's laptop.
-asset_dir = re.search(r"writeFile\(py, '(/[A-Za-z0-9_\-/]*)' \+ path", html)
-engine_dir = re.search(r"writeFile\(py, '(/[A-Za-z0-9_\-/]*)' \+ rel", html)
-check("the page says where it puts the assets", asset_dir is not None,
-      asset_dir.group(1) if asset_dir else "no writeFile for assets")
-check("and where it puts the engine", engine_dir is not None,
-      engine_dir.group(1) if engine_dir else "no writeFile for the engine")
-if not (asset_dir and engine_dir):
+# because that is where they belong — which meant that pointing the exporter
+# at some other directory changed nothing and every check still passed. A
+# replay that supplies the answer it is checking is not a replay. Both
+# destinations now come from the page's own source, so moving either one lands
+# the files somewhere the program does not look, and the game fails here the
+# way it would on a student's laptop.
+lib_decl = re.search(r'var LIB = "([^"]+)"', html)
+project_decl = re.search(r'var PROJECT = "([^"]+)"', html)
+check("the page says where the engine goes", lib_decl is not None,
+      lib_decl.group(1) if lib_decl else "no LIB in the page")
+check("and where it runs the program from", project_decl is not None,
+      project_decl.group(1) if project_decl else "no PROJECT in the page")
+if not (lib_decl and project_decl):
     done(1)
+
+# And that it really uses them for the writes, rather than declaring them and
+# then writing somewhere else.
+check("the engine is written under LIB",
+      'writeFile(py, LIB + "/kaplay/" + rel' in html)
+check("and the assets under PROJECT",
+      'writeFile(py, PROJECT + "/" + path' in html)
 
 
 def relocate(absolute):
@@ -195,84 +199,70 @@ def relocate(absolute):
     return root / absolute.strip("/")
 
 
+lib = relocate(lib_decl.group(1))
+project = relocate(project_decl.group(1))
+
 for rel, text in engine.items():
-    target = relocate(engine_dir.group(1)) / rel
+    target = lib / "kaplay" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
 
 import base64                                                  # noqa: E402
 for path, b64 in assets.items():
-    target = relocate(asset_dir.group(1)) / path
+    target = project / path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(base64.b64decode(b64))
 
-# kaplay/ is the package directory inside wherever the engine went; its parent
-# is what goes on sys.path.
-lib = relocate(engine_dir.group(1)).parent
-
 check("the engine unpacks to an importable package",
-      (relocate(engine_dir.group(1)) / "__init__.py").is_file())
-sprite = relocate(asset_dir.group(1)) / "images/bean.png"
-sound = relocate(asset_dir.group(1)) / "sounds/ding.wav"
+      (lib / "kaplay" / "__init__.py").is_file())
+sprite = project / "images/bean.png"
+sound = project / "sounds/ding.wav"
 check("a carried sprite is a real PNG on disk",
       sprite.read_bytes()[1:4] == b"PNG", "%d bytes" % sprite.stat().st_size)
 check("a carried sound is a real WAV on disk",
       sound.read_bytes()[:4] == b"RIFF", "%d bytes" % sound.stat().st_size)
 
 # ------------------------------------------------------------- run it, as well
-# The bootstrap owns one absolute path — the working directory it chdirs into
-# — and it becomes a path this process may write to. Everything else about the
-# bootstrap is untouched.
-relocated = bootstrap.replace("PROJECT_DIR = '/project'",
-                              "PROJECT_DIR = %r" % str(project))
-check("the bootstrap's working directory was relocated",
-      relocated != bootstrap and str(project) in relocated,
-      "" if relocated != bootstrap else "PROJECT_DIR is no longer spelled that way")
-
-# The engine's directory is not the bootstrap's doing: the page puts it on
-# sys.path itself, right after writing the files. Replayed here rather than
-# assumed, so that dropping that line from export.js fails this test.
-put_on_path = re.search(r"sys\.path\.insert\(0, '(/lib)'\)", html)
-check("the page puts the engine's directory on sys.path", put_on_path is not None)
-check("and writes the engine into that same directory",
-      put_on_path is not None and ("'%s/kaplay/' + rel" % put_on_path.group(1)) in html)
-if put_on_path:
-    sys.path.insert(0, str(lib))
-
-# Pyodide's js module, which the bootstrap imports for input().
-js = types.ModuleType("js")
-js.window = types.SimpleNamespace(__pyide_inline=False, prompt=lambda *a: "")
-sys.modules["js"] = js
+# The page puts the engine on sys.path and changes into the project directory
+# before it runs anything. Both are replayed, and both are checked against the
+# page rather than assumed — a page that stopped doing either would leave a
+# game that cannot import its engine or cannot find its sprites, and this
+# would go on passing.
+check("the page puts the engine's directory on sys.path",
+      "sys.path.insert(0, " in html and "LIB" in html)
+check("and changes into the directory the assets went to",
+      "os.chdir(" in html, "so relative paths in the program resolve")
 
 os.environ["KAYPY_TEST_MAX_FRAMES"] = "30"
+sys.path.insert(0, str(lib))
+os.chdir(project)
 
-scope = {"__name__": "__main__"}
 try:
-    exec(compile(relocated, "bootstrap", "exec"), scope)
-    booted, why = True, ""
+    from kaplay import webrun
+    import kaplay.engine as ke
+    imported, why = True, ""
 except Exception as exc:
-    booted, why = False, "%s: %s" % (type(exc).__name__, exc)
-check("the carried bootstrap runs", booted, why)
-if not booted:
+    imported, why = False, "%s: %s" % (type(exc).__name__, exc)
+check("the engine the page carries imports on its own", imported, why)
+if not imported:
     done(1)
 
-check("and defines the two calls the page makes",
-      callable(scope.get("_pyide_run_game")) and callable(scope.get("_pyide_drive_game")))
+check("and it is the copy out of the page, not this repo's",
+      pathlib.Path(webrun.__file__).is_relative_to(root),
+      pathlib.Path(webrun.__file__).parent.parent.name)
 
-status = scope["_pyide_run_game"](program)
+status = webrun.run(program)
 check("the program's top level runs, on the carried engine", status == "ok",
       "status %r" % status)
 
 if status == "ok":
-    loop_status = asyncio.run(scope["_pyide_drive_game"]())
+    loop_status = asyncio.run(webrun.drive())
     check("and the frame loop runs and ends", loop_status == "ok",
           "status %r" % loop_status)
 
     # What the game itself recorded. This is the part that says the assets
     # were found: a sprite that failed to load raises before any of it.
-    import kaplay.engine as ke
-    main = sys.modules.get("__main__")
-    seen = getattr(main, "seen", None)
+    seen = getattr(sys.modules.get("__main__"), "seen", None)
     check("the game's own update handler ran", seen and "frame" in seen,
           "%d frames" % (seen.count("frame") if seen else 0))
     check("its collision fired, so the sprites really loaded",
@@ -286,23 +276,22 @@ if status == "ok":
 # A program naming a sprite that was never carried must fail the way it would
 # anywhere else — by name — rather than drawing nothing and saying nothing.
 missing = GAME.replace("images/bean.png", "images/not_a_sprite.png")
-ke_mod = sys.modules.get("kaplay.engine")
-if ke_mod is not None:
-    ke_mod._engine = None
+if ke._engine is not None:
+    ke._engine = None
 import io                                                       # noqa: E402
 err = io.StringIO()
 real_stderr, sys.stderr = sys.stderr, err
 try:
-    bad_status = scope["_pyide_run_game"](missing)
+    bad_status = webrun.run(missing)
 finally:
     sys.stderr = real_stderr
 check("a sprite that was not carried fails loudly, by name",
       bad_status == "error" and "not_a_sprite.png" in err.getvalue(),
       err.getvalue().strip().splitlines()[-1][:60] if err.getvalue() else "silent")
-if ke_mod is not None and ke_mod._engine is not None:
-    ke_mod._engine._started = True
-    ke_mod._engine._running = False
-    ke_mod._engine = None
+if ke._engine is not None:
+    ke._engine._started = True
+    ke._engine._running = False
+    ke._engine = None
 
 shutil.rmtree(work, ignore_errors=True)
 done()

@@ -3,26 +3,26 @@
  *     node tools/test_export.mjs
  *
  * export.js runs in a page and uses fetch(), so this supplies a fetch that
- * reads from static/ instead. Everything else is the real module, including
- * the real engine bundle and the real Python bootstrap out of runtime.js.
+ * reads from static/ instead. Everything else is the real module, filling in
+ * the real page template out of the real engine bundle.
  *
- * WHAT THIS CAN CHECK
+ * WHAT THIS CHECKS
  *
  * That the file is one self-contained document, that it carries the engine,
  * the program and exactly the assets the program names, that nothing inside a
  * <script> block can end the block early, and that what it writes into
  * Pyodide's filesystem lines up with what the program will look for.
  *
- * That last one is the point of most of this file. An exported game is the one
- * thing here that nobody watches fail: it is downloaded, taken home, and
- * opened on a machine with no console open and nobody to ask. A path written
- * to /project/images/bean.png while the program looks for a file in some other
- * directory is a blank screen with no error at all.
+ * And that the page is kaypy's rather than this repo's — because the moment
+ * PyIDE starts writing its own HTML again, a game downloaded from school and
+ * a game built at home with `kaypy web` stop being the same thing, and the
+ * difference shows up as "it works in class but not on my laptop".
  *
  * WHAT IT CANNOT
  *
- * Whether the exported page actually plays. That needs a browser, Pyodide and
- * pygame-ce from a CDN, and a pair of eyes.
+ * Whether the exported page plays. That needs a browser, Pyodide and
+ * pygame-ce from a CDN, and a pair of eyes. tools/test_export_runs.py takes
+ * the page apart and runs what is inside it, which is as close as this gets.
  */
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -45,34 +45,36 @@ globalThis.fetch = async (url) => {
     return {
       ok: true,
       text: async () => buf.toString("utf8"),
+      json: async () => JSON.parse(buf.toString("utf8")),
       arrayBuffer: async () =>
         buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length),
     };
   } catch {
-    return { ok: false, text: async () => "", arrayBuffer: async () => new ArrayBuffer(0) };
+    return { ok: false, text: async () => "", json: async () => ({}),
+             arrayBuffer: async () => new ArrayBuffer(0) };
   }
 };
 globalThis.btoa = (s) => Buffer.from(s, "binary").toString("base64");
-globalThis.atob = (s) => Buffer.from(s, "base64").toString("binary");
 globalThis.window = {};
 globalThis.document = { createElement: () => ({ style: {} }) };
 
-// runtime.js first: the export carries its Python bootstrap inside it.
-new Function("window", "document", "fetch",
-             readFileSync(join(ROOT, "static", "runtime.js"), "utf8"))
-  (globalThis.window, globalThis.document, globalThis.fetch);
 new Function("window", "document", "fetch", "btoa",
              readFileSync(join(ROOT, "static", "export.js"), "utf8"))
   (globalThis.window, globalThis.document, globalThis.fetch, globalThis.btoa);
 
 const X = globalThis.window.PyIDEExport;
 check("export.js loaded", !!X && typeof X.buildGamePage === "function");
-check("and found runtime.js's bootstrap to carry",
-      !!(globalThis.window.PyIDERuntime || {}).BOOTSTRAP);
+
+const bundle = JSON.parse(
+  readFileSync(join(ROOT, "static", "py", "kaplay_bundle.json"), "utf8"));
+check("the vendored engine carries kaypy's page template",
+      typeof bundle["web_page.html"] === "string",
+      "run tools/vendor_kaypy.py if this fails");
+check("and the runner the page calls", typeof bundle["webrun.py"] === "string");
 
 const GAME = `from kaplay import *
 
-kaplay(width=800, height=600, background=[24, 24, 40])
+kaplay(width=640, height=480, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
 loadSprite("ghosty", "images/ghosty.png")
 loadSound("ding", "sounds/ding.wav")
@@ -98,8 +100,7 @@ check("it finds only the assets the program names",
       X.referencedAssets(GAME).join(" "));
 
 const DUNGEON = `loadSprite("dwarf_f", "dungeon/dwarf_f.png",
-            sliceX=9, anims={"idle": {"from": 0, "to": 3}})
-add([sprite("dwarf_f", anim="idle"), pos(100, 100)])`;
+            sliceX=9, anims={"idle": {"from": 0, "to": 3}})`;
 check("it finds dungeon sprites too",
       JSON.stringify(X.referencedAssets(DUNGEON)) === '["dungeon/dwarf_f.png"]',
       X.referencedAssets(DUNGEON).join(" "));
@@ -108,9 +109,7 @@ check("it finds dungeon sprites too",
    the one asset path in the whole editor that looks like nothing in
    particular. Missed by the exporter, a downloaded game would look for a file
    that was never carried. */
-const ATLAS = `loadSpriteAtlas("dungeon.png", {
-    "wall": {"x": 16, "y": 16, "width": 16, "height": 16},
-})`;
+const ATLAS = `loadSpriteAtlas("dungeon.png", {"wall": {"x": 16, "y": 16}})`;
 check("it finds a sprite atlas loaded by bare filename",
       JSON.stringify(X.referencedAssets(ATLAS)) === '["dungeon.png"]',
       X.referencedAssets(ATLAS).join(" "));
@@ -118,35 +117,35 @@ check("it finds a sprite atlas loaded by bare filename",
 /* The editor and the exporter must agree about what an asset path looks like.
    If they drift, a game works on Run and not after Download — found by the
    student, at home, with nobody to ask. */
-const patternIn = (file) => {
-  const src = readFileSync(join(ROOT, "static", file), "utf8");
-  return /var ASSET_RE =\s*(\/[\s\S]+?\/g);/.exec(src)[1];
-};
+const patternIn = (file) =>
+  /var ASSET_RE =\s*(\/[\s\S]+?\/g);/.exec(
+    readFileSync(join(ROOT, "static", file), "utf8"))[1];
 check("the editor and the exporter look for the same paths",
       patternIn("game.js") === patternIn("export.js"),
       patternIn("game.js") === patternIn("export.js") ? "" : "they have drifted");
+
+// --------------------------------------------------------- the canvas size
+check("it reads the size out of kaplay()",
+      JSON.stringify(X.canvasSize(GAME)) === '{"width":640,"height":480}',
+      JSON.stringify(X.canvasSize(GAME)));
+check("and falls back to kaypy's own default when it cannot",
+      JSON.stringify(X.canvasSize("from kaplay import *\nkaplay()\n")) ===
+      '{"width":800,"height":600}');
 
 // ------------------------------------------------------------ the document
 const html = await X.buildGamePage(GAME, "Bean Jump");
 console.log("\n  exported size: %s KB\n", (html.length / 1024).toFixed(0));
 
-/* Each `var NAME = ...;` the page declares is written on its own line, so the
-   value is read back by line rather than by a regex across the document — a
-   pattern like /var ENGINE = (\{[\s\S]*?\});/ runs straight past the end of
+/* Each `var NAME = ...;` is written on its own line, so the value is read
+   back by line — a regex across the document runs straight past the end of
    the object, because the engine's own source contains "};" inside strings. */
 const declared = (name) => {
   const line = html.split("\n").find((l) => l.startsWith("var " + name + " = "));
   if (!line) throw new Error("the export declares no " + name);
-  if (!line.endsWith(";")) {
-    // The value ran onto the next line, which is how the engine bundle's
-    // trailing newline first showed up here.
-    throw new Error("var " + name + " is not one line ending in ';'");
-  }
-  const text = line.slice(("var " + name + " = ").length, -1);
+  if (!line.endsWith(";")) throw new Error("var " + name + " is not one line");
   try {
-    return JSON.parse(text);
+    return JSON.parse(line.slice(("var " + name + " = ").length, -1));
   } catch (e) {
-    // Without this the whole 120 KB bundle lands in the terminal.
     throw new Error("var " + name + " is not valid JSON: " + e.message);
   }
 };
@@ -154,107 +153,97 @@ const declared = (name) => {
 check("it is one HTML document",
       html.startsWith("<!doctype html>") && html.trim().endsWith("</html>"));
 check("the title carries through", html.includes("<title>Bean Jump</title>"));
+check("the canvas starts at the size the program asked for",
+      html.includes('width="640" height="480"'));
 
-check("the kaypy engine is inlined", /var ENGINE = \{/.test(html));
-check("and it is the whole package, not a file or two",
-      Object.keys(declared("ENGINE")).length > 20,
-      Object.keys(declared("ENGINE")).length + " files");
-check("runtime.js's Python bootstrap is inlined", html.includes("var BOOTSTRAP = "));
-check("the program is inlined", html.includes("var PROGRAM = "));
+// ------------------------------------------- it is kaypy's page, not ours
+const template = bundle["web_page.html"];
+check("the page is kaypy's template, filled in",
+      html.includes("A kaypy game, as one file."),
+      "the comment at the top of web_page.html");
+check("export.js writes no HTML of its own",
+      !/["'`]<!doctype/i.test(readFileSync(join(ROOT, "static", "export.js"), "utf8")),
+      "no doctype anywhere in the module");
+/* The strongest form of it: everything outside the four filled slots should
+   be the template unchanged. */
+const stripped = html.split("\n")
+  .filter((l) => !/^var (ENGINE|ASSETS|PROGRAM) = /.test(l)).join("\n");
+const templateStripped = template.split("\n")
+  .filter((l) => !/^var (ENGINE|ASSETS|PROGRAM) = /.test(l)).join("\n")
+  .replace("__TITLE__", "Bean Jump")
+  .replace("__WIDTH__", "640").replace("__HEIGHT__", "480")
+  .replace(/__PYODIDE__/g, "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/");
+check("and changes nothing else about it", stripped === templateStripped,
+      stripped === templateStripped ? "" : "the page has drifted from the template");
 
-/* The old exporter had to rewrite every asset path into a data: URI, because
-   Kaplay fetched assets over HTTP. kaypy opens them as files, so the program
-   goes in untouched — which means the file a student opens contains the code
-   they wrote. */
+// ------------------------------------------------------------- the pieces
+const engine = declared("ENGINE");
+const assets = declared("ASSETS");
 const program = declared("PROGRAM");
+
+check("the engine is the whole package", Object.keys(engine).length > 20,
+      Object.keys(engine).length + " files");
+check("including the runner the page calls", "webrun.py" in engine);
+check("and only Python, like kaypy's own build",
+      Object.keys(engine).every((n) => n.endsWith(".py")),
+      Object.keys(engine).filter((n) => !n.endsWith(".py")).join(", ") || "");
+
+/* kaypy opens assets as files, so the program goes in untouched — which means
+   the file a student opens contains the code they wrote. */
 check("the student's program is carried unchanged", program === GAME);
 check("so it still names its sprites by path, not by data URI",
       program.includes('"images/bean.png"') && !program.includes("data:image"));
 
-// ------------------------------------------- the assets, and where they land
-const assets = declared("ASSETS");
 check("exactly the named assets are carried",
       JSON.stringify(Object.keys(assets).sort()) ===
       '["images/bean.png","images/ghosty.png","sounds/ding.wav"]',
       Object.keys(assets).join(" "));
 check("unused assets were NOT carried", !html.includes("images/watermelon.png"));
-check("they are carried as bytes, not as paths",
-      Object.values(assets).every((v) => /^[A-Za-z0-9+/=]+$/.test(v) && v.length > 100));
 check("a PNG decodes to a PNG",
       Buffer.from(assets["images/bean.png"], "base64").slice(1, 4).toString() === "PNG");
 check("a WAV decodes to a WAV",
       Buffer.from(assets["sounds/ding.wav"], "base64").slice(0, 4).toString() === "RIFF");
 
-/* The one that matters. The program says "images/bean.png"; the page must put
-   a file exactly there, relative to the directory the program is run from. */
-check("assets are written under the program's working directory",
-      html.includes("writeFile(py, '/project/' + path"),
-      "/project is what _pyide_run_game chdirs into");
-const bootstrapSrc = globalThis.window.PyIDERuntime.BOOTSTRAP;
-check("and that directory is the one the bootstrap actually uses",
-      bootstrapSrc.includes("PROJECT_DIR = '/project'"));
-check("the engine goes where the import will look for it",
-      html.includes("'/lib/kaplay/' + rel") && html.includes("sys.path.insert(0, '/lib')"));
+// -------------------------------- the self-referential replacement bug
+/* The engine carries kaypy's webbuild.py, whose source contains the literal
+   "__ASSETS__" — it is the module that defines the slots. Filling them one at
+   a time replaced that mention too, corrupting a Python string inside a JSON
+   string: the page looked plausible and the JSON no longer parsed. */
+check("the engine's own source survived being embedded",
+      (engine["webbuild.py"] || "").includes("__ASSETS__"),
+      "the slot names in webbuild.py are still the slot names");
+const elsewhere = html.split("\n")
+  .filter((l) => !l.startsWith("var ENGINE = ")).join("\n");
+check("and no slot was left unfilled",
+      !/__(TITLE|WIDTH|HEIGHT|PYODIDE|ENGINE|ASSETS|PROGRAM)__/.test(elsewhere));
 
-// ------------------------------------------------------------ running it
-/* Against the CALL, not the name: the inlined bootstrap mentions
-   _pyide_run_game in its own source, hundreds of lines before the boot code,
-   so looking for the name alone answers a different question than it appears
-   to and answers it wrongly. */
-check("pygame-ce is loaded before anything needs it",
-      html.indexOf("loadPackage('pygame-ce')")
-      < html.indexOf("_pyide_run_game(_pyide_source)"));
-check("the canvas has the id SDL insists on", /<canvas[^>]+id="canvas"/.test(html));
-check("and is handed over with setCanvas2D", html.includes("py.canvas.setCanvas2D(canvas)"));
-check("the unwind guard is set, or SDL's loop is fatal",
-      html.includes("_skip_unwind_fatal_error"));
-check("the setup and the frame loop are run separately",
-      html.includes("_pyide_run_game(_pyide_source)") &&
-      html.includes("await _pyide_drive_game()"));
-check("the loop is awaited, not fired and forgotten",
-      /await py\.runPythonAsync\('await _pyide_drive_game\(\)'\)/.test(html));
-check("the frame loop only runs if the setup succeeded",
-      /status === 'ok'[\s\S]{0,120}_pyide_drive_game/.test(html));
-
-// -------------------------------------------------------- showing failures
-check("it shows errors rather than failing silently", html.includes('id="error"'));
-check("a later error still reaches the screen",
-      html.includes("py.setStderr") && /setStderr[\s\S]{0,120}fail\(/.test(html));
-check("errors accumulate rather than replacing each other",
-      html.includes("errorEl.textContent += message"));
-check("print() from a game has somewhere to go",
-      html.includes("py.setStdout") && html.includes('id="log"'));
-/* The bootstrap's input() asks the page for an inline input line. There is no
-   editor in an exported game, and reading a property that was never defined
-   would raise inside Python rather than fall back to prompt(). */
-check("input() falls back to prompt rather than raising",
-      html.includes("window.__pyide_inline = false"));
-
-// ------------------------------------------------- nothing left to fetch
+// --------------------------------------------------- nothing left to fetch
 const externalSrc = [...html.matchAll(/src="(https?:[^"]+)"/g)].map((m) => m[1]);
 check("the only external reference is Pyodide",
       externalSrc.length === 1 && externalSrc[0].includes("pyodide"),
       externalSrc.join(", ") || "none");
 check("every external script is HTTPS",
-      externalSrc.every((u) => u.startsWith("https://")), externalSrc.join(", "));
+      externalSrc.every((u) => u.startsWith("https://")));
 check("no asset is left as a relative URL to fetch",
       !/src="(?!https?:)[^"]*\.(png|wav)"/.test(html));
 
-/* What matters is that nothing inside a block can END the block: the HTML
-   parser stops at the first "</script", string literal or not. Counting
-   "<script" is meaningless because the inlined content may contain one. */
 const closers = (html.match(/<\/script>/g) || []).length;
 check("exactly two script blocks are closed", closers === 2, closers + " closers");
+/* The property, not a hand-escaped literal of it — counting backslashes in a
+   test that exists because of backslashes is how you get a passing test of
+   the wrong thing. What matters is only this: what comes out can never
+   contain the sequence that ends a script block. */
+const escaped = X.js("var s = '<\/script>'; // <\/SCRIPT");
 check("nothing inlined can end a block early",
-      X.safeInline("var s = '<\/script>';") === "var s = '<\\/script>';");
+      !/<\/script/i.test(escaped) && escaped.includes("<\\/script"),
+      escaped);
 const inlineStart = html.indexOf("<script>") + "<script>".length;
 check("and the real inlined content does not contain one",
       !html.slice(inlineStart, html.indexOf("<\/script>", inlineStart)).includes("<\/script"));
 
 // ------------------------------------------------- nothing from the old one
-/* The JavaScript engine and its Python bridge are still on disk, because this
-   exporter was the last thing using them. Nothing may reach for them again. */
-for (const dead of ["kaplay.js", "__pyideCanvas", "__pyideAssetRoot", "var BRIDGE"]) {
+for (const dead of ["kaplay.js", "__pyideCanvas", "__pyideAssetRoot",
+                    "var BRIDGE", "var BOOTSTRAP"]) {
   check("no trace of the old exporter: " + dead, !html.includes(dead));
 }
 

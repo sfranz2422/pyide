@@ -892,7 +892,8 @@ static/
   game.js               kaypy: loads pygame-ce, unpacks the engine, the canvas,
                         the assets, and the keyboard
   export.js             Exports a game as one self-contained playable .html
-  py/kaplay/            The vendored kaypy engine (generated)
+  py/kaplay/            The vendored kaypy engine (generated), including
+                        web_page.html — the page Download fills in
   py/kaplay_bundle.json The same thing as one file, which is what the browser
                         downloads (generated)
   py/kaypy.json         Which kaypy version is vendored, and from where
@@ -966,9 +967,22 @@ the reason for holding it.
 
 A game downloads as **one `.html` file**. Double-click it and it plays — no
 Python installed, no server started, nothing unzipped. Inside are the student's
-program, the kaypy engine, the shared Python bootstrap out of `runtime.js`, and
-every sprite and sound the program actually loads; only Pyodide and pygame-ce
-come from a CDN.
+program, the kaypy engine, and every sprite and sound the program actually
+loads; only Pyodide and pygame-ce come from a CDN.
+
+**The page is kaypy's, not this repo's.** `export.js` writes no HTML at all: it
+fills in `web_page.html`, carried in the vendored engine bundle — the same
+template, byte for byte, that `kaypy web game.py` fills in on a desktop. So a
+student can write a game here, download it, and later `pip install kaypy` and
+build the same game at home, and get the same page: same boot sequence, same
+error reporting, same everything.
+
+That is worth the indirection because two exporters that merely agreed today
+would drift apart by Christmas — one would gain a fix the other never heard
+about, and the difference would surface as "it works in school but not on my
+laptop", which is the worst bug report a fourteen-year-old can be asked to
+write. `tools/test_same_as_kaypy.py` builds one game both ways and compares
+the results line by line.
 
 **The program goes in unchanged**, and that is the one real difference from the
 JavaScript exporter this replaced. That one had to find every asset path in the
@@ -1036,9 +1050,16 @@ able to end it early. Forty-four checks.
 `test_export_runs.py` takes the same built page apart and **runs what is inside
 it**: the engine it carries is unpacked and imported, the assets it carries are
 written where the page says it writes them, and the program is run by the same
-two calls — on real pygame-ce, against real sprite and sound files. It ends by
-checking that a sprite which was *not* carried fails loudly and by name, rather
-than leaving a blank screen.
+two calls — kaypy's own `webrun.run()` and `webrun.drive()`, out of the engine
+the page carried rather than out of this repo, on real pygame-ce against real
+sprite and sound files. It ends by checking that a sprite which was *not*
+carried fails loudly and by name, rather than leaving a blank screen.
+
+`test_same_as_kaypy.py` builds the same game with both exporters and compares
+them. Everything except the three values that are the game itself — the
+engine, the assets and the program — must match exactly, and does: the pages
+come out byte-identical. It skips rather than fails when there is no kaypy
+checkout to compare against.
 
 The split is deliberate and each half has a hole the other fills. Move the
 assets one directory away and both fail. Delete the `await` in front of the

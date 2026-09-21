@@ -1,65 +1,48 @@
 /* PyIDE — export a game as one playable HTML file.
  *
- * Downloading main.py alone is honest but useless: the file needs an engine,
- * a canvas and a Python interpreter, none of which a student has at home. So a
+ * Downloading main.py alone is honest but useless: the file needs an engine, a
+ * canvas and a Python interpreter, none of which a student has at home. So a
  * game downloads as a single .html file that already contains all of it.
  * Double-click it and the game plays. Nothing to install, no server to start,
  * no Python on the machine.
  *
+ * THE PAGE IS kaypy's, NOT THIS FILE'S
+ *
+ * This module does not write HTML. It fills in kaypy's own page template —
+ * `web_page.html`, carried in the engine bundle — with this game's engine,
+ * assets and program. That is the same template, byte for byte, that
+ * `kaypy web game.py` fills in on a desktop.
+ *
+ * Which is the point. A student can write a game here, download it, and later
+ * `pip install kaypy` and build the same game at home, and get the same page:
+ * same boot sequence, same error reporting, same everything. Two exporters
+ * that merely agreed today would drift apart by Christmas — one would gain a
+ * fix the other never heard about, and the difference would surface as "it
+ * works in school but not on my laptop", which is the worst bug report a
+ * fourteen-year-old can be asked to write.
+ *
+ * So the only thing here that is PyIDE's own is where the pieces come from:
+ * the engine out of the vendored bundle, the assets off this server, the
+ * program out of the editor. The page is kaypy's.
+ *
  * WHAT GOES INSIDE
  *
  *   - the student's own program, byte for byte
- *   - the kaypy engine, out of the same bundle the editor uses
+ *   - the kaypy engine, out of the same bundle the editor runs
  *   - every sprite and sound the program actually loads, base64'd
- *   - the shared Python bootstrap from runtime.js
  *   - a loader for Pyodide, from a CDN
  *
  * Only the assets the program mentions are carried. The two packs and the
  * sounds come to about 5 MB together, so shipping the lot would turn a small
  * game into a large download for no reason.
- *
- * THE STUDENT'S PROGRAM IS NOT REWRITTEN
- *
- * This is the one real difference from the old JavaScript exporter, and it is
- * worth stating plainly. That one had to find every asset path in the source
- * and replace it with a `data:` URI, because Kaplay fetched assets over HTTP
- * and a file:// page cannot fetch anything. So the program inside a downloaded
- * game was not quite the program the student wrote — a detail that does not
- * matter until someone opens the file to see their own code.
- *
- * kaypy opens assets as ordinary files: `pygame.image.load("images/bean.png")`.
- * So the fix is to put the file where the program says it is. The assets are
- * decoded into Pyodide's filesystem under the game's working directory before
- * the program runs, at exactly the paths it names, and `loadSprite("bean",
- * "images/bean.png")` means the same thing in an exported game as it does in
- * the editor, on a desktop, and in the guide. Nothing is rewritten.
- *
- * WHY ONE FILE AND NOT A FOLDER
- *
- * A folder of files opened from disk is a `file://` page, and browsers refuse
- * to fetch anything next to it. A zip would therefore need a local web server
- * to be any use, which is exactly the obstacle this is meant to remove.
- * Everything inlined into one document has nothing left to fetch, so `file://`
- * stops mattering.
- *
- * WHAT IT STILL NEEDS
- *
- * Pyodide and pygame-ce come from a CDN on first load, so the first run of an
- * exported game wants an internet connection and takes several seconds while
- * Python starts. The browser caches both afterwards. Embedding them would make
- * every exported game tens of megabytes, which is fine for one showcase and
- * absurd for a class set.
- *
- * pygame-ce in particular cannot be embedded another way even in principle: it
- * is a compiled C extension, so it has to be Pyodide's own build of it.
  */
 
 window.PyIDEExport = (function () {
   "use strict";
 
-  var PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/";
   var BUNDLE = "/static/py/kaplay_bundle.json";
   var ASSET_ROOT = "/static/assets/";
+  var TEMPLATE = "web_page.html";      // kaypy's page, inside the bundle
 
   /* Asset paths as they appear in a student's program: the shapes the Sprites
      panel inserts, quoted either way round. `dungeon/` is the 0x72 pack, whose
@@ -101,28 +84,15 @@ window.PyIDEExport = (function () {
     return toBase64(new Uint8Array(await res.arrayBuffer()));
   }
 
-  async function text(url) {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error("Could not read " + url);
-    return res.text();
-  }
-
-  /* A string safe to drop inside a <script> block. JSON.stringify leaves "</"
-     alone, and a program containing it would otherwise close the tag early and
-     spill the rest of the game into the page as markup. */
+  /* A JavaScript literal that cannot end the <script> block it sits in.
+     The HTML parser stops a script block at the first "</script", wherever it
+     appears — inside a string literal, inside a comment, anywhere. It does not
+     know it is reading JavaScript. "<\/" is identical to "</" in JavaScript
+     and invisible to the parser, so escaping costs nothing and removes a whole
+     class of failure: a game whose engine silently spills onto the page as
+     visible text. kaypy's builder does exactly this, in _js(). */
   function js(value) {
     return JSON.stringify(value).replace(/<\//g, "<\\/");
-  }
-
-  /* Inlining JavaScript into a <script> block is safe only while that code
-     contains no "</script" — the HTML parser ends the block at the first one,
-     wherever it appears, including inside a string. Inside real JavaScript
-     "</script" can only occur in a string or a regex, where the backslash is
-     harmless. Nothing inlined today contains one; relying on that staying true
-     is relying on luck, and the failure would be a game that silently spills
-     its engine onto the page as text. */
-  function safeInline(code) {
-    return code.replace(/<\/(script)/gi, "<\\/$1");
   }
 
   function escapeHtml(s) {
@@ -130,20 +100,20 @@ window.PyIDEExport = (function () {
                     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  /* The Python bootstrap, straight out of runtime.js.
-   *
-   * The same code the editor runs, so an exported game reports an error the
-   * way the editor reports it: the student's own frames, their own line
-   * numbers, `main.py` rather than `<exec>`. Writing a second, simpler version
-   * here would mean a game that downloads and then misreports the one thing a
-   * student most needs to read. It also hands over the two halves of a run —
-   * _pyide_run_game for the top level, _pyide_drive_game for the frame loop —
-   * already written. */
-  function bootstrap() {
-    if (!window.PyIDERuntime || !window.PyIDERuntime.BOOTSTRAP) {
-      throw new Error("runtime.js has not loaded; cannot build an export.");
-    }
-    return window.PyIDERuntime.BOOTSTRAP;
+  /* The size the program asks kaplay() for, so the canvas starts right rather
+     than resizing visibly on the first frame. kaypy reads this off the syntax
+     tree; there is no Python parser here, so it is a pattern — and anything it
+     cannot read falls back to kaypy's own default, which is what the engine
+     would have used anyway. */
+  function canvasSize(source) {
+    var size = { width: 800, height: 600 };
+    var call = /\bkaplay\s*\(([^)]*)\)/.exec(source);
+    if (!call) return size;
+    ["width", "height"].forEach(function (name) {
+      var m = new RegExp(name + "\\s*=\\s*(\\d+)").exec(call[1]);
+      if (m) size[name] = parseInt(m[1], 10);
+    });
+    return size;
   }
 
   async function buildGamePage(source, title, onProgress) {
@@ -163,143 +133,59 @@ window.PyIDEExport = (function () {
     }
 
     say("Packing the game engine…");
-    // Already JSON, so it is embedded as text rather than parsed and
-    // re-serialised. trim() because the file ends with a newline, which would
-    // otherwise put the closing `;` on a line of its own — harmless to run and
-    // a nuisance to read back.
-    var engine = (await text(BUNDLE)).trim();
-    JSON.parse(engine);                     // fail here, not in the download
+    var res = await fetch(BUNDLE);
+    if (!res.ok) throw new Error("Could not load the game engine.");
+    var bundle = await res.json();
 
-    var safeTitle = escapeHtml(title || "Game");
+    var template = bundle[TEMPLATE];
+    if (!template) {
+      throw new Error("The engine bundle has no " + TEMPLATE + " — it was "
+                      + "vendored from a kaypy too old to carry its own page. "
+                      + "Run tools/vendor_kaypy.py again.");
+    }
 
-    return [
-      "<!doctype html>",
-      '<html lang="en">',
-      "<head>",
-      '<meta charset="utf-8">',
-      '<meta name="viewport" content="width=device-width, initial-scale=1">',
-      "<title>" + safeTitle + "</title>",
-      "<style>",
-      "  html, body { margin: 0; height: 100%; background: #12121a;",
-      "               color: #e8e8f0; font: 15px/1.5 system-ui, sans-serif; }",
-      "  body { display: flex; align-items: center; justify-content: center; }",
-      "  #wrap { text-align: center; }",
-      "  canvas { max-width: 100vw; max-height: 100vh; background: #000;",
-      "           border-radius: 6px; image-rendering: pixelated; }",
-      "  #status { padding: 24px; }",
-      "  #error, #log { white-space: pre-wrap; text-align: left;",
-      "           font: 13px/1.5 ui-monospace, monospace;",
-      "           padding: 16px; border-radius: 6px;",
-      "           max-width: 90vw; max-height: 40vh; overflow: auto; }",
-      "  #error { display: none; color: #ffb4b4; background: #1c1420; }",
-      "  #log { display: none; color: #cfe3ff; background: #141a22; }",
-      "</style>",
-      "</head>",
-      "<body>",
-      '<div id="wrap">',
-      '  <div id="status">Starting Python… (a few seconds the first time)</div>',
-      // The id must be exactly "canvas": Pyodide's SDL support looks the
-      // element up by that name, and pygame.display.set_mode() inside
-      // kaplay() fails without it.
-      '  <canvas id="canvas" width="800" height="600" hidden></canvas>',
-      '  <pre id="error"></pre>',
-      '  <pre id="log"></pre>',
-      "</div>",
-      "",
-      '<script src="' + PYODIDE + 'pyodide.js"><\/script>',
-      "<script>",
-      "var ENGINE = " + safeInline(engine) + ";",
-      "var ASSETS = " + js(assets) + ";",
-      "var PROGRAM = " + js(source) + ";",
-      "var BOOTSTRAP = " + js(bootstrap()) + ";",
-      "",
-      "var statusEl = document.getElementById('status');",
-      "var errorEl = document.getElementById('error');",
-      "var logEl = document.getElementById('log');",
-      "var canvas = document.getElementById('canvas');",
-      "",
-      "function fail(message) {",
-      "  statusEl.hidden = true;",
-      "  errorEl.style.display = 'block';",
-      "  errorEl.textContent += message;",
-      "}",
-      "",
-      "function note(message) {",
-      "  logEl.style.display = 'block';",
-      "  logEl.textContent += message;",
-      "}",
-      "",
-      "// The bootstrap's input() asks the page whether there is an inline",
-      "// input line to read from. There is no editor here, so there is not,",
-      "// and it falls back to the browser's own prompt().",
-      "window.__pyide_inline = false;",
-      "",
-      "function writeFile(py, path, bytes) {",
-      "  var dir = path.slice(0, path.lastIndexOf('/'));",
-      "  py.FS.mkdirTree(dir);",
-      "  py.FS.writeFile(path, bytes);",
-      "}",
-      "",
-      "function decode(b64) {",
-      "  var binary = atob(b64);",
-      "  var out = new Uint8Array(binary.length);",
-      "  for (var i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);",
-      "  return out;",
-      "}",
-      "",
-      "(async function () {",
-      "  try {",
-      "    var py = await loadPyodide({ indexURL: " + js(PYODIDE) + " });",
-      "",
-      "    // Errors inside a callback happen long after the program has",
-      "    // finished running, so this shows whatever arrives whenever it",
-      "    // arrives rather than checking once and never looking again.",
-      "    py.setStderr({ batched: function (s) { fail(s + '\\n'); } });",
-      "    py.setStdout({ batched: function (s) { note(s + '\\n'); } });",
-      "",
-      "    statusEl.textContent = 'Loading the game engine…';",
-      "    await py.loadPackage('pygame-ce');",
-      "",
-      "    statusEl.textContent = 'Unpacking…';",
-      "    Object.keys(ENGINE).forEach(function (rel) {",
-      "      writeFile(py, '/lib/kaplay/' + rel, ENGINE[rel]);",
-      "    });",
-      "    py.runPython(BOOTSTRAP);",
-      "    py.runPython(\"import sys\\nif '/lib' not in sys.path:\\n\" +",
-      "                 \"    sys.path.insert(0, '/lib')\");",
-      "",
-      "    // The assets go in at the paths the program names, under the same",
-      "    // working directory _pyide_run_game chdirs into. Nothing in the",
-      "    // program is rewritten.",
-      "    Object.keys(ASSETS).forEach(function (path) {",
-      "      writeFile(py, '/project/' + path, decode(ASSETS[path]));",
-      "    });",
-      "",
-      "    // Pyodide's own opt-in for SDL: without it, a main loop that hands",
-      "    // control back to the browser is treated as a fatal unwind.",
-      "    try { py._api._skip_unwind_fatal_error = true; } catch (e) {}",
-      "    if (py.canvas && py.canvas.setCanvas2D) py.canvas.setCanvas2D(canvas);",
-      "",
-      "    canvas.hidden = false;",
-      "    statusEl.hidden = true;",
-      "",
-      "    // Two steps, the same two the editor runs. An error in the setup is",
-      "    // then reported as an error in the setup, rather than arriving",
-      "    // tangled up in whatever the frame loop was doing.",
-      "    py.globals.set('_pyide_source', PROGRAM);",
-      "    var status = py.runPython('_pyide_run_game(_pyide_source)');",
-      "    if (status === 'ok') {",
-      "      await py.runPythonAsync('await _pyide_drive_game()');",
-      "    }",
-      "  } catch (e) {",
-      "    fail(String((e && e.message) || e));",
-      "  }",
-      "})();",
-      "<\/script>",
-      "</body>",
-      "</html>",
-      ""
-    ].join("\n");
+    /* The engine the page carries is the Python, and only the Python.
+       kaypy's own builder takes *.py; matching that keeps the two exports
+       identical, and there is no sense shipping the page template inside a
+       page that was built from it. */
+    var engine = {};
+    Object.keys(bundle).forEach(function (name) {
+      if (/\.py$/.test(name)) engine[name] = bundle[name];
+    });
+
+    var size = canvasSize(source);
+    var slots = {
+      "__TITLE__": escapeHtml(title || "Game"),
+      "__WIDTH__": String(size.width),
+      "__HEIGHT__": String(size.height),
+      "__PYODIDE__": "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/",
+      "__ENGINE__": js(engine),
+      "__ASSETS__": js(assets),
+      "__PROGRAM__": js(source)
+    };
+
+    var missing = Object.keys(slots).filter(function (name) {
+      return template.indexOf(name) === -1;
+    });
+    if (missing.length) {
+      throw new Error("kaypy's page template has no " + missing.join(", ")
+                      + " slot. The vendored engine and this file disagree.");
+    }
+
+    /* ONE pass, not one replace() per slot.
+     *
+     * The engine carries kaypy's own webbuild.py, whose source contains the
+     * literal text "__ASSETS__" — it is the module that defines these slots.
+     * Filling them one at a time puts the engine in first and then goes
+     * looking for "__ASSETS__" again, finds the mention inside webbuild.py's
+     * source, and replaces it with this game's assets, halfway through a
+     * Python string inside a JSON string. The page still looks plausible and
+     * the JSON no longer parses. It happened; that is how it was found.
+     *
+     * A single pass cannot do it: what goes in is never looked at again. */
+    return template.replace(
+      /__(?:TITLE|WIDTH|HEIGHT|PYODIDE|ENGINE|ASSETS|PROGRAM)__/g,
+      function (name) { return slots[name]; });
   }
 
   function downloadGamePage(filename, html) {
@@ -315,9 +201,10 @@ window.PyIDEExport = (function () {
   }
 
   return {
-    safeInline: safeInline,
     buildGamePage: buildGamePage,
     downloadGamePage: downloadGamePage,
-    referencedAssets: referencedAssets
+    referencedAssets: referencedAssets,
+    canvasSize: canvasSize,
+    js: js
   };
 })();
