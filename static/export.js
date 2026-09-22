@@ -100,14 +100,22 @@ window.PyIDEExport = (function () {
                     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  /* The size the program asks kaplay() for, so the canvas starts right rather
+  /* The size the program asks kaypy() for, so the canvas starts right rather
      than resizing visibly on the first frame. kaypy reads this off the syntax
      tree; there is no Python parser here, so it is a pattern — and anything it
      cannot read falls back to kaypy's own default, which is what the engine
      would have used anyway. */
+  /* Both names start the engine: kaypy() is the documented one, kaplay() is
+     what files written before the rename say. Miss one and nothing breaks
+     loudly — the size just falls back to 800x600 and the export still reports
+     success, so the wrong canvas only shows up on itch.io. This mirrors
+     webbuild.INIT_NAMES in the engine; the two are checked against each other
+     by tools/test_same_as_kaypy.py. */
+  var INIT_CALL = /\b(?:kaypy|kaplay)\s*\(([^)]*)\)/;
+
   function canvasSize(source) {
     var size = { width: 800, height: 600 };
-    var call = /\bkaplay\s*\(([^)]*)\)/.exec(source);
+    var call = INIT_CALL.exec(source);
     if (!call) return size;
     ["width", "height"].forEach(function (name) {
       var m = new RegExp(name + "\\s*=\\s*(\\d+)").exec(call[1]);

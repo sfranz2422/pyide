@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -47,7 +48,7 @@ def check(label, ok, detail=""):
 
 GAME = '''from kaypy import *
 
-kaplay(width=320, height=240, background=[24, 24, 40])
+kaypy(width=320, height=240, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
 
 player = add([sprite("bean"), pos(40, 40), area(), "player"])
@@ -188,6 +189,41 @@ check("and the same engine code" if identical
       % (len(k_files & p_files) - len(same), len(k_files & p_files)))
 if not identical:
     print("        (not a failure: PyIDE vendors a chosen kaypy on purpose)")
+
+# ------------------------- both exporters know every name that starts a game
+#
+# Each exporter finds the window size by looking for the init call BY NAME —
+# kaypy off the syntax tree, PyIDE with a regex, because there is no Python
+# parser in a browser. Two separate lists of names, which is two chances to
+# add an alias to one and not the other.
+#
+# Nothing fails loudly when they disagree. The call is simply not recognised,
+# the size falls back to 800x600, and the export reports success. The student
+# finds out when their game is letterboxed on itch.io.
+sys.path.insert(0, str(kaypy))
+from kaypy import webbuild as _wb                               # noqa: E402
+
+js = (PYIDE / "static" / "export.js").read_text()
+m = re.search(r"var INIT_CALL = /\\b\(\?:([^)]*)\)", js)
+pyide_names = set(m.group(1).split("|")) if m else set()
+
+check("PyIDE's exporter recognises the same init names as kaypy's",
+      pyide_names == set(_wb.INIT_NAMES),
+      "kaypy: %s | PyIDE: %s"
+      % (" ".join(sorted(_wb.INIT_NAMES)), " ".join(sorted(pyide_names)) or "none found"))
+
+# And that the regex really reads a size through each name, rather than the
+# names merely being listed in it.
+for _name in sorted(pyide_names):
+    probe = "from kaypy import *\n%s(width=333, height=222)\n" % _name
+    call = re.search(r"\b(?:%s)\s*\(([^)]*)\)" % "|".join(sorted(pyide_names)), probe)
+    got = None
+    if call:
+        w = re.search(r"width\s*=\s*(\d+)", call.group(1))
+        h = re.search(r"height\s*=\s*(\d+)", call.group(1))
+        got = (int(w.group(1)) if w else None, int(h.group(1)) if h else None)
+    check("  %s(width=, height=) is read by PyIDE's pattern" % _name,
+          got == (333, 222), "got %s" % (got,))
 
 import shutil                                                   # noqa: E402
 shutil.rmtree(work, ignore_errors=True)

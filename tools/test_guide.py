@@ -75,7 +75,27 @@ for rel, text in json.loads(bundle_path.read_text()).items():
 sys.path.insert(0, str(lib))
 
 import pygame                                                  # noqa: E402
+import kaypy                                                   # noqa: E402
 import kaypy.engine as ke                                     # noqa: E402
+
+# Which names start a game, asked of the engine rather than written down here.
+#
+# This test already went blind once, when the package was renamed and it kept
+# looking for the old import. It was hardened afterwards — but the hardening
+# ALSO hardcoded the name, so when the init function was renamed both the
+# check and the alarm meant to catch it missed in the same instant, and it
+# reported "0 lessons" again, green.
+#
+# A guard written in terms of a name is only as current as that name. So the
+# names come from the package: add an alias there and this follows it.
+#
+# Written to work against either vintage of the vendored engine: PyIDE carries
+# a chosen kaypy, which may predate a rename in the checkout. Whichever init
+# function this bundle has, every name pointing at it is collected.
+_init = getattr(kaypy, "kaypy", None) or getattr(kaypy, "kaplay")
+INIT_NAMES = sorted(n for n in kaypy.__all__
+                    if getattr(kaypy, n, None) is _init)
+INIT_CALL = re.compile(r"^[ \t]*(?:%s)\(" % "|".join(INIT_NAMES), re.M)
 
 
 # ------------------------------------------------------------- held keys
@@ -260,8 +280,7 @@ def lessons_in(path):
     text = pathlib.Path(path).read_text()
     blocks = re.findall(r"```python\n(.*?)```", text, re.S)
     return [(i + 1, b) for i, b in enumerate(blocks)
-            if "from kaypy import" in b
-            and re.search(r"^[ \t]*kaplay\(", b, re.M)]
+            if "from kaypy import" in b and INIT_CALL.search(b)]
 
 
 def main(paths):
@@ -276,20 +295,36 @@ def main(paths):
             # A file with Python in it and no runnable lesson is almost always
             # this test having gone blind, not a guide with nothing in it.
             #
-            # It happened the day the package was renamed: every lesson still
-            # said `from kaplay import *`, this looked for `from kaypy import`,
-            # matched nothing, and reported "ALL PASSED (0 lessons, 0 failed)".
-            # A green line, a zero, and twelve untested lessons. A test that
-            # can pass by finding nothing is not a test.
+            # It has now happened twice. First when the package was renamed:
+            # the lessons still said `from kaplay import *`, this looked for
+            # `from kaypy import`, and it reported "ALL PASSED (0 lessons)".
+            # An alarm was added — and it went blind too, the day the init
+            # function was renamed, because the alarm ALSO matched on a
+            # function name, so both halves missed in the same instant.
+            #
+            # So this one names nothing. It asks a question no rename can
+            # change: are there Python blocks here substantial enough to be
+            # lessons? If yes, and none was recognised, the recogniser is
+            # wrong — whatever it was that got renamed this time.
             blocks = re.findall(r"```python\n(.*?)```",
                                 pathlib.Path(path).read_text(), re.S)
-            runnable = [b for b in blocks if re.search(r"^[ \t]*kaplay\(", b, re.M)]
-            if runnable:
+
+            def substantial(b):
+                body = [l for l in b.splitlines()
+                        if l.strip() and not l.strip().startswith("#")]
+                return len(body) >= 4
+
+            candidates = [b for b in blocks if substantial(b)]
+            if candidates:
                 failed += 1
-                print("  FAIL %d block(s) call kaplay() but none was recognised "
-                      "as a lesson." % len(runnable))
-                print("       lessons_in() looks for 'from kaypy import'. Has the")
-                print("       guide been left on an older spelling of the import?")
+                print("  FAIL %d Python block(s) here look like whole lessons, "
+                      "but none was recognised." % len(candidates))
+                print("       lessons_in() wants 'from kaypy import' AND a call to")
+                print("       one of: %s" % ", ".join("%s()" % n for n in INIT_NAMES))
+                first = candidates[0].strip().splitlines()[:3]
+                print("       the first unrecognised block starts:")
+                for line in first:
+                    print("           %s" % line[:64])
             else:
                 print("  (no block runs on its own; nothing here to check)")
         for number, source in found:

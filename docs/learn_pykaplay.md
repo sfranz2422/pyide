@@ -74,7 +74,7 @@ it.
 
 | JavaScript | Python |
 |---|---|
-| `kaplay({ width: 800 })` | `kaplay(width=800)` |
+| `kaypy({ width: 800 })` | `kaypy(width=800)` |
 | `body({ jumpForce: 800 })` | `body(jumpForce=800)` |
 | `const SPEED = 300;` | `SPEED = 300` |
 | `() => player.move(-300, 0)` | `lambda: player.move(-300, 0)` |
@@ -151,7 +151,7 @@ component gives it one ability.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 
@@ -167,7 +167,7 @@ Press **Run**. Bean is on the screen.
 
 **What each part does.**
 
-`kaplay(...)` starts the engine. It has to come first, before anything else.
+`kaypy(...)` starts the engine. It has to come first, before anything else.
 
 `loadSprite("bean", "images/bean.png")` makes a picture available under the
 name `bean`. Loading and using are two separate steps, and forgetting the load
@@ -199,7 +199,7 @@ Input handling and moving things about.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 
@@ -255,7 +255,7 @@ picture.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 loadSprite("ghosty", "images/ghosty.png")
@@ -372,7 +372,7 @@ needs a `pos()` to say where it goes.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 
@@ -452,7 +452,7 @@ you already have:
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 # One sprite made out of nine pictures. The frames are numbered 0 to 8 in the
 # order you list them.
@@ -605,7 +605,7 @@ Each one is a function, and `go()` switches between them.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600)
+kaypy(width=800, height=600)
 setBackground(0, 0, 0)
 
 loadSprite("bean", "images/bean.png")
@@ -710,7 +710,7 @@ as a parameter: `def lose(score):`.
 **Nothing runs until `go()` is called.** That last line is the one everybody
 forgets.
 
-`setBackground(0, 0, 0)` sets the background outside the `kaplay()` call —
+`setBackground(0, 0, 0)` sets the background outside the `kaypy()` call —
 handy when you want to change it later.
 
 `onUpdate("enemy", action)` runs the action every frame for **every** object
@@ -732,7 +732,7 @@ JavaScript, and it is the one Python-specific gotcha in this whole guide.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSound("bell", "sounds/ding.wav")
 loadSound("bgMusic", "sounds/background.wav")
@@ -805,7 +805,7 @@ tied to the frame loop and stay in step with the game.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 
@@ -845,7 +845,7 @@ picture made of characters.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[141, 183, 255])
+kaypy(width=800, height=600, background=[141, 183, 255])
 
 loadSprite("bean", "images/bean.png")
 loadSprite("grass", "images/grass.png")
@@ -937,7 +937,7 @@ When the level is bigger than the window, the camera follows the player.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[141, 183, 255])
+kaypy(width=800, height=600, background=[141, 183, 255])
 
 loadSprite("bean", "images/bean.png")
 loadSprite("grass", "images/grass.png")
@@ -1158,7 +1158,7 @@ behaviour in each. It is how nearly all simple game AI is written.
 ```python
 from kaypy import *
 
-kaplay(width=800, height=600, background=[0, 0, 0])
+kaypy(width=800, height=600, background=[0, 0, 0])
 
 loadSprite("bean", "images/bean.png")
 loadSprite("ghosty", "images/ghosty.png")
@@ -1265,7 +1265,7 @@ Everything used in this guide.
 ### Starting up
 | | |
 |---|---|
-| `kaplay(width=, height=, background=)` | start the engine, always first |
+| `kaypy(width=, height=, background=)` | start the engine, always first |
 | `loadSprite(name, path)` | make a picture available |
 | `loadSprite(name, [paths], anims={})` | build frames from several pictures |
 | `loadSprite(name, path, sliceX=, anims={})` | cut a spritesheet into frames |

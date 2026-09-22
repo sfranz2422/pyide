@@ -679,7 +679,7 @@
     pushFilesToPython();
     try {
       /* Two steps, because they fail differently. The first runs the program
-         top to bottom, the way `python game.py` does — kaplay() builds the
+         top to bottom, the way `python game.py` does — kaypy() builds the
          engine and everything after it registers handlers. An error there is
          an error in the student's setup and stops the run.
 

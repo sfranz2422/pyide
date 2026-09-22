@@ -247,7 +247,7 @@ window.PyIDEGame = (function () {
    *
    * The id matters: Pyodide's SDL support requires the element to be called
    * "canvas", and setCanvas2D is how it is handed over. Without both, the
-   * pygame.display.set_mode() inside kaplay() fails.
+   * pygame.display.set_mode() inside kaypy() fails.
    *
    * Replacing rather than reusing carries over from the Kaplay days for a
    * different but related reason: SDL keeps state about the surface it was

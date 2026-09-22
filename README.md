@@ -561,7 +561,7 @@ crosses a language boundary.
 ```python
 from kaplay import *
 
-kaplay(width=800, height=600, background=[24, 24, 40])
+kaypy(width=800, height=600, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
 setGravity(1600)
 
@@ -581,8 +581,8 @@ onUpdate("enemy", lambda e: e.move(-120, 0))
 is the whole point: every Kaplay tutorial, example and forum answer on the
 internet applies to what a student writes here, with the punctuation changed.
 A snake_case wrapper would look more like Python and leave the class with no
-documentation in the world. `kaplay({ width: 800 })` becomes
-`kaplay(width=800)`; everything else is the same call in the same order.
+documentation in the world. `kaypy({ width: 800 })` becomes
+`kaypy(width=800)`; everything else is the same call in the same order.
 
 **+ Game** in the toolbar starts a project with the import already there.
 
@@ -1098,7 +1098,7 @@ about the surface it was given, and a second game on a used canvas is the kind
 of thing that works in one browser and not another. A fresh element costs
 nothing. The id must be exactly `"canvas"` and it must be handed over with
 `pyodide.canvas.setCanvas2D`, or the `pygame.display.set_mode()` inside
-`kaplay()` fails.
+`kaypy()` fails.
 
 **Stopping does not tear anything down.** kaypy's loop checks `_running` once
 a frame, so clearing it lets `run_async()` return normally and the `await` in
