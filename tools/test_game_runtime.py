@@ -49,7 +49,7 @@ def check(label, ok, detail=""):
 
 
 # ------------------------------------------------- the bundle the browser gets
-bundle_path = STATIC / "py" / "kaplay_bundle.json"
+bundle_path = STATIC / "py" / "kaypy_bundle.json"
 check("the engine bundle exists", bundle_path.is_file(),
       "run tools/vendor_kaypy.py" if not bundle_path.is_file() else
       "%.0f KB" % (bundle_path.stat().st_size / 1024))
@@ -64,20 +64,20 @@ check("it carries the package entry point", "__init__.py" in bundle)
 work = pathlib.Path(tempfile.mkdtemp())
 lib = work / "lib"
 for rel, text in bundle.items():
-    target = lib / "kaplay" / rel
+    target = lib / "kaypy" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
 sys.path.insert(0, str(lib))
 
-import kaplay as _mod                                          # noqa: E402
-import kaplay.engine as ke                                     # noqa: E402
+import kaypy as _mod                                          # noqa: E402
+import kaypy.engine as ke                                     # noqa: E402
 
 check("it unpacks into an importable package",
       pathlib.Path(_mod.__file__).is_relative_to(lib),
       pathlib.Path(_mod.__file__).name)
 
 # The bundle must not have drifted from the vendored copy beside it.
-vendored = STATIC / "py" / "kaplay"
+vendored = STATIC / "py" / "kaypy"
 drifted = [rel for rel, text in bundle.items()
            if not (vendored / rel).is_file() or (vendored / rel).read_text() != text]
 check("and matches the vendored copy exactly", not drifted,
@@ -188,7 +188,7 @@ check("app.py still has a game starter", starter is not None)
 if starter:
     source = starter.group(1)
     check("the starter is recognised as a game",
-          re.search(r"^[ \t]*(?:from[ \t]+kaplay[ \t]+import|import[ \t]+kaplay)\b",
+          re.search(r"^[ \t]*(?:from[ \t]+kaypy[ \t]+import|import[ \t]+kaypy)\b",
                     source, re.M) is not None)
     # Run it for real, from the directory the assets live in.
     os.chdir(ASSETS)

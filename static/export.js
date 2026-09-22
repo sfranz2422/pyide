@@ -40,7 +40,7 @@
 window.PyIDEExport = (function () {
   "use strict";
 
-  var BUNDLE = "/static/py/kaplay_bundle.json";
+  var BUNDLE = "/static/py/kaypy_bundle.json";
   var ASSET_ROOT = "/static/assets/";
   var TEMPLATE = "web_page.html";      // kaypy's page, inside the bundle
 

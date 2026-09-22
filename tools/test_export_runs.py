@@ -72,7 +72,7 @@ def done(code=None):
 
 # A program that uses a sprite, a sound, a key, a collision and a timer — so
 # that "it ran" means several different things went right, not one.
-GAME = '''from kaplay import *
+GAME = '''from kaypy import *
 
 kaplay(width=320, height=240, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
@@ -160,7 +160,7 @@ program = declared("PROGRAM")
 
 check("it carries the whole engine", len(engine) > 20, "%d files" % len(engine))
 check("including kaypy's own runner, which the page calls", "webrun.py" in engine,
-      "no separate bootstrap any more — the page calls kaplay.webrun")
+      "no separate bootstrap any more — the page calls kaypy.webrun")
 check("it carries the assets the program names",
       sorted(assets) == ["images/bean.png", "sounds/ding.wav"], " ".join(sorted(assets)))
 check("it carries the program unchanged", program == GAME)
@@ -189,7 +189,7 @@ if not (lib_decl and project_decl):
 # And that it really uses them for the writes, rather than declaring them and
 # then writing somewhere else.
 check("the engine is written under LIB",
-      'writeFile(py, LIB + "/kaplay/" + rel' in html)
+      'writeFile(py, LIB + "/kaypy/" + rel' in html)
 check("and the assets under PROJECT",
       'writeFile(py, PROJECT + "/" + path' in html)
 
@@ -203,7 +203,7 @@ lib = relocate(lib_decl.group(1))
 project = relocate(project_decl.group(1))
 
 for rel, text in engine.items():
-    target = lib / "kaplay" / rel
+    target = lib / "kaypy" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
 
@@ -214,7 +214,7 @@ for path, b64 in assets.items():
     target.write_bytes(base64.b64decode(b64))
 
 check("the engine unpacks to an importable package",
-      (lib / "kaplay" / "__init__.py").is_file())
+      (lib / "kaypy" / "__init__.py").is_file())
 sprite = project / "images/bean.png"
 sound = project / "sounds/ding.wav"
 check("a carried sprite is a real PNG on disk",
@@ -238,8 +238,8 @@ sys.path.insert(0, str(lib))
 os.chdir(project)
 
 try:
-    from kaplay import webrun
-    import kaplay.engine as ke
+    from kaypy import webrun
+    import kaypy.engine as ke
     imported, why = True, ""
 except Exception as exc:
     imported, why = False, "%s: %s" % (type(exc).__name__, exc)

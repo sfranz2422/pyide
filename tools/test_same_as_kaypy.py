@@ -45,7 +45,7 @@ def check(label, ok, detail=""):
     print("  %-4s %-52s %s" % ("ok" if ok else "FAIL", label, detail))
 
 
-GAME = '''from kaplay import *
+GAME = '''from kaypy import *
 
 kaplay(width=320, height=240, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
@@ -64,7 +64,7 @@ ap.add_argument("--kaypy", type=pathlib.Path,
 args = ap.parse_args()
 
 kaypy = args.kaypy.resolve()
-if not (kaypy / "kaplay" / "webbuild.py").is_file():
+if not (kaypy / "kaypy" / "webbuild.py").is_file():
     print("  skip  no kaypy checkout at %s — pass --kaypy to compare" % kaypy)
     print("\nSKIPPED (nothing to compare against)")
     sys.exit(0)
@@ -79,7 +79,7 @@ work = pathlib.Path(tempfile.mkdtemp())
 sys.path.insert(0, str(kaypy))
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
-from kaplay import webbuild                                     # noqa: E402
+from kaypy import webbuild                                     # noqa: E402
 
 kaypy_page, _ = webbuild.build_page(work / "game.py", [], "Same Test",
                                     webbuild.read_size(work / "game.py"))

@@ -191,8 +191,8 @@ check(len(inserts["sprites"]) == sum(len(e) for _, e in packs),
 sys.path.insert(0, str(STATIC / "py"))
 os.chdir(ASSETS)
 
-import kaplay as K                                              # noqa: E402
-import kaplay.engine as ke                                      # noqa: E402
+import kaypy as K                                              # noqa: E402
+import kaypy.engine as ke                                      # noqa: E402
 
 def run_inserts(label, lines):
     """Run some inserts in an engine of their own, and hand back the sprites.

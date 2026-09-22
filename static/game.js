@@ -34,8 +34,8 @@
 window.PyIDEGame = (function () {
   "use strict";
 
-  var BUNDLE = "/static/py/kaplay_bundle.json";   // the engine, as one file
-  var PKG_DIR = "/lib/kaplay";                    // inside Pyodide
+  var BUNDLE = "/static/py/kaypy_bundle.json";   // the engine, as one file
+  var PKG_DIR = "/lib/kaypy";                    // inside Pyodide
   var PROJECT_DIR = "/project";
   var ASSET_ROOT = "/static/assets/";
 
@@ -129,8 +129,21 @@ window.PyIDEGame = (function () {
   /* A kaypy program is recognised by importing it. Unchanged from the Kaplay
      days, and still a much firmer signal than Pygame Zero's old one (defining
      draw() or update()), which a console program could trip over by accident. */
+  /* Both spellings count as a game, and only one of them works.
+   *
+   * The package was called `kaplay` until the rename, so a project saved
+   * before it says `from kaplay import *`. That import now fails — deliberately;
+   * there is no compatibility alias — but the failure has to arrive in GAME
+   * mode. Recognising only the new spelling would send an old project down the
+   * console path, where it would be run as an ordinary program, print
+   * "ModuleNotFoundError: No module named 'kaplay'" with no canvas in sight,
+   * and leave a student with no clue that one word is the whole problem.
+   *
+   * Detected as a game, it instead reaches runtime.js's check and gets told
+   * which line to change. Recognising the old name costs one alternation and
+   * buys a sentence that fixes the project. */
   function looksLikeGame(source) {
-    return /^[ \t]*(?:from[ \t]+kaplay[ \t]+import|import[ \t]+kaplay)\b/m
+    return /^[ \t]*(?:from[ \t]+ka(?:ypy|play)[ \t]+import|import[ \t]+ka(?:ypy|play))\b/m
       .test(source);
   }
 
@@ -153,8 +166,8 @@ window.PyIDEGame = (function () {
   /* The engine, written into Pyodide's filesystem as real files.
    *
    * Real files rather than a string exec'd into a module, so a traceback
-   * through the engine names kaplay/engine.py and a line number that exists —
-   * and so `import kaplay` is an ordinary import with nothing clever about it.
+   * through the engine names kaypy/engine.py and a line number that exists —
+   * and so `import kaypy` is an ordinary import with nothing clever about it.
    *
    * One fetch, not twenty-eight: tools/vendor_kaypy.py bundles the package
    * into a single JSON file for exactly this.
@@ -288,7 +301,7 @@ window.PyIDEGame = (function () {
     if (!pyodide || !engineReady) return;
     try {
       pyodide.runPython(
-        "import kaplay.engine as _ke\n" +
+        "import kaypy.engine as _ke\n" +
         "if _ke._engine is not None:\n" +
         "    _ke._engine._running = False\n"
       );

@@ -66,13 +66,13 @@ const X = globalThis.window.PyIDEExport;
 check("export.js loaded", !!X && typeof X.buildGamePage === "function");
 
 const bundle = JSON.parse(
-  readFileSync(join(ROOT, "static", "py", "kaplay_bundle.json"), "utf8"));
+  readFileSync(join(ROOT, "static", "py", "kaypy_bundle.json"), "utf8"));
 check("the vendored engine carries kaypy's page template",
       typeof bundle["web_page.html"] === "string",
       "run tools/vendor_kaypy.py if this fails");
 check("and the runner the page calls", typeof bundle["webrun.py"] === "string");
 
-const GAME = `from kaplay import *
+const GAME = `from kaypy import *
 
 kaplay(width=640, height=480, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
@@ -129,7 +129,7 @@ check("it reads the size out of kaplay()",
       JSON.stringify(X.canvasSize(GAME)) === '{"width":640,"height":480}',
       JSON.stringify(X.canvasSize(GAME)));
 check("and falls back to kaypy's own default when it cannot",
-      JSON.stringify(X.canvasSize("from kaplay import *\nkaplay()\n")) ===
+      JSON.stringify(X.canvasSize("from kaypy import *\nkaplay()\n")) ===
       '{"width":800,"height":600}');
 
 // ------------------------------------------------------------ the document

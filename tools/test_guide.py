@@ -3,7 +3,7 @@
     python3 tools/test_guide.py                    # ../learn_pykaplay.md
     python3 tools/test_guide.py ../fruit_catcher.md ../adventure_game.md
 
-Every fenced ```python block containing `from kaplay import *` is a whole
+Every fenced ```python block containing `from kaypy import *` is a whole
 lesson. Each one is executed the way pressing Run executes it, then the game
 is actually played for a few hundred frames: every key the lesson registered
 a handler for is held down and released, the mouse is clicked, and every timer
@@ -19,7 +19,7 @@ anything the stand-in got wrong (an argument order, a return type) was a bug
 the test would never see because the test *was* the bug. It also meant the
 lessons were checked against something no student ever runs.
 
-Now there is no stand-in. `import kaplay` imports kaypy — the same package the
+Now there is no stand-in. `import kaypy` imports kaypy — the same package the
 browser writes into Pyodide's filesystem, read out of the same bundle — and a
 lesson that runs here is a lesson that runs in front of a class.
 
@@ -62,20 +62,20 @@ MAX_KEY_ROUNDS = 8        # scene changes to follow before giving up
 # The bundle, not the directory beside it, for the same reason
 # test_game_runtime.py does it: the bundle is what the browser actually gets,
 # and a stale one would pass every other check.
-bundle_path = STATIC / "py" / "kaplay_bundle.json"
+bundle_path = STATIC / "py" / "kaypy_bundle.json"
 if not bundle_path.is_file():
-    sys.exit("No static/py/kaplay_bundle.json — run tools/vendor_kaypy.py first.")
+    sys.exit("No static/py/kaypy_bundle.json — run tools/vendor_kaypy.py first.")
 
 work = pathlib.Path(tempfile.mkdtemp())
 lib = work / "lib"
 for rel, text in json.loads(bundle_path.read_text()).items():
-    target = lib / "kaplay" / rel
+    target = lib / "kaypy" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
 sys.path.insert(0, str(lib))
 
 import pygame                                                  # noqa: E402
-import kaplay.engine as ke                                     # noqa: E402
+import kaypy.engine as ke                                     # noqa: E402
 
 
 # ------------------------------------------------------------- held keys
@@ -252,15 +252,15 @@ def run_lesson(source):
 def lessons_in(path):
     """The blocks in a guide that are whole programs, not fragments.
 
-    A block has to import kaplay AND call it. The import alone is not enough:
-    the very first block in the guide is the one line `from kaplay import *`,
+    A block has to import kaypy AND call it. The import alone is not enough:
+    the very first block in the guide is the one line `from kaypy import *`,
     quoted to show what + Game gives you, and a block showing two lines of
     arguments mid-paragraph is not something anyone could press Run on.
     """
     text = pathlib.Path(path).read_text()
     blocks = re.findall(r"```python\n(.*?)```", text, re.S)
     return [(i + 1, b) for i, b in enumerate(blocks)
-            if "from kaplay import" in b
+            if "from kaypy import" in b
             and re.search(r"^[ \t]*kaplay\(", b, re.M)]
 
 
@@ -273,7 +273,25 @@ def main(paths):
         found = lessons_in(path)
         print("%s — %d whole lessons" % (pathlib.Path(path).name, len(found)))
         if not found:
-            print("  (no block imports kaplay; nothing here runs on its own)")
+            # A file with Python in it and no runnable lesson is almost always
+            # this test having gone blind, not a guide with nothing in it.
+            #
+            # It happened the day the package was renamed: every lesson still
+            # said `from kaplay import *`, this looked for `from kaypy import`,
+            # matched nothing, and reported "ALL PASSED (0 lessons, 0 failed)".
+            # A green line, a zero, and twelve untested lessons. A test that
+            # can pass by finding nothing is not a test.
+            blocks = re.findall(r"```python\n(.*?)```",
+                                pathlib.Path(path).read_text(), re.S)
+            runnable = [b for b in blocks if re.search(r"^[ \t]*kaplay\(", b, re.M)]
+            if runnable:
+                failed += 1
+                print("  FAIL %d block(s) call kaplay() but none was recognised "
+                      "as a lesson." % len(runnable))
+                print("       lessons_in() looks for 'from kaypy import'. Has the")
+                print("       guide been left on an older spelling of the import?")
+            else:
+                print("  (no block runs on its own; nothing here to check)")
         for number, source in found:
             total += 1
             first = next((l.strip() for l in source.splitlines()
@@ -296,7 +314,7 @@ def main(paths):
                 # eng.width as a number when it is a method, and three good
                 # lessons were marked FAIL.
                 theirs = [f for f in frames
-                          if f.filename == "<lesson>" or "kaplay/" in f.filename]
+                          if f.filename == "<lesson>" or "kaypy/" in f.filename]
                 if theirs:
                     where = (" — building scene %r with zeros" % building[-1]
                              if building else "")
@@ -304,7 +322,7 @@ def main(paths):
                     for f in theirs[-3:]:
                         where = ("the lesson, line %d" % f.lineno
                                  if f.filename == "<lesson>"
-                                 else "%s:%d" % (f.filename.split("kaplay/")[-1],
+                                 else "%s:%d" % (f.filename.split("kaypy/")[-1],
                                                  f.lineno))
                         print("        %-28s %s" % (where, (f.line or "").strip()))
                     print("        %s: %s" % (type(exc).__name__, exc))

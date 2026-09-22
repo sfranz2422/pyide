@@ -23,7 +23,7 @@ to the server, once a day, on the teacher dashboard (see app.py).
 
 WHAT IS AND IS NOT COPIED
 
-Only `kaplay/`, and not `kaplay/starter/` — those are the assets `kaypy new`
+Only `kaypy/`, and not `kaypy/starter/` — those are the assets `kaypy new`
 hands a desktop user, and PyIDE has its own sprite packs in static/assets. No
 `__pycache__`, no `.pyc`.
 
@@ -46,9 +46,9 @@ from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PYIDE = os.path.dirname(HERE)
-DEST = os.path.join(PYIDE, "static", "py", "kaplay")
+DEST = os.path.join(PYIDE, "static", "py", "kaypy")
 STAMP = os.path.join(PYIDE, "static", "py", "kaypy.json")
-BUNDLE = os.path.join(PYIDE, "static", "py", "kaplay_bundle.json")
+BUNDLE = os.path.join(PYIDE, "static", "py", "kaypy_bundle.json")
 
 SKIP_DIRS = {"__pycache__", "starter"}
 
@@ -108,9 +108,9 @@ def main():
     args = ap.parse_args()
 
     src = os.path.abspath(os.path.expanduser(args.src))
-    src_pkg = os.path.join(src, "kaplay")
+    src_pkg = os.path.join(src, "kaypy")
     if not os.path.isdir(src_pkg):
-        sys.exit("No kaplay/ package under %s — is that the kaypy repo?" % src)
+        sys.exit("No kaypy/ package under %s — is that the kaypy repo?" % src)
 
     version = read_version(src)
     if version is None:
@@ -144,10 +144,10 @@ def main():
         json.dump(stamp, f, indent=1)
         f.write("\n")
 
-    print("kaypy %s%s -> static/py/kaplay/"
+    print("kaypy %s%s -> static/py/kaypy/"
           % (version, " (" + stamp["commit"] + ")" if stamp["commit"] else ""))
     print("  %d files, %.0f KB" % (len(files), total / 1024))
-    print("  bundled for the browser: static/py/kaplay_bundle.json (%.0f KB)"
+    print("  bundled for the browser: static/py/kaypy_bundle.json (%.0f KB)"
           % (os.path.getsize(BUNDLE) / 1024))
     print("  starter assets left behind on purpose; PyIDE serves its own")
 

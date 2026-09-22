@@ -101,7 +101,7 @@ const pyideShortcutsIntact = () =>
 
 /* ----------------------------------------------------------- Pyodide -----*/
 const bundle = JSON.parse(
-  readFileSync(join(ROOT, "static", "py", "kaplay_bundle.json"), "utf8"));
+  readFileSync(join(ROOT, "static", "py", "kaypy_bundle.json"), "utf8"));
 
 let canvasHandedTo = null;
 const writes = [];
@@ -119,7 +119,7 @@ const pyodide = {
 };
 
 const fetchStub = async (url) => {
-  if (url.endsWith("kaplay_bundle.json")) {
+  if (url.endsWith("kaypy_bundle.json")) {
     return { ok: true, json: async () => bundle };
   }
   return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
@@ -143,7 +143,7 @@ function sdlStarts() {
   return fns;
 }
 
-const SOURCE = 'from kaplay import *\nkaplay()\nloadSprite("bean", "images/bean.png")\n';
+const SOURCE = 'from kaypy import *\nkaplay()\nloadSprite("bean", "images/bean.png")\n';
 
 // ---------------------------------------------------------------- cycle 1
 await G.ensureReady(pyodide, null, SOURCE);
@@ -151,7 +151,7 @@ check("the first Run installs a canvas", !!canvasEl && canvasEl.id === "canvas")
 check("SDL is handed that exact element", canvasHandedTo === canvasEl);
 check("pygame-ce is loaded once", pyodide.loaded.filter(n => n === "pygame-ce").length === 1);
 check("the engine is written into the filesystem",
-      writes.some((p) => p.endsWith("/lib/kaplay/__init__.py")),
+      writes.some((p) => p.endsWith("/lib/kaypy/__init__.py")),
       writes.length + " files");
 check("so is the sprite the program names",
       writes.some((p) => p.endsWith("/project/images/bean.png")));
