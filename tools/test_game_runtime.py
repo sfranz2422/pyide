@@ -98,7 +98,14 @@ TEACHES = ["kaplay", "add", "sprite", "pos", "area", "body", "anchor", "scale",
            "destroyAll", "isKeyDown", "rgb", "mousePos", "toWorld", "setCamPos",
            "setCamScale", "shake", "play", "debug", "addLevel", "addKaboom",
            "loadSprite", "loadSpriteAtlas", "loadSound", "setGravity",
-           "setBackground", "get", "state", "fixed", "move", "offscreen", "tile"]
+           "setBackground", "get", "state", "fixed", "move", "offscreen", "tile",
+           # the four gaps — a game that aims, draws a health bar, kills an
+           # enemy and keeps a high score
+           "onMousePress", "onMouseRelease", "onMouseDown", "onMouseMove",
+           "isMouseDown", "isMousePressed", "isMouseReleased", "isMouseMoved",
+           "mouseDeltaPos", "onDraw", "drawRect", "drawCircle", "drawLine",
+           "drawLines", "drawText", "drawSprite", "health", "lifespan",
+           "setData", "getData"]
 absent = [n for n in TEACHES if not hasattr(_mod, n)]
 check("every name the guide teaches is in the bundle", not absent,
       "missing %s" % absent)

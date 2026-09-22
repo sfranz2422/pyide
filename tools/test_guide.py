@@ -341,7 +341,10 @@ def main(paths):
 
 
 if __name__ == "__main__":
-    args = sys.argv[1:] or [str(PYIDE.parent / "learn_pykaplay.md")]
+    # docs/, inside the repo — the guides used to live beside it, outside
+    # version control, where this could not find them and nothing backed them
+    # up.
+    args = sys.argv[1:] or [str(PYIDE / "docs" / "learn_pykaplay.md")]
     missing = [a for a in args if not pathlib.Path(a).is_file()]
     if missing:
         sys.exit("No such file: %s" % ", ".join(missing))

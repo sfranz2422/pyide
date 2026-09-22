@@ -914,6 +914,8 @@ tools/
   vendor_atlas.py       Brings in a sprite atlas and checks its regions
   vendor_kaypy.py       Copies the kaypy engine in and bundles it for the browser
   test_assignment_flow.py  Who gets what from /a/<slug>, in both editors
+docs/                   The student walkthroughs — see docs/README.md.
+                        Two of the four are Pygame-Zero-era and no longer run.
 examples/               file-handling and notes starters
 ```
 
