@@ -34,10 +34,25 @@
 window.PyIDEGame = (function () {
   "use strict";
 
-  var BUNDLE = "/static/py/kaypy_bundle.json";   // the engine, as one file
+  /* Where the engine and the sprite packs are served from.
+
+     PyIDE's own answer is these two paths, and nothing here needs to change
+     for PyIDE. They are overridable because this file is vendored verbatim by
+     the kaypy site, which serves the same two things from its own layout and
+     from a page one directory down.
+
+     Overridable rather than rewritten on the way out: a copy edited by a
+     regex during vendoring is a copy that stops matching the day somebody
+     reformats this line, and the failure is a 404 inside a game engine — the
+     kind nobody sees until a student presses Run. Byte-identical copies can
+     be checksummed against the original instead, which is what the site's
+     vendor.py does. */
+  var PATHS = window.PyIDEPaths || {};
+  var BUNDLE = PATHS.bundle || "/static/py/kaypy_bundle.json";
+  var ASSET_ROOT = PATHS.assets || "/static/assets/";
+
   var PKG_DIR = "/lib/kaypy";                    // inside Pyodide
   var PROJECT_DIR = "/project";
-  var ASSET_ROOT = "/static/assets/";
 
   /* Asset paths as a student writes them. The same four shapes the Sprites
      panel inserts: images/, dungeon/, sounds/, and a bare filename, which is

@@ -40,8 +40,12 @@
 window.PyIDEExport = (function () {
   "use strict";
 
-  var BUNDLE = "/static/py/kaypy_bundle.json";
-  var ASSET_ROOT = "/static/assets/";
+  /* Overridable for the same reason as in game.js, and they must agree with
+     it: the two read the same bundle and the same sprite packs. */
+  var PATHS = window.PyIDEPaths || {};
+  var BUNDLE = PATHS.bundle || "/static/py/kaypy_bundle.json";
+  var ASSET_ROOT = PATHS.assets || "/static/assets/";
+
   var TEMPLATE = "web_page.html";      // kaypy's page, inside the bundle
 
   /* Asset paths as they appear in a student's program: the shapes the Sprites
