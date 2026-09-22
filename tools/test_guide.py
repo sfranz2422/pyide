@@ -88,11 +88,7 @@ import kaypy.engine as ke                                     # noqa: E402
 #
 # A guard written in terms of a name is only as current as that name. So the
 # names come from the package: add an alias there and this follows it.
-#
-# Written to work against either vintage of the vendored engine: PyIDE carries
-# a chosen kaypy, which may predate a rename in the checkout. Whichever init
-# function this bundle has, every name pointing at it is collected.
-_init = getattr(kaypy, "kaypy", None) or getattr(kaypy, "kaplay")
+_init = kaypy.kaypy
 INIT_NAMES = sorted(n for n in kaypy.__all__
                     if getattr(kaypy, n, None) is _init)
 INIT_CALL = re.compile(r"^[ \t]*(?:%s)\(" % "|".join(INIT_NAMES), re.M)
@@ -264,7 +260,7 @@ def run_lesson(source):
     exec(compile(source, "<lesson>", "exec"), scope)
     eng = ke._engine
     if eng is None:
-        raise RuntimeError("the lesson never called kaplay()")
+        raise RuntimeError("the lesson never called %s()" % INIT_NAMES[-1])
     asyncio.run(play(eng))
     return eng
 

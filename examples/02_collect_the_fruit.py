@@ -1,8 +1,8 @@
 # Catch the falling fruit with the bean. Miss three and the game ends.
 
-from kaplay import *
+from kaypy import *
 
-kaplay(width=600, height=400, background=[28, 32, 44])
+kaypy(width=600, height=400, background=[28, 32, 44])
 
 FRUITS = ["apple", "grape", "lemon", "pineapple", "watermelon", "pizza"]
 

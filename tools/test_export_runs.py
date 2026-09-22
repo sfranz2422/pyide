@@ -74,7 +74,7 @@ def done(code=None):
 # that "it ran" means several different things went right, not one.
 GAME = '''from kaypy import *
 
-kaplay(width=320, height=240, background=[24, 24, 40])
+kaypy(width=320, height=240, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
 loadSound("ding", "sounds/ding.wav")
 

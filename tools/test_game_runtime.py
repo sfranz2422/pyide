@@ -89,7 +89,7 @@ check("the version stamp agrees with the bundle",
       "stamp says %s, bundle has %d" % (stamp.get("files"), len(bundle)))
 
 # --------------------------------------------- the names PyIDE's guide teaches
-TEACHES = ["kaplay", "add", "sprite", "pos", "area", "body", "anchor", "scale",
+TEACHES = ["kaypy", "add", "sprite", "pos", "area", "body", "anchor", "scale",
            "rotate", "color", "opacity", "outline", "text", "rect", "circle",
            "onUpdate", "onKeyDown", "onKeyPress", "onKeyRelease", "onClick",
            "onCollide", "wait", "loop", "tween", "easings", "scene", "go",
@@ -139,7 +139,7 @@ check("the listeners are watched before pygame-ce loads",
 # ------------------------------------------------------ the loop's own contract
 # app.js awaits the loop and puts the toolbar back when it resolves, so the
 # loop MUST return rather than run for ever once _running goes false.
-eng = _mod.kaplay(width=64, height=64)
+eng = _mod.kaypy(width=64, height=64)
 frames = []
 _mod.onUpdate(lambda: frames.append(1))
 

@@ -559,7 +559,7 @@ built on pygame-ce. There is no JavaScript in a game any more and nothing
 crosses a language boundary.
 
 ```python
-from kaplay import *
+from kaypy import *
 
 kaypy(width=800, height=600, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
@@ -596,8 +596,8 @@ and it is worth more than everything below.
 
 Pyodide loads **pygame-ce** from its own package set (a compiled C extension,
 so it cannot come from PyPI), and `static/game.js` writes the vendored kaypy
-package into Pyodide's filesystem as real files. Then `import kaplay` is an
-ordinary import, and a traceback through the engine names `kaplay/engine.py`
+package into Pyodide's filesystem as real files. Then `import kaypy` is an
+ordinary import, and a traceback through the engine names `kaypy/engine.py`
 and a line number that exists.
 
 kaypy's frame loop is already an `async` coroutine that yields with
@@ -606,7 +606,7 @@ kaypy's frame loop is already an `async` coroutine that yields with
 was a target it already knew about — it is the same platform pygbag builds for.
 
 **The engine is vendored, not installed at runtime.** `tools/vendor_kaypy.py`
-copies it out of a working copy and writes `static/py/kaplay_bundle.json`: one
+copies it out of a working copy and writes `static/py/kaypy_bundle.json`: one
 file, ~120 KB, cached like any other static asset. The reasons are in that
 script's docstring, and the short version is that a class starts all at once —
 twenty students running `micropip.install("kaypy")` at 8:05 would pull about
@@ -617,7 +617,7 @@ teacher dashboard.
 Vendoring from a working copy rather than from PyPI is also deliberate: fix
 something in `~/kaypy`, run the script, press Run — before publishing anything.
 
-**Mode is detected by the import.** `from kaplay import *` or `import kaplay`
+**Mode is detected by the import.** `from kaypy import *` or `import kaypy`
 at the top level means this is a game; anything else is a console program.
 That is a firmer signal than Pygame Zero's, which was recognised by defining
 `draw()` or `update()` — something an ordinary program could trip over.
@@ -892,9 +892,9 @@ static/
   game.js               kaypy: loads pygame-ce, unpacks the engine, the canvas,
                         the assets, and the keyboard
   export.js             Exports a game as one self-contained playable .html
-  py/kaplay/            The vendored kaypy engine (generated), including
+  py/kaypy/             The vendored kaypy engine (generated), including
                         web_page.html — the page Download fills in
-  py/kaplay_bundle.json The same thing as one file, which is what the browser
+  py/kaypy_bundle.json  The same thing as one file, which is what the browser
                         downloads (generated)
   py/kaypy.json         Which kaypy version is vendored, and from where
   sprites.js            The Python a Sprites-panel click inserts
@@ -1175,7 +1175,7 @@ python3 tools/test_guide.py                    # ../learn_pykaplay.md
 python3 tools/test_guide.py ../some_other.md   # or any markdown file
 ```
 
-Every fenced ```python block that imports *and* calls `kaplay` is a whole
+Every fenced ```python block that imports *and* calls `kaypy` is a whole
 lesson. Each one is executed the way pressing Run executes it — and then
 **played**: every key the lesson registered a handler for is held down and
 released, the mouse is clicked, every scene is built, and the timers are run
@@ -1195,7 +1195,8 @@ hundred lines of hand-written JavaScript pretending to be Kaplay. That
 stand-in was the test's weakest point: it answered every call, so a lesson
 could only fail by raising, and anything the stand-in got wrong was a bug the
 test could never see because the test *was* the bug. There is no stand-in now.
-`import kaplay` imports kaypy, out of the same bundle the browser downloads,
+`import kaypy` imports the vendored engine, out of the same bundle the
+browser downloads,
 so a lesson that runs here is a lesson that runs in front of a class.
 
 A failure names the line in the markdown, not a line in a file that does not

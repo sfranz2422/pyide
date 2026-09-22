@@ -3,9 +3,9 @@
 # The dino walk cycle is nine separate pictures, dino_0 through dino_8.
 # Flipping between them quickly is what makes it look like walking.
 
-from kaplay import *
+from kaypy import *
 
-kaplay(width=600, height=300, background=[246, 238, 220])
+kaypy(width=600, height=300, background=[246, 238, 220])
 
 for i in range(9):
     loadSprite("dino_" + str(i), "images/dino_" + str(i) + ".png")

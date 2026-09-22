@@ -204,7 +204,7 @@ def run_inserts(label, lines):
     and the atlas at once anyway.
     """
     ke._engine = None
-    eng = K.kaplay(width=64, height=64)
+    eng = K.kaypy(width=64, height=64)
     eng._started = True       # never let atexit start a frame loop
     eng._running = False
     scope = {n: getattr(K, n) for n in dir(K) if not n.startswith("_")}

@@ -1,9 +1,9 @@
 # Move the bean with the arrow keys.
 # Click the picture first so the keys reach the game.
 
-from kaplay import *
+from kaypy import *
 
-kaplay(width=600, height=400, background=[120, 190, 230])
+kaypy(width=600, height=400, background=[120, 190, 230])
 
 loadSprite("bean", "images/bean.png")
 

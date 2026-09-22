@@ -74,7 +74,7 @@ check("and the runner the page calls", typeof bundle["webrun.py"] === "string");
 
 const GAME = `from kaypy import *
 
-kaplay(width=640, height=480, background=[24, 24, 40])
+kaypy(width=640, height=480, background=[24, 24, 40])
 loadSprite("bean", "images/bean.png")
 loadSprite("ghosty", "images/ghosty.png")
 loadSound("ding", "sounds/ding.wav")
@@ -125,11 +125,11 @@ check("the editor and the exporter look for the same paths",
       patternIn("game.js") === patternIn("export.js") ? "" : "they have drifted");
 
 // --------------------------------------------------------- the canvas size
-check("it reads the size out of kaplay()",
+check("it reads the size out of kaypy()",
       JSON.stringify(X.canvasSize(GAME)) === '{"width":640,"height":480}',
       JSON.stringify(X.canvasSize(GAME)));
 check("and falls back to kaypy's own default when it cannot",
-      JSON.stringify(X.canvasSize("from kaypy import *\nkaplay()\n")) ===
+      JSON.stringify(X.canvasSize("from kaypy import *\nkaypy()\n")) ===
       '{"width":800,"height":600}');
 
 // ------------------------------------------------------------ the document

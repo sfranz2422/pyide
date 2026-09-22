@@ -108,14 +108,14 @@ window.PyIDEExport = (function () {
      than resizing visibly on the first frame. kaypy reads this off the syntax
      tree; there is no Python parser here, so it is a pattern — and anything it
      cannot read falls back to kaypy's own default, which is what the engine
-     would have used anyway. */
-  /* Both names start the engine: kaypy() is the documented one, kaplay() is
-     what files written before the rename say. Miss one and nothing breaks
-     loudly — the size just falls back to 800x600 and the export still reports
-     success, so the wrong canvas only shows up on itch.io. This mirrors
-     webbuild.INIT_NAMES in the engine; the two are checked against each other
-     by tools/test_same_as_kaypy.py. */
-  var INIT_CALL = /\b(?:kaypy|kaplay)\s*\(([^)]*)\)/;
+     would have used anyway.
+
+     Miss the name and nothing breaks loudly: the size falls back to 800x600
+     and the export still reports success, so the wrong canvas only shows up
+     on itch.io. This mirrors webbuild.INIT_NAMES in the engine, and
+     tools/test_same_as_kaypy.py checks the two against each other rather than
+     trusting them to be kept in step. */
+  var INIT_CALL = /\b(?:kaypy)\s*\(([^)]*)\)/;
 
   function canvasSize(source) {
     var size = { width: 800, height: 600 };

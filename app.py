@@ -55,12 +55,12 @@ for i in range(1, 6):
     print(i, "squared is", i * i)
 '''
 
-# The starter a game project opens on. Importing kaplay is also what tells the
+# The starter a game project opens on. Importing kaypy is also what tells the
 # editor this is a game rather than a console program, so the import has to be
 # there from the very first line a student sees.
 GAME_CODE = '''from kaypy import *
 
-kaplay(width=800, height=600, background=[24, 24, 40])
+kaypy(width=800, height=600, background=[24, 24, 40])
 
 # Click Sprites to browse the pictures you can use.
 loadSprite("bean", "images/bean.png")

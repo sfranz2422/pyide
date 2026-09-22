@@ -51,7 +51,7 @@ python3 tools/test_guide.py                       # learn_pykaplay.md
 python3 tools/test_guide.py docs/adventure_game.md
 ```
 
-Every fenced `python` block that imports *and* calls `kaplay` is executed the
+Every fenced `python` block that imports *and* calls `kaypy` is executed the
 way pressing Run executes it, and then played: every key the lesson registers a
 handler for is held down and released, the mouse is clicked, every scene is
 built, and the timers are run out. A lesson passes only if nothing raised.
