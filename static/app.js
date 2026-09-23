@@ -453,8 +453,12 @@
     document.body.classList.toggle("is-game", mode === "game");
 
     // Sprites are only meaningful to a game, so the button appears with one.
+    // So is the engine's documentation: in console mode it would be a link
+    // to the wrong manual.
     var isGame = mode === "game";
     spritesToggle.hidden = !isGame;
+    var docs = $("kaypy-docs");
+    if (docs) docs.hidden = !isGame;
     if (!isGame) closeSprites();
     relayout();
   }
@@ -726,8 +730,43 @@
        by the time limit, not by this button, which is why it stays hidden. */
   }
 
+  /* The support address, put together at run time.
+     Split so the whole address never appears as one string anywhere a
+     scraper can read it — this page is public. Writing the address out in
+     THIS comment would have defeated the entire exercise, which is exactly
+     what the first version of it did. */
+  var support = $("support");
+  if (support) {
+    var who = ["stephenfranz22", "gmail.com"].join("\u0040");
+    support.href = "mailto:" + who +
+      "?subject=" + encodeURIComponent("PyIDE — a question from a teacher");
+    support.title = "Email " + who + " about using PyIDE with your class";
+  }
+
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
+
+  /* + Game throws away whatever is in the editor and starts a new project.
+     It is a plain link, so without this it navigates on the first click and
+     the work is simply gone — which is what was happening to students who
+     brushed it on the way to Run.
+
+     Nothing is asked when there is nothing to lose: an untouched starter, or
+     a project that saves itself, costs nothing to leave. */
+  var newGame = $("new-game");
+  if (newGame) {
+    newGame.addEventListener("click", function (e) {
+      if (window.PYIDE && window.PYIDE.draftSlug) return;   // it saves itself
+      var code = mainSource().trim();
+      if (!code || code === (window.PYIDE && window.PYIDE.startingCode || "").trim()) {
+        return;                                            // nothing written yet
+      }
+      var ok = window.confirm(
+        "Start a new game project?\n\n" +
+        "What's in the editor now hasn't been saved, and will be lost.");
+      if (!ok) e.preventDefault();
+    });
+  }
 
   /* Re-bound after every canvas swap, because the listeners belong to the
      element and the element is replaced for each new game. */
