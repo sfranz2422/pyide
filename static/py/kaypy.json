@@ -1,8 +1,8 @@
 {
- "version": "0.10.0",
- "commit": "19c9ac6",
+ "version": "0.10.1",
+ "commit": "15012d8",
  "source": "/Users/franz/kaypy",
- "vendored_at": "2026-09-23T12:48:40Z",
+ "vendored_at": "2026-09-23T13:08:42Z",
  "files": 37,
- "bytes": 204498
+ "bytes": 206521
 }
