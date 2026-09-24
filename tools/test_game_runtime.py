@@ -189,30 +189,42 @@ for snippet, wanted in SAMPLES:
 for _, wanted in SAMPLES:
     check("  and %s is really there" % wanted, (ASSETS / wanted).is_file())
 
-# ------------------------------------------------- the starter students get
-starter = re.search(r"GAME_CODE = '''(.*?)'''", (PYIDE / "app.py").read_text(), re.S)
-check("app.py still has a game starter", starter is not None)
-if starter:
-    source = starter.group(1)
-    check("the starter is recognised as a game",
-          re.search(r"^[ \t]*(?:from[ \t]+kaypy[ \t]+import|import[ \t]+kaypy)\b",
-                    source, re.M) is not None)
-    # Run it for real, from the directory the assets live in.
-    os.chdir(ASSETS)
+# ------------------------------------ a kaypy program runs on the real assets
+#
+# This used to lift GAME_CODE out of app.py and run that. PyIDE no longer
+# ships a game starter — a student writes `from kaypy import *` themselves and
+# the editor notices — so the program under test lives here instead.
+#
+# What it proves is unchanged and is the point: an ordinary kaypy program,
+# executed from the directory PyIDE serves its sprites from, loads a real
+# sprite and completes frames. A broken asset path or an engine that cannot
+# start both fail here rather than in front of a class.
+SOURCE = """from kaypy import *
+
+kaypy(width=400, height=300, background=[20, 24, 36])
+loadSprite("bean", "images/bean.png")
+add([sprite("bean"), pos(100, 100), area()])
+"""
+
+check("the program under test is recognised as a game",
+      re.search(r"^[ \t]*(?:from[ \t]+kaypy[ \t]+import|import[ \t]+kaypy)\b",
+                SOURCE, re.M) is not None)
+
+os.chdir(ASSETS)
+ke._engine = None
+os.environ["KAYPY_TEST_MAX_FRAMES"] = "20"
+try:
+    scope = {}
+    exec(compile(SOURCE, "main.py", "exec"), scope)
+    asyncio.run(ke.current_engine().run_async())
+    ran, why = True, ""
+except Exception as exc:                                          # noqa: BLE001
+    ran, why = False, "%s: %s" % (type(exc).__name__, str(exc)[:70])
+check("and it runs on kaypy, with the real sprite pack", ran, why)
+if ke._engine is not None:
+    ke._engine._started = True
+    ke._engine._running = False
     ke._engine = None
-    os.environ["KAYPY_TEST_MAX_FRAMES"] = "20"
-    try:
-        scope = {}
-        exec(compile(source, "main.py", "exec"), scope)
-        asyncio.run(ke.current_engine().run_async())
-        ran, why = True, ""
-    except Exception as exc:
-        ran, why = False, "%s: %s" % (type(exc).__name__, str(exc)[:70])
-    check("and it runs on kaypy, with the real sprite pack", ran, why)
-    if ke._engine is not None:
-        ke._engine._started = True
-        ke._engine._running = False
-        ke._engine = None
 
 shutil.rmtree(work, ignore_errors=True)
 

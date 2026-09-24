@@ -55,47 +55,6 @@ for i in range(1, 6):
     print(i, "squared is", i * i)
 '''
 
-# The starter a game project opens on. Importing kaypy is also what tells the
-# editor this is a game rather than a console program, so the import has to be
-# there from the very first line a student sees.
-GAME_CODE = '''from kaypy import *
-
-kaypy(width=800, height=600, background=[24, 24, 40])
-
-# Click Sprites to browse the pictures you can use.
-loadSprite("bean", "images/bean.png")
-
-player = add([
-    sprite("bean"),
-    pos(400, 300),
-    anchor("center"),
-])
-
-SPEED = 300
-
-
-# Put the key above the function it runs. A lambda works too, and is shorter
-# for one line — but only a function can hold more than one.
-@onKeyDown("left")
-def go_left():
-    player.move(-SPEED, 0)
-
-
-@onKeyDown("right")
-def go_right():
-    player.move(SPEED, 0)
-
-
-@onKeyDown("up")
-def go_up():
-    player.move(0, -SPEED)
-
-
-@onKeyDown("down")
-def go_down():
-    player.move(0, SPEED)
-'''
-
 
 def _database_url() -> str:
     """Render supplies DATABASE_URL; fall back to a local SQLite file."""
@@ -424,22 +383,6 @@ def auth_callback():
 def logout():
     session.clear()
     return redirect(request.args.get("next") or url_for("index"))
-
-
-@app.get("/game")
-def new_game():
-    """A fresh game project, with Kaplay already imported."""
-    return render_template(
-        "index.html",
-        code=GAME_CODE,
-        files={},
-        title="Untitled Game",
-        author="",
-        readonly=False,
-        authoring=True,
-        slug=None,
-        shared_at=None,
-    )
 
 
 @app.get("/")

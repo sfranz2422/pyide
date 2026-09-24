@@ -46,7 +46,11 @@
   </div>
 
   <div class="actions">
-    <button id="mode" class="mode mode-console" type="button">Console</button>
+    {#  Not a button. The mode is decided by the code — an import of kaypy
+        means a game — so there is nothing here to press. It used to toggle,
+        which let a student pin the wrong mode and then wonder why Run did
+        the wrong thing. #}
+    <span id="mode" class="mode mode-console" aria-live="polite">Console</span>
     <button id="run" class="btn btn-run" disabled>
       <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
     </button>
@@ -115,16 +119,6 @@
     {% if not user %}
       <button id="download" class="btn">Download</button>
     {% endif %}
-    {#  + Game starts a whole new project, throwing away whatever is in the
-        editor. It used to sit between Stop and Sprites — two inches from the
-        button a student presses every thirty seconds — and students were
-        hitting it by accident and losing a lesson's work.
-
-        Moved down here, past everything reached for often, and it asks
-        first. Moving it alone would only have made the accident rarer; the
-        confirm is what makes it survivable. #}
-    <a id="new-game" class="btn btn-quiet" href="{{ url_for('new_game') }}"
-       title="Start a new, empty game project">+ Game</a>
     <div class="stepper" role="group" aria-label="Code text size">
       <button id="font-down" class="step" title="Smaller code text">−</button>
       <span id="font-size" class="step-value" aria-live="polite">14</span>

@@ -436,20 +436,27 @@
   $("clear").addEventListener("click", clearOutput);
 
   // ------------------------------------------------------------ mode state
-  // null = decide from the code, "console"/"game" = the student overrode it
-  var modeOverride = null;
-
+  /* The code decides, and nothing else can.
+   *
+   * The chip used to be a button that pinned the mode. It was the wrong
+   * shape for the problem: a student could pin Console on a game and then
+   * press Run and get nothing, with the reason sitting in a chip they had
+   * stopped reading. Pinning also had to be remembered, undone and painted
+   * differently, which is three states where one will do.
+   *
+   * Now an import of kaypy means a game and anything else means console, so
+   * what Run will do is always a fact about the code on screen.
+   */
   function currentMode(source) {
-    if (modeOverride) return modeOverride;
     return window.PyIDEGame.looksLikeGame(source) ? "game" : "console";
   }
 
   function paintMode(mode) {
     modeTag.textContent = mode === "game" ? "Game" : "Console";
-    modeTag.className = "mode mode-" + mode + (modeOverride ? " mode-pinned" : "");
-    modeTag.title = modeOverride
-      ? "Locked to " + mode + " mode. Click to go back to automatic."
-      : "Detected automatically from your code. Click to lock the mode.";
+    modeTag.className = "mode mode-" + mode;
+    modeTag.title = mode === "game"
+      ? "Your code imports kaypy, so Run opens a game window."
+      : "Run will run this in the console. Import kaypy to make it a game.";
     document.body.classList.toggle("is-game", mode === "game");
 
     // Sprites are only meaningful to a game, so the button appears with one.
@@ -489,13 +496,6 @@
         if (!cm.state.completionActive) window.PyIDEComplete.show(cm);
       }, 120);
     }
-  });
-
-  modeTag.addEventListener("click", function () {
-    var now = currentMode(mainSource());
-    // click cycles: auto -> pinned to the other mode -> auto
-    modeOverride = modeOverride ? null : (now === "game" ? "console" : "game");
-    refreshMode();
   });
 
   // Paint the mode before Python loads, so opening a shared game project shows
@@ -745,28 +745,6 @@
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
-
-  /* + Game throws away whatever is in the editor and starts a new project.
-     It is a plain link, so without this it navigates on the first click and
-     the work is simply gone — which is what was happening to students who
-     brushed it on the way to Run.
-
-     Nothing is asked when there is nothing to lose: an untouched starter, or
-     a project that saves itself, costs nothing to leave. */
-  var newGame = $("new-game");
-  if (newGame) {
-    newGame.addEventListener("click", function (e) {
-      if (window.PYIDE && window.PYIDE.draftSlug) return;   // it saves itself
-      var code = mainSource().trim();
-      if (!code || code === (window.PYIDE && window.PYIDE.startingCode || "").trim()) {
-        return;                                            // nothing written yet
-      }
-      var ok = window.confirm(
-        "Start a new game project?\n\n" +
-        "What's in the editor now hasn't been saved, and will be lost.");
-      if (!ok) e.preventDefault();
-    });
-  }
 
   /* Re-bound after every canvas swap, because the listeners belong to the
      element and the element is replaced for each new game. */
