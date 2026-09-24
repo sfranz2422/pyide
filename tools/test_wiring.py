@@ -125,6 +125,55 @@ check("  the mode comes from the source, and only from it",
       and "looksLikeGame" in check_mode_source.group(1)
       and "return" in check_mode_source.group(1))
 
+# ------------------------------------------- publish edits what it published
+#
+# Publish used to POST a new assignment every single press, so a teacher
+# revising a task ended up with three links and no way to tell which one the
+# class was holding. Nothing errored — it did exactly what it was told, three
+# times. Wanting a second, separate assignment has a better path: share the
+# project to yourself and publish the copy, which arrives named "Copy of ...".
+account = (ROOT / "static" / "account.js").read_text()
+
+check("publishing twice updates rather than duplicating",
+      "if (cfg.editingAssignment)" in account
+      and "updateAssignment(btn, read, say)" in account)
+check("  and the button says so afterwards",
+      'btn.textContent = "Update assignment"' in account)
+check("  remembering what it just published",
+      "cfg.editingAssignment = out.data.slug" in account)
+
+# One update path, not two copies of the message that explains who a change
+# reaches — the Update button and Publish-after-publishing share it.
+check("  with one shared update function",
+      account.count("function updateAssignment(") == 1
+      and account.count("/api/assignment/\" + encodeURIComponent") == 1)
+
+# ------------------------------------------- the game download carries source
+#
+# The .html is playable and NOT editable: the program is inside it, but so is
+# the whole engine, base64'd. A student left with only the page has a game
+# they can play and can never change again.
+editor = (ROOT / "static" / "app.js").read_text()
+
+# Only the GAME branch. The console download builds its zip with the very
+# same `{ name: MAIN, data: source }` line, so a check against the whole file
+# stays true while the game path is gutted — which is exactly what happened
+# the first time this was written, and it passed.
+start = editor.find('if (currentMode(source) === "game") {')
+end = editor.find("\n      return;\n    }", start)
+game_branch = editor[start:end] if start >= 0 and end > start else ""
+check("the game branch of onDownload was found", len(game_branch) > 200,
+      "%d chars" % len(game_branch))
+
+check("a game downloads as a zip, not a bare page",
+      'PyIDEZip.download(base + ".zip", gameEntries)' in game_branch)
+check("  containing the playable page",
+      'name: base + ".html", data: html' in game_branch)
+check("  and the source beside it",
+      "name: MAIN, data: source" in game_branch)
+check("  and any other files the project has",
+      "var alsoFiles = dataFiles();" in game_branch)
+
 # ------------------------------------------------- the starter is really gone
 server = (ROOT / "app.py").read_text()
 check("no game starter survives on the server",

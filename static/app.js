@@ -1150,13 +1150,16 @@
     var base = ($("title").value || "main").replace(/[^\w\-]+/g, "_").toLowerCase();
     var source = mainSource();
 
-    /* A game downloads as one playable .html file rather than as source.
+    /* A game downloads as a zip: the playable page AND the source.
        main.py on its own needs the engine, a canvas and a Python interpreter
-       to do anything, none of which a student has at home — so what came back
-       from Download would be a file that could not be opened.
+       to do anything, none of which a student has at home — so the .html
+       carries all three and can be double-clicked.
 
-       The .html carries all three. It also carries the program byte for byte,
-       so opening the file in an editor shows the student their own code. */
+       But the .html cannot be edited. The program is in there byte for byte,
+       and so is the whole engine, base64'd, so a student who keeps only the
+       page has a game they can play and can never change again. The .py files
+       go in beside it, which is what the kaypy playground does for the same
+       reason. */
     if (currentMode(source) === "game") {
       var was = runLabel.textContent;
       runBtn.disabled = true;
@@ -1166,9 +1169,25 @@
           source, $("title").value || "Game", function (msg) {
             runLabel.textContent = msg.length > 14 ? "Packing…" : msg;
           });
-        window.PyIDEExport.downloadGamePage(base + ".html", html);
-        write("\nSaved " + base + ".html — double-click it to play. " +
-              "It needs the internet the first time it runs.\n", "dim");
+
+        var gameEntries = [
+          { name: base + ".html", data: html },
+          { name: MAIN, data: source }
+        ];
+        // every other file the project has: imported modules, data files
+        var alsoFiles = dataFiles();
+        Object.keys(alsoFiles).sort().forEach(function (n) {
+          gameEntries.push({ name: n, data: alsoFiles[n] });
+        });
+
+        window.PyIDEZip.download(base + ".zip", gameEntries);
+        write("\nSaved " + base + ".zip\n" +
+              "  " + base + ".html  — double-click to play, or upload it\n" +
+              "  " + MAIN + "        — your code, to keep working on\n" +
+              (Object.keys(alsoFiles).length
+                ? "  and " + Object.keys(alsoFiles).length + " more file(s)\n"
+                : "") +
+              "The game needs the internet the first time it runs.\n", "dim");
       } catch (e) {
         write("\nCould not pack the game: " + e.message + "\n", "err");
       } finally {
