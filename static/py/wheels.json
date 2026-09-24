@@ -1,0 +1,36 @@
+{
+  "pinned": {
+    "requests": "2.33.1",
+    "urllib3": "2.6.3",
+    "certifi": "2026.4.22",
+    "idna": "3.11",
+    "charset-normalizer": "3.4.7"
+  },
+  "wheels": [
+    {
+      "file": "certifi-2026.4.22-py3-none-any.whl",
+      "sha256": "3cb2210c8f88ba2318d29b0388d1023c8492ff72ecdde4ebdaddbb13a31b1c4a",
+      "bytes": 135707
+    },
+    {
+      "file": "charset_normalizer-3.4.7-py3-none-any.whl",
+      "sha256": "3dce51d0f5e7951f8bb4900c257dad282f49190fdbebecd4ba99bcc41fef404d",
+      "bytes": 61958
+    },
+    {
+      "file": "idna-3.11-py3-none-any.whl",
+      "sha256": "771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea",
+      "bytes": 71008
+    },
+    {
+      "file": "requests-2.33.1-py3-none-any.whl",
+      "sha256": "4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a",
+      "bytes": 64947
+    },
+    {
+      "file": "urllib3-2.6.3-py3-none-any.whl",
+      "sha256": "bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4",
+      "bytes": 131584
+    }
+  ]
+}

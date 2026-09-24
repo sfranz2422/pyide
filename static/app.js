@@ -605,6 +605,73 @@
     paintStop();
   }
 
+  // -------------------------------------------------------------- requests
+  /* `requests` works in Pyodide — urllib3 talks to the browser's
+     XMLHttpRequest, so a plain synchronous requests.get() really does return
+     a response. It is not in Pyodide's own package set, though, so
+     loadPackagesFromImports cannot find it and `import requests` would be a
+     ModuleNotFoundError. It gets installed here instead.
+   
+     FROM THIS APP, NOT FROM PyPI
+   
+     micropip.install("requests") works and costs 445 KB per student per
+     session from files.pythonhosted.org — 13 MB of PyPI traffic for one
+     class, at the exact moment they all press Run. A school network that
+     blocks PyPI would stop the lesson with nothing on screen to explain it.
+     The wheels are vendored, so this fetches from the same host that served
+     the page. See tools/vendor_requests.py.
+   
+     ONLY WHEN ASKED FOR
+   
+     Most programs never import it, and half a megabyte on every Run for a
+     print() exercise is a bad trade. */
+  var REQUESTS_RE =
+    /^[ \t]*(?:import[ \t]+requests\b|from[ \t]+requests[ \t]+import\b)/m;
+  var requestsReady = false;
+  var requestsWorking = null;
+
+  function wantsRequests(source) { return REQUESTS_RE.test(source); }
+
+  async function ensureRequests(source) {
+    if (requestsReady || !wantsRequests(source)) return;
+    // Two Runs in quick succession must not install it twice; the second
+    // waits on the first rather than starting its own.
+    if (requestsWorking) return requestsWorking;
+
+    requestsWorking = (async function () {
+      status("Loading requests…");
+      var manifest = await fetch("/static/py/wheels.json",
+                                 { cache: "force-cache" }).then(function (r) {
+        if (!r.ok) throw new Error("wheels.json is missing (" + r.status + ")");
+        return r.json();
+      });
+      var urls = manifest.wheels.map(function (w) {
+        return "/static/py/wheels/" + w.file;
+      });
+      await pyodide.loadPackage("micropip");
+      /* All five in one call. Installed one at a time, requests would go in
+         before urllib3 exists and micropip would go looking for it on PyPI —
+         which is the trip this whole arrangement exists to avoid. */
+      pyodide.globals.set("_pyide_wheels", JSON.stringify(urls));
+      await pyodide.runPythonAsync(
+        "import json, micropip\n" +
+        "await micropip.install(json.loads(_pyide_wheels))\n");
+      requestsReady = true;
+      status("");
+    })();
+
+    try {
+      await requestsWorking;
+    } catch (e) {
+      requestsWorking = null;
+      status("");
+      write("Could not load requests: " + e + "\n" +
+            "Your teacher may need to run tools/vendor_requests.py.\n", "err");
+      throw e;
+    }
+    requestsWorking = null;
+  }
+
   // ---------------------------------------------------------------- run it
   async function run() {
     if (running || !pyRun) return;
@@ -621,6 +688,13 @@
     relayout();
     clearOutput();
     await repaint();
+
+    try {
+      await ensureRequests(source);
+    } catch (e) {
+      setBusy(false);
+      return;                       // the reason is already on screen
+    }
 
     try {
       await pyodide.loadPackagesFromImports(source, {
@@ -657,6 +731,13 @@
     showOutput();
     clearOutput();
     await repaint();
+
+    try {
+      await ensureRequests(source);
+    } catch (e) {
+      setBusy(false);
+      return;
+    }
 
     try {
       /* ensureReady hands back a NEW canvas each time, and points SDL at it.
