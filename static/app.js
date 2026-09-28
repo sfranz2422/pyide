@@ -792,7 +792,18 @@
     }
   }
 
+  /* Which run the finally below belongs to.
+   *
+   * Stop now puts the toolbar back itself, so a game can be stopped and
+   * another started while the first run's promise is still pending. If that
+   * old promise ever settles, its finally would call PyIDEGame.stop() and
+   * setBusy(false) on whatever is running NOW — stopping the new game for no
+   * visible reason, seconds after it started. The token makes a finally that
+   * no longer owns the toolbar do nothing at all. */
+  var runToken = 0;
+
   async function runGame(source) {
+    var token = ++runToken;
     setBusy(true, "game");
     showOutput();
     clearOutput();
@@ -849,22 +860,42 @@
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
-      window.PyIDEGame.stop(pyodide);
-      setBusy(false, "game");
-      pullFilesFromPython();
+      // Only if this is still the run the toolbar is showing. See runToken.
+      if (token === runToken) {
+        window.PyIDEGame.stop(pyodide);
+        setBusy(false, "game");
+        pullFilesFromPython();
+      }
     }
   }
 
   function stopRun() {
     if (!running) return;
     if (runMode === "game") {
-      /* Ask, don't tear down. Stop clears the engine's `running` flag; the
-         loop notices on its next frame, returns, and the await in runGame
-         resolves — and ITS finally is what puts the toolbar back. Calling
-         setBusy here as well would be a second, earlier answer to the same
-         question, and the two would disagree for a frame. */
+      /* Ask, don't tear down: Stop clears the engine's `running` flag and the
+         loop returns on its next frame.
+
+         THE TOOLBAR IS PUT BACK HERE, not by runGame's finally.
+
+         It used to be left to the finally, on the reasoning that resetting in
+         two places would be two answers to one question. That reasoning was
+         wrong in the only way that matters: the first answer never arrives.
+         Measured on the deployed app — press Stop on a kaypy game and the
+         canvas freezes, "— stopped —" is printed, and the await on
+         `_pyide_drive_game()` stays pending for ever, so Run sat on
+         "Running…" with Stop showing until the page was reloaded. The engine
+         had stopped; only the button disagreed.
+
+         Calling stop() re-enters Python synchronously while that coroutine is
+         suspended, which is the likely reason the promise never settles — but
+         the fix does not depend on being right about that. The user asked to
+         stop, the engine has been told, so the UI is now correct to say so,
+         whatever the promise does afterwards. runGame's finally is guarded by
+         a run token so it cannot undo a later run. */
       window.PyIDEGame.stop(pyodide);
       write("\n— stopped —\n", "dim");
+      setBusy(false);
+      pullFilesFromPython();
       if (!window.PyIDENotes.isMarkdown(active)) editor.focus();
       return;
     }

@@ -201,6 +201,32 @@ check("the live page opens for anyone with the code", r.status_code == 200,
 page = r.get_data(as_text=True)
 check("  and carries two editors, mirror and their own",
       'id="mirror"' in page and 'id="mine"' in page)
+
+# LAYOUT, because the first version got this wrong in a way only a kaypy
+# lesson showed: three panes stacked down the page put an 800x600 canvas in
+# the middle, squeezed the student's own editor to a few lines at the
+# bottom, and left Run in the header far from the code it runs.
+#
+# Checked as structure rather than by eye: the two editors are inside one
+# left-hand column, and the output and the canvas are a sibling of that
+# column, not a third row under it.
+# NESTING, not order. The first version of this sliced from the left
+# column's class to the string "live-right" — which is the same slice
+# whether the student's editor is inside that column or has been moved out
+# of it into a sibling, because both sit between those two points in the
+# text. It passed a deliberately broken page.
+start = page.index('class="pane live-left"')
+end = page.index("</section>", start)
+left = page[start:end]
+check("  with both editors stacked inside the left column",
+      'id="mirror"' in left and 'id="mine"' in left,
+      "mirror: %s, mine: %s" % ('id="mirror"' in left, 'id="mine"' in left))
+check("  and the output beside them, not under them",
+      'id="output"' not in left and 'id="canvas"' not in left,
+      "a game in the middle row is what squeezed the editor last time")
+check("  in the same right-hand pane class the editor uses",
+      'class="pane pane-right live-right"' in page,
+      "so the two pages do not disagree about where output lives")
 check("  with the lesson already in it, so it is not blank while it polls",
       "line two" in page)
 check("  and no button that copies the teacher's code down",
@@ -434,6 +460,39 @@ check("  and the server refuses a lower one",
 
 check("the poll answers 304 when nothing changed",
       'return ("", 304)' in app_src)
+
+# The editor's own rule for game mode: the output becomes a log strip under
+# the picture. Without the class the stylesheet has nothing to hook, and the
+# output pane fights the canvas for the right-hand column.
+check("a game turns the output into a strip under the picture",
+      'classList.add("is-game")' in live_code
+      and 'classList.remove("is-game")' in live_code,
+      "the editor sets the same class; the rule is already in style.css")
+check("  and the stylesheet has a rule for it",
+      "body.is-game" in open(os.path.join(PYIDE, "static", "style.css")).read())
+
+# STOP HAS TO PUT THE TOOLBAR BACK ITSELF.
+#
+# Reproduced on the deployed editor: press Stop on a kaypy game and the
+# canvas freezes and "— stopped —" is printed, but the await on
+# `_pyide_drive_game()` never settles, so Run stays disabled on "Running…"
+# with Stop showing until the page is reloaded. Leaving the reset to the
+# promise's finally is leaving it to something that may never run.
+for name, src in (("live.js", live_code),
+                  ("app.js", code_only(app_js))):
+    stop_fn = src[src.index("function stopRun"):]
+    stop_fn = stop_fn[:stop_fn.index("\n  }")]
+    check("%s: Stop puts the toolbar back without waiting for the promise"
+          % name,
+          "setBusy(false" in stop_fn,
+          "the game stops but the button says Running… for ever")
+
+# And the promise, if it ever does settle, must not reset a LATER run.
+for name, src in (("live.js", live_code),
+                  ("app.js", code_only(app_js))):
+    check("  %s: and a stale run cannot reset a newer one" % name,
+          "runToken" in src and "token === runToken" in src,
+          "an old finally would stop the game that is running now")
 
 check("a finished lesson stops the polling",
       'throw new Error("ended")' in live_code,

@@ -101,44 +101,55 @@
 </main>
 
 {% else %}
+{#  SAME SHAPE AS THE EDITOR: code on the left, what it does on the right.
+    The two editors stack down the left because they are read in that order —
+    watch this, now do it yourself — but the output and the game canvas
+    belong beside them, not under them. Stacked all three deep, a game
+    pushed the student's own editor to the bottom of the screen and left Run
+    somewhere near the ceiling. #}
 <main class="live-split">
-  {#  THE MIRROR AND THE STUDENT'S EDITOR ARE TWO SEPARATE CODEMIRRORS.
-      Not one editor that changes mode, and not a shared document. Nothing
-      arriving from the network is ever given to the lower one, so there is
-      no path — not even a buggy one — by which a student loses their own
-      work because the teacher typed. #}
-  <section class="pane live-pane live-mirror">
-    <div class="pane-head">
-      <span>What {{ live.host_name or "your teacher" }} is typing</span>
-      <span id="mirror-name" class="dim">{{ live.filename }}</span>
+  <section class="pane live-left">
+    {#  THE MIRROR AND THE STUDENT'S EDITOR ARE TWO SEPARATE CODEMIRRORS.
+        Not one editor that changes mode, and not a shared document. Nothing
+        arriving from the network is ever given to the lower one, so there is
+        no path — not even a buggy one — by which a student loses their own
+        work because the teacher typed. #}
+    <div class="live-pane live-mirror">
+      <div class="pane-head">
+        <span>What {{ live.host_name or "your teacher" }} is typing</span>
+        <span id="mirror-name" class="dim">{{ live.filename }}</span>
+      </div>
+      <div class="editor-wrap"><textarea id="mirror"></textarea></div>
     </div>
-    <div class="editor-wrap"><textarea id="mirror"></textarea></div>
+
+    <div class="live-pane live-mine">
+      <div class="pane-head">
+        <span>Your turn — type it yourself</span>
+        <span id="mine-saved" class="dim" aria-live="polite"></span>
+        {% if not user %}
+          <span class="dim">Kept in this browser — sign in to save it properly</span>
+        {% endif %}
+      </div>
+      <div class="editor-wrap"><textarea id="mine"></textarea></div>
+    </div>
   </section>
 
-  <section class="pane live-pane live-mine">
-    <div class="pane-head">
-      <span>Your turn — type it yourself</span>
-      <span id="mine-saved" class="dim" aria-live="polite"></span>
-      {% if not user %}
-        <span class="dim">Kept in this browser — sign in to save it properly</span>
-      {% endif %}
-    </div>
-    <div class="editor-wrap"><textarea id="mine"></textarea></div>
-  </section>
-
-  <section class="pane live-pane live-out">
+  <section class="pane pane-right live-right">
     <div id="stage" class="stage" hidden>
       <div class="pane-head"><span>Game</span></div>
       <div class="stage-frame">
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
       </div>
     </div>
-    <div class="pane-head">
-      <span>Output</span>
-      <button id="clear" class="linkbtn">Clear</button>
-    </div>
-    <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
+
+    <div id="output-view" class="subpane">
+      <div class="pane-head">
+        <span>Output</span>
+        <button id="clear" class="linkbtn">Clear</button>
+      </div>
+      <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
+    </div>
   </section>
 </main>
 {% endif %}

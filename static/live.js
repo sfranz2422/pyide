@@ -327,6 +327,9 @@
   var runMode = null;
   var canvas = $("canvas");
   var TIME_LIMIT_SECONDS = 15;
+  /* Which run the game finally belongs to — Stop resets the toolbar itself,
+     so an old pending promise must not reset a newer run's. */
+  var runToken = 0;
 
   function paintStop() {
     stopBtn.hidden = !(running && (runMode === "game" || consoleIO.isWaiting()));
@@ -361,6 +364,7 @@
     if (!window.PyIDEGame.looksLikeGame(source)) {
       setBusy(true, "console");
       stage.hidden = true;
+      document.body.classList.remove("is-game");
       clearOutput();
       consoleIO.setEnabled(true);
       try {
@@ -378,6 +382,7 @@
       return;
     }
 
+    var token = ++runToken;
     setBusy(true, "game");
     try {
       canvas = await window.PyIDEGame.ensureReady(pyodide, function () {}, source);
@@ -390,6 +395,10 @@
     clearOutput();
     write("Game running. Click the picture first so the keys reach it.\n", "dim");
     stage.hidden = false;
+    /* The same class the editor sets. It is what turns the output pane into
+       a log strip under the picture instead of letting it fight the canvas
+       for the right-hand column. */
+    document.body.classList.add("is-game");
     consoleIO.setEnabled(false);
     canvas.focus();
     try {
@@ -400,8 +409,11 @@
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
-      window.PyIDEGame.stop(pyodide);
-      setBusy(false);
+      // Only if this is still the run the toolbar is showing. See runToken.
+      if (token === runToken) {
+        window.PyIDEGame.stop(pyodide);
+        setBusy(false);
+      }
     }
   }
 
@@ -409,8 +421,18 @@
     if (!running) return;
     if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
     if (runMode !== "game") return;
+    /* THE TOOLBAR IS PUT BACK HERE, not by the finally above.
+
+       Measured on the deployed editor, which had the same shape: pressing
+       Stop on a kaypy game freezes the canvas and prints "— stopped —", and
+       then the await on `_pyide_drive_game()` never settles, so Run stays on
+       "Running…" with Stop showing until the page is reloaded. The engine has
+       stopped; only the button disagrees. The student asked to stop and the
+       engine has been told, so the UI is correct to say so now. */
     window.PyIDEGame.stop(pyodide);
     write("\n— stopped —\n", "dim");
+    setBusy(false);
+    document.body.classList.remove("is-game");
     mine.focus();
   }
 
