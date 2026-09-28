@@ -10,7 +10,7 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import (
     Flask,
@@ -1259,6 +1259,252 @@ def teacher_assignment(slug):
                    share_url=url_for("open_assignment", slug=item.slug,
                                      _external=True, _scheme=_scheme()))
         return render_template("teacher_assignment.html", **ctx)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Teaching live
+#
+# The teacher presses Go live in their ordinary editor and keeps working the
+# way they always do — tabs, notes, Run. Every few hundred milliseconds the
+# current file is written to one row. Students open /live/<code>, watch that
+# row appear above them, and type their own copy underneath.
+#
+# THE STUDENT'S OWN EDITOR IS NEVER WRITTEN TO FROM THE WIRE. Nothing that
+# arrives from a poll can reach it: the mirror and the student's editor are
+# two CodeMirror instances and only the mirror is ever given text. A class
+# losing a paragraph of their own work because the teacher typed is the one
+# failure that would stop anyone using this twice, so it is arranged to be
+# impossible rather than avoided carefully.
+#
+# There is deliberately no button that copies the teacher's code into the
+# student's editor. Typing it is the exercise.
+# --------------------------------------------------------------------------
+
+#: How stale a session can get before it is swept. A lesson is an hour; a row
+#: still being pushed to is never touched, however old.
+LIVE_STALE_HOURS = 12
+
+
+def _live_now():
+    return datetime.now(timezone.utc)
+
+
+def _find_live(db, code):
+    return db.query(accounts.LiveSession).filter_by(
+        code=(code or "").strip().lower(), app=APP_NAME).first()
+
+
+@app.post("/api/live/start")
+def live_start():
+    """Open a session, or hand back the one already running.
+
+    Reusing the open one matters: pressing Go live after a reload should put
+    the same code back on the projector, not invent a second one that half
+    the class is not looking at.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="Only a teacher can start a live lesson."), 403
+
+        data = request.get_json(silent=True) or {}
+        body = data.get("body")
+        if not isinstance(body, str):
+            body = ""
+        if len(body.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That file is too large to share live."), 413
+
+        live = (db.query(accounts.LiveSession)
+                  .filter_by(host_id=user.id, app=APP_NAME, ended=0)
+                  .order_by(accounts.LiveSession.started_at.desc()).first())
+        if live is None:
+            live = accounts.LiveSession(
+                code=accounts.new_id(db, accounts.LiveSession, "code"),
+                app=APP_NAME,
+                host_id=user.id,
+                host_name=user.display_name(),
+                title=clean(data.get("title"), 200) or "Live lesson",
+                body=body,
+                filename=clean(data.get("filename"), 200) or "main.py",
+                version=0,
+            )
+            db.add(live)
+        else:
+            live.title = clean(data.get("title"), 200) or live.title
+        live.updated_at = _live_now()
+        db.commit()
+
+        _sweep_live(db)
+        return jsonify(code=live.code, version=live.version,
+                       url=url_for("live_page", code=live.code, _external=True))
+    finally:
+        db.close()
+
+
+def _sweep_live(db):
+    """Close sessions nobody has pushed to for hours.
+
+    Without this the table grows a row per lesson forever, and — worse — a
+    teacher who closed the tab last Tuesday still has an "open" session, so
+    Go live today reuses a code the class no longer has.
+    """
+    cutoff = _live_now() - timedelta(hours=LIVE_STALE_HOURS)
+    try:
+        (db.query(accounts.LiveSession)
+           .filter(accounts.LiveSession.ended == 0,
+                   accounts.LiveSession.updated_at < cutoff)
+           .update({"ended": 1}, synchronize_session=False))
+        db.commit()
+    except Exception:
+        db.rollback()          # a sweep failing must never fail the lesson
+
+
+@app.post("/api/live/<code>/push")
+def live_push(code):
+    """The teacher's current file. Called every few hundred milliseconds.
+
+    `seq` is a stamp from the teacher's browser that only ever goes up, and
+    the write is conditional on it being higher than what the row already
+    has. Two pushes overtaking each other on a slow connection would
+    otherwise leave the OLDER text in the row with a HIGHER version, and the
+    class would sit looking at a line their teacher had already fixed.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Not signed in."), 403
+
+        live = _find_live(db, code)
+        if live is None:
+            return jsonify(error="No such live lesson."), 404
+        # Only the host, checked against the row rather than against the
+        # teacher list: a second teacher must not be able to type into
+        # somebody else's lesson.
+        if live.host_id != user.id:
+            return jsonify(error="This is not your live lesson."), 403
+        if live.ended:
+            return jsonify(error="That live lesson has ended.", ended=True), 409
+
+        data = request.get_json(silent=True) or {}
+        body = data.get("body")
+        if not isinstance(body, str):
+            return jsonify(error="Nothing to send."), 400
+        if len(body.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That file is too large to share live."), 413
+        try:
+            seq = int(data.get("seq", 0))
+        except (TypeError, ValueError):
+            return jsonify(error="Bad sequence number."), 400
+
+        filename = clean(data.get("filename"), 200) or live.filename
+
+        # One statement, so two workers cannot interleave a read and a write.
+        # `version < seq` is what drops a stale push, and it is also why this
+        # cannot be an ORM assignment followed by a commit.
+        changed = (db.query(accounts.LiveSession)
+                     .filter(accounts.LiveSession.id == live.id,
+                             accounts.LiveSession.version < seq)
+                     .update({"body": body, "filename": filename,
+                              "version": seq, "updated_at": _live_now()},
+                             synchronize_session=False))
+        db.commit()
+        if not changed:
+            # Not an error: a push that lost the race has nothing to say, and
+            # the teacher's browser should carry on rather than retry.
+            return jsonify(stale=True, version=live.version)
+        return jsonify(version=seq)
+    finally:
+        db.close()
+
+
+@app.post("/api/live/<code>/stop")
+def live_stop(code):
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None:
+            return jsonify(error="No such live lesson."), 404
+        if user is None or live.host_id != user.id:
+            return jsonify(error="This is not your live lesson."), 403
+        live.ended = 1
+        live.updated_at = _live_now()
+        db.commit()
+        return jsonify(ended=True)
+    finally:
+        db.close()
+
+
+@app.get("/api/live/<code>")
+def live_poll(code):
+    """What the class asks for, once a second, all lesson.
+
+    Answers 304 when nothing has changed, which is almost every time. Thirty
+    students polling is thirty small queries a second and no payload at all
+    until a key is pressed.
+
+    No sign-in required, on purpose: a student who cannot get Google to work
+    must still be able to follow the lesson.
+    """
+    db = SessionLocal()
+    try:
+        live = _find_live(db, code)
+        if live is None:
+            return jsonify(error="No such live lesson."), 404
+        try:
+            seen = int(request.args.get("v", -1))
+        except (TypeError, ValueError):
+            seen = -1
+
+        if seen == live.version and not live.ended:
+            return ("", 304)
+        return jsonify(
+            version=live.version,
+            body=live.body,
+            filename=live.filename,
+            title=live.title,
+            host=live.host_name,
+            ended=bool(live.ended),
+        )
+    finally:
+        db.close()
+
+
+@app.get("/live/")
+@app.get("/live")
+def live_join():
+    """Type a code in. The page students are sent to when they have a code."""
+    db = SessionLocal()
+    try:
+        ctx = user_context(db)
+        ctx.update(live=None, code="", joined=False,
+                   error=request.args.get("error", ""))
+        return render_template("live.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.get("/live/<code>")
+def live_page(code):
+    db = SessionLocal()
+    try:
+        live = _find_live(db, code)
+        if live is None:
+            return redirect(url_for("live_join", error="No lesson with that code."))
+        user = current_user(db)
+        ctx = user_context(db)
+        ctx.update(
+            live=live,
+            code=live.code,
+            joined=True,
+            is_host=bool(user is not None and user.id == live.host_id),
+            error="",
+        )
+        return render_template("live.html", **ctx)
     finally:
         db.close()
 

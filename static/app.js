@@ -1301,4 +1301,132 @@
     }
     if (e.key === "Escape" && running) stopRun();
   });
+
+  // ------------------------------------------------------------ teach live
+  //
+  // Go live and carry on working. Whatever file is open here is what the
+  // class sees at /live/<code>; switching tabs switches what they are
+  // watching, which is what a teacher means by "look at this bit".
+  //
+  // The file is sent WHOLE, every time, rather than as a diff. A diff stream
+  // is smaller and needs every update to arrive, in order — which polling
+  // cannot promise. Sending the whole file means a student whose wifi drops
+  // ten updates is correct again on the eleventh, and a student who joins in
+  // the middle needs no catch-up path at all.
+
+  var liveBtn = $("go-live");
+  var liveChip = $("live-code");
+
+  if (liveBtn) {
+    var liveCode = null;
+    var liveTimer = null;
+    var lastSent = null;
+    var lastVersion = 0;
+    var PUSH_MS = 400;
+
+    /* A stamp that only ever goes up, and the server refuses anything lower
+       than the row already has. Two pushes overtaking each other on a slow
+       connection would otherwise leave the OLDER text on screen with the
+       newer version number, and the class would sit looking at a line that
+       had already been fixed.
+
+       Date.now() rather than a counter starting at 1, so that reloading this
+       page mid-lesson does not start numbering below what the row has
+       reached — which would get every push after the reload rejected, with
+       the mirror silently frozen and the button still saying Live. The
+       max() covers a machine whose clock is behind the one that started it. */
+    function nextSeq() {
+      lastVersion = Math.max(Date.now(), lastVersion + 1);
+      return lastVersion;
+    }
+
+    function pushNow() {
+      if (!liveCode) return;
+      var name = active;
+      var text = docs[name] ? docs[name].getValue() : mainSource();
+      var stamp = name + "\u0000" + text;
+      if (stamp === lastSent) return;      // nothing typed since last time
+      lastSent = stamp;
+      fetch("/api/live/" + encodeURIComponent(liveCode) + "/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: text, filename: name, seq: nextSeq() })
+      }).then(function (res) {
+        if (res.status === 403 || res.status === 409) stopLive(true);
+      }).catch(function () {
+        // A dropped push is fine: the next one carries the whole file.
+      });
+    }
+
+    function paintLive() {
+      if (liveCode) {
+        liveBtn.textContent = "End lesson";
+        liveBtn.classList.add("btn-live-on");
+        liveChip.hidden = false;
+        liveChip.textContent = liveCode;
+        liveChip.title = "Your class joins at /live and types " + liveCode;
+      } else {
+        liveBtn.textContent = "Go live";
+        liveBtn.classList.remove("btn-live-on");
+        liveChip.hidden = true;
+      }
+    }
+
+    function stopLive(quietly) {
+      var code = liveCode;
+      liveCode = null;
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      lastSent = null;
+      paintLive();
+      try { localStorage.removeItem("pyide-live-host"); } catch (e) {}
+      if (code && !quietly) {
+        fetch("/api/live/" + encodeURIComponent(code) + "/stop", { method: "POST" });
+      }
+    }
+
+    function startLive() {
+      var name = active;
+      var text = docs[name] ? docs[name].getValue() : mainSource();
+      fetch("/api/live/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body: text,
+          filename: name,
+          title: ($("title") && $("title").value) || "Live lesson"
+        })
+      }).then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.error) { window.alert(data.error); return; }
+          liveCode = data.code;
+          lastVersion = data.version || 0;
+          lastSent = null;
+          try { localStorage.setItem("pyide-live-host", liveCode); } catch (e) {}
+          paintLive();
+          pushNow();
+          liveTimer = setInterval(pushNow, PUSH_MS);
+        })
+        .catch(function () {
+          window.alert("Could not start the live lesson. Check your connection.");
+        });
+    }
+
+    liveBtn.addEventListener("click", function () {
+      if (liveCode) {
+        if (window.confirm("End the lesson? Your class stops seeing this editor.")) {
+          stopLive(false);
+        }
+      } else {
+        startLive();
+      }
+    });
+
+    /* Reloading the editor mid-lesson must not silently stop the broadcast.
+       The session is still open server-side — /api/live/start hands back the
+       one already running rather than inventing a second code — so this puts
+       the button back into its Live state and resumes pushing. */
+    try {
+      if (localStorage.getItem("pyide-live-host")) startLive();
+    } catch (e) { /* storage blocked: press Go live again */ }
+  }
 })();
