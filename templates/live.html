@@ -52,7 +52,19 @@
         <button id="live-stop" class="btn btn-stop-live">End lesson</button>
       {% endif %}
     {% endif %}
-    {% if not is_host %}
+    {% if joined and not is_host %}
+      {#  Signed in, their copy can go into their own projects and autosave
+          from then on — the same Save-once-then-it-is-yours the editor
+          already does. Signed out it is not offered, because there is
+          nowhere for it to go; that copy lives in their browser and the
+          page says so. #}
+      {% if user %}
+        <button id="live-save" class="btn"
+                title="Keep this in your projects. It saves itself from then on.">Save</button>
+        <span id="live-save-state" class="savestate" aria-live="polite" hidden></span>
+        <a id="live-open" class="btn" hidden
+           title="Open this copy in the full editor">Open in editor</a>
+      {% endif %}
       <button id="run" class="btn btn-run" disabled>
         <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
       </button>
@@ -107,6 +119,9 @@
     <div class="pane-head">
       <span>Your turn — type it yourself</span>
       <span id="mine-saved" class="dim" aria-live="polite"></span>
+      {% if not user %}
+        <span class="dim">Kept in this browser — sign in to save it properly</span>
+      {% endif %}
     </div>
     <div class="editor-wrap"><textarea id="mine"></textarea></div>
   </section>
@@ -136,7 +151,9 @@
     version: {{ (live.version if live else 0) | tojson }},
     body: {{ (live.body if live else '') | tojson }},
     filename: {{ (live.filename if live else 'main.py') | tojson }},
-    ended: {{ 'true' if (live and live.ended) else 'false' }}
+    ended: {{ 'true' if (live and live.ended) else 'false' }},
+    title: {{ (live.title if live else '') | tojson }},
+    signedIn: {{ 'true' if user else 'false' }}
   };
 </script>
 {#  Only a student following the lesson needs an editor and Python. The join

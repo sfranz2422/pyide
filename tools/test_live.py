@@ -233,6 +233,63 @@ check("  and does not offer it to a student", 'id="go-live"' not in
       r.get_data(as_text=True))
 
 
+# ------------------------------------------------ keeping their own copy
+print("\nSaving their own work")
+
+r = student.get("/live/%s" % CODE)
+student_page = r.get_data(as_text=True)
+check("a signed-in student is offered Save", 'id="live-save"' in student_page)
+check("  and is not told their work is browser-only",
+      "sign in to save it properly" not in student_page)
+
+r = stranger.get("/live/%s" % CODE)
+out_page = r.get_data(as_text=True)
+check("a signed-out student is not offered Save",
+      'id="live-save"' not in out_page,
+      "there is nowhere for it to go, so the button would be a lie")
+check("  and is told where their work is kept instead",
+      "sign in to save it properly" in out_page)
+
+# The live page saves through the editor's own endpoints, so a project made
+# here is an ordinary project: it opens at /p/<slug>, lists in My projects,
+# and can be turned in. Nothing about it is special-cased.
+r = student.post("/api/draft", json={"code": "my own attempt", "files": {},
+                                     "title": "Loops"})
+check("their copy saves through the ordinary draft endpoint",
+      r.status_code == 200, r.status_code)
+SLUG = r.get_json()["slug"]
+
+r = student.post("/api/draft/" + SLUG,
+                 json={"code": "my own attempt, further on", "files": {},
+                       "title": "Loops"})
+check("  and autosaves from then on", r.status_code == 200, r.status_code)
+
+listed = student.get("/api/my/projects").get_json()
+titles = [row["title"] for row in listed.get("projects", listed if
+          isinstance(listed, list) else [])]
+check("  and turns up in My projects", "Loops" in titles, titles)
+
+r = student.get("/p/" + SLUG)
+check("  and opens in the full editor",
+      r.status_code == 200 and "my own attempt, further on"
+      in r.get_data(as_text=True), r.status_code)
+
+r = stranger.post("/api/draft", json={"code": "x", "files": {}})
+check("a signed-out student saving is told to sign in, not ignored",
+      r.status_code == 401, r.status_code)
+
+# A deleted project must not leave the page autosaving into nothing while
+# telling the student it saved.
+student.delete("/api/draft/" + SLUG)
+r = student.post("/api/draft/" + SLUG, json={"code": "after", "files": {}})
+check("autosaving into a deleted project is a clean 404, not a silent success",
+      r.status_code == 404, r.status_code)
+_live_js = open(os.path.join(PYIDE, "static", "live.js")).read()
+check("  and live.js turns that back into a Save button",
+      "res.status === 404" in _live_js and "removeItem(SLUG_KEY)" in _live_js,
+      "otherwise it says Saved for the rest of the lesson and saves nothing")
+
+
 # ------------------------------------------------------------------ ending
 print("\nEnding it")
 
@@ -324,6 +381,41 @@ check("  and what goes in came out of their own browser, not the wire",
                                   else "NOT traced to localStorage"))
 
 after_mirror = live_code[live_code.index("function showMirror"):]
+# What gets saved has to be the student's editor. Saving the mirror would
+# put the teacher's code in the student's projects under their name, and it
+# would look completely correct on screen while doing it.
+#
+# ONE LEVEL OF INDIRECTION IS RESOLVED, because the first version of this
+# check only matched `code: <editor>.getValue()` and the initial Save passes
+# a variable — so changing that variable to read the mirror passed the suite
+# untouched. A check that covers the autosave and not the Save is worse than
+# none, because it reads as though both are guarded.
+def editors_behind(field):
+    """Which CodeMirror every `field: ...` ends up reading."""
+    found = set()
+    for value in re.findall(r"\b%s: *([\w.()]+)" % field, live_code):
+        value = value.rstrip(",")
+        direct = re.match(r"(\w+)\.getValue\(\)$", value)
+        if direct:
+            found.add(direct.group(1))
+            continue
+        if re.match(r"^\w+$", value):          # a variable: find what it holds
+            for src in re.findall(
+                    r"\b%s *= *(\w+)\.getValue\(\)" % re.escape(value),
+                    live_code):
+                found.add(src)
+            else:
+                if not re.search(r"\b%s *= *\w+\.getValue\(\)"
+                                 % re.escape(value), live_code):
+                    found.add("?" + value)     # unresolved: say so, don't pass
+    return found
+
+
+saved_from = editors_behind("code")
+check("  and what is saved to their projects is their editor, not the mirror",
+      bool(saved_from) and saved_from == {"mine"},
+      "saved from: %s" % sorted(saved_from))
+
 check("  and nothing in the polling path touches it at all",
       "mine.setValue(" not in after_mirror,
       "a class losing their own work is the one unforgivable bug here")

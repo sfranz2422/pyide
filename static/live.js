@@ -109,8 +109,108 @@
       } catch (e) {
         note("Could not save here — keep this tab open");
       }
+      autosave();
     }, 500);
   });
+
+  /* ------------------------------------------------- into their projects
+   *
+   * Signed in, the copy they type here is an ordinary PyIDE project: press
+   * Save once and it autosaves from then on, exactly as the editor does. It
+   * turns up in My projects, opens at /p/<slug>, and can be turned in.
+   *
+   * The browser copy above stays either way. It is the only thing a
+   * signed-out student has, and for a signed-in one it is what survives the
+   * network being down for the ten minutes the school's wifi is having a
+   * moment. The two never disagree about anything important, because both
+   * are written from the same editor a fraction of a second apart.
+   *
+   * EVERYTHING BELOW SENDS `mine`. The mirror is not theirs and must never
+   * end up in their projects with their name on it.
+   */
+  var saveBtn = $("live-save");
+  var saveState = $("live-save-state");
+  var openLink = $("live-open");
+  var SLUG_KEY = DRAFT_KEY + "-slug";
+  var draftSlug = null;
+  var pendingSave = false;
+
+  try {
+    draftSlug = window.localStorage.getItem(SLUG_KEY) || null;
+  } catch (e) { /* they will press Save and get a fresh one */ }
+
+  function savedNow(text) {
+    if (!saveState) return;
+    saveState.hidden = false;
+    saveState.textContent = text;
+    if (saveBtn) saveBtn.hidden = true;
+    if (openLink && draftSlug) {
+      openLink.hidden = false;
+      openLink.href = "/p/" + encodeURIComponent(draftSlug);
+    }
+  }
+
+  if (draftSlug) savedNow("Saved");
+
+  function startDraft() {
+    if (!L.signedIn || pendingSave) return;
+    var text = mine.getValue();
+    if (!text.trim()) { note("Type something first"); return; }
+    pendingSave = true;
+    fetch("/api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: text,                       // theirs, never the mirror's
+        files: {},
+        title: L.title || "Live lesson"
+      })
+    }).then(function (res) { return res.json(); })
+      .then(function (data) {
+        pendingSave = false;
+        if (data.error) { window.alert(data.error); return; }
+        draftSlug = data.slug;
+        try { window.localStorage.setItem(SLUG_KEY, draftSlug); } catch (e) {}
+        savedNow("Saved");
+      })
+      .catch(function () {
+        pendingSave = false;
+        window.alert("Could not save. Check your connection and try again.");
+      });
+  }
+
+  function autosave() {
+    if (!draftSlug || !L.signedIn) return;
+    fetch("/api/draft/" + encodeURIComponent(draftSlug), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: mine.getValue(),            // theirs, never the mirror's
+        files: {},
+        title: L.title || "Live lesson"
+      })
+    }).then(function (res) {
+      if (res.status === 404) {
+        /* The project was deleted from another tab, or from My projects.
+           Forgetting the slug turns the next Save into a fresh one rather
+           than leaving this page autosaving into nothing for the rest of
+           the lesson and telling the student it was saved. */
+        draftSlug = null;
+        try { window.localStorage.removeItem(SLUG_KEY); } catch (e) {}
+        if (saveBtn) saveBtn.hidden = false;
+        if (saveState) saveState.hidden = true;
+        if (openLink) openLink.hidden = true;
+        return null;
+      }
+      return res.json();
+    }).then(function (data) {
+      if (data && data.saved_at) savedNow("Saved " + data.saved_at);
+    }).catch(function () {
+      if (saveState) saveState.textContent = "Not saved — still in this browser";
+    });
+  }
+
+  if (saveBtn) saveBtn.addEventListener("click", startDraft);
 
   var noteTimer = null;
   function note(text) {
