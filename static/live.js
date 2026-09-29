@@ -150,9 +150,15 @@
   var saveBtn = $("live-save");
   var saveState = $("live-save-state");
   var openLink = $("live-open");
+  var turnInBtn = $("live-turn-in");
   var SLUG_KEY = DRAFT_KEY + "-slug";
   var draftSlug = null;
   var pendingSave = false;
+  /* Whether the lesson has an assignment behind it. Trusted from the save's
+     own reply rather than assumed from the page, so a lesson whose
+     assignment was closed between loading the page and pressing Save does
+     not leave a Turn in button that cannot work. */
+  var canTurnIn = false;
 
   try {
     draftSlug = window.localStorage.getItem(SLUG_KEY) || null;
@@ -167,28 +173,75 @@
       openLink.hidden = false;
       openLink.href = "/p/" + encodeURIComponent(draftSlug);
     }
+    if (turnInBtn) turnInBtn.hidden = !(draftSlug && canTurnIn);
   }
 
-  if (draftSlug) savedNow("Saved");
+  if (draftSlug) {
+    // Reopened mid-lesson with a copy already saved. The page knows whether
+    // the lesson has an assignment, so Turn in can be offered straight away
+    // rather than waiting for the next keystroke to trigger an autosave.
+    canTurnIn = !!L.assignment;
+    savedNow(L.submittedAt ? "Turned in " + L.submittedAt : "Saved");
+  }
+
+  /* Handing it in. The same endpoint the editor uses, against the same
+     draft, so what the teacher sees on the dashboard is identical whichever
+     way the student got there. */
+  function turnIn() {
+    if (!draftSlug || !canTurnIn) return;
+    if (!window.confirm("Turn this in to " + (L.assignmentTitle || "your teacher")
+                        + "? You can keep working and turn it in again.")) {
+      return;
+    }
+    turnInBtn.disabled = true;
+    fetch("/api/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        draft: draftSlug,
+        code: mine.getValue(),            // theirs, never the mirror's
+        files: {}
+      })
+    }).then(function (res) { return res.json(); })
+      .then(function (data) {
+        turnInBtn.disabled = false;
+        if (data.error) { window.alert(data.error); return; }
+        turnInBtn.textContent = "Turn in again";
+        savedNow("Turned in" + (data.submitted_at ? " " + data.submitted_at : ""));
+      })
+      .catch(function () {
+        turnInBtn.disabled = false;
+        window.alert("Could not turn it in. Check your connection and try again.");
+      });
+  }
+
+  if (turnInBtn) turnInBtn.addEventListener("click", turnIn);
 
   function startDraft() {
     if (!L.signedIn || pendingSave) return;
     var text = mine.getValue();
     if (!text.trim()) { note("Type something first"); return; }
     pendingSave = true;
-    fetch("/api/draft", {
+    /* /api/live/<code>/keep, NOT /api/draft.
+       
+       /api/draft makes a free-standing project with no assignment on it, and
+       a draft with no assignment can never be turned in — which is what made
+       handing work in from a live lesson impossible. This route puts the
+       work in the assignment's own draft when the lesson has one, so it is
+       the same row the handout link would have made and Turn in appears. */
+    fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: text,                       // theirs, never the mirror's
-        files: {},
-        title: L.title || "Live lesson"
+        files: {}
       })
     }).then(function (res) { return res.json(); })
       .then(function (data) {
         pendingSave = false;
         if (data.error) { window.alert(data.error); return; }
         draftSlug = data.slug;
+        canTurnIn = !!data.can_turn_in;
         try { window.localStorage.setItem(SLUG_KEY, draftSlug); } catch (e) {}
         savedNow("Saved");
       })

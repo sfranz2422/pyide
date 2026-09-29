@@ -1353,6 +1353,7 @@
     var liveTimer = null;
     var lastSent = null;
     var lastVersion = 0;
+    var liveFor = "";           // assignment title, for the chip's tooltip
     var PUSH_MS = 400;
 
     /* A stamp that only ever goes up, and the server refuses anything lower
@@ -1395,7 +1396,9 @@
         liveBtn.classList.add("btn-live-on");
         liveChip.hidden = false;
         liveChip.textContent = liveCode;
-        liveChip.title = "Your class joins at /live and types " + liveCode;
+        liveChip.title = "Your class joins at /live and types " + liveCode
+          + (liveFor ? "\nThey can turn in to: " + liveFor
+                     : "\nNo assignment, so they cannot turn work in.");
       } else {
         liveBtn.textContent = "Go live";
         liveBtn.classList.remove("btn-live-on");
@@ -1415,21 +1418,55 @@
       }
     }
 
-    function startLive() {
+    /* Which assignment this lesson is for, asked once when Go live is
+       pressed.
+
+       IT IS NOT A NICETY. Turning work in needs a draft with an assignment
+       on it, so a lesson with none is a lesson the class cannot hand
+       anything in from — and nothing about that is visible while it is
+       happening. Asking here is the one moment the teacher is thinking
+       about the lesson anyway. */
+    function chooseAssignment() {
+      return fetch("/api/live/assignments")
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var list = (data && data.assignments) || [];
+          if (!list.length) return "";       // nothing published yet
+          var lines = ["Which assignment is this lesson for?", "",
+                       "0 — none (they can still save, but not turn in)"];
+          list.forEach(function (a, i) {
+            lines.push((i + 1) + " — " + a.title);
+          });
+          var pick = window.prompt(lines.join("\n"), "1");
+          if (pick === null) return null;    // cancelled: do not go live
+          var n = parseInt(pick, 10);
+          if (!n || n < 1 || n > list.length) return "";
+          return list[n - 1].slug;
+        })
+        .catch(function () { return ""; });
+    }
+
+    function startLive(assignment) {
       var name = active;
       var text = docs[name] ? docs[name].getValue() : mainSource();
       fetch("/api/live/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          body: text,
-          filename: name,
-          title: ($("title") && $("title").value) || "Live lesson"
-        })
+        body: JSON.stringify(assignment === undefined
+          ? { body: text, filename: name,
+              title: ($("title") && $("title").value) || "Live lesson" }
+          /* `assignment` present — even as "" — is what tells the server this
+             was a deliberate choice. Left out, a resumed session keeps the
+             assignment it already had rather than silently losing it on a
+             page reload, which would leave the class unable to hand in with
+             nothing on screen to say why. */
+          : { body: text, filename: name, assignment: assignment,
+              title: ($("title") && $("title").value) || "Live lesson" })
       }).then(function (res) { return res.json(); })
         .then(function (data) {
           if (data.error) { window.alert(data.error); return; }
           liveCode = data.code;
+          liveFor = data.assignment_title || "";
           lastVersion = data.version || 0;
           lastSent = null;
           try { localStorage.setItem("pyide-live-host", liveCode); } catch (e) {}
@@ -1448,7 +1485,10 @@
           stopLive(false);
         }
       } else {
-        startLive();
+        chooseAssignment().then(function (slug) {
+          if (slug === null) return;        // they cancelled the chooser
+          startLive(slug);
+        });
       }
     });
 
@@ -1457,6 +1497,8 @@
        one already running rather than inventing a second code — so this puts
        the button back into its Live state and resumes pushing. */
     try {
+      // Resuming after a reload: no assignment argument at all, so the
+      // server keeps whatever the session already had.
       if (localStorage.getItem("pyide-live-host")) startLive();
     } catch (e) { /* storage blocked: press Go live again */ }
   }

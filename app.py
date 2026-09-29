@@ -1296,6 +1296,65 @@ def _find_live(db, code):
         code=(code or "").strip().lower(), app=APP_NAME).first()
 
 
+@app.get("/api/live/assignments")
+def live_assignments():
+    """The teacher's open assignments, for the chooser on Go live.
+
+    Picking one is what makes Turn in possible for the class, so this is not
+    decoration: a lesson with no assignment is a lesson nobody can hand
+    anything in from.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="Only a teacher can start a live lesson."), 403
+        rows = (db.query(accounts.Assignment)
+                  .filter_by(teacher_id=user.id, app=APP_NAME,
+                             archived=0, closed=0)
+                  .order_by(accounts.Assignment.created_at.desc())
+                  .limit(40).all())
+        return jsonify(assignments=[{"slug": a.slug, "title": a.title}
+                                    for a in rows])
+    finally:
+        db.close()
+
+
+def _assignment_for(db, user, slug):
+    """The teacher's own assignment by slug, or (None, reason).
+
+    Checked against teacher_id rather than just the teacher list, so one
+    teacher cannot attach a lesson to another's assignment and collect their
+    class's work.
+    """
+    if not slug:
+        return None, None
+    item = db.query(accounts.Assignment).filter_by(
+        slug=slug, app=APP_NAME).first()
+    if item is None:
+        return None, "No assignment with that link."
+    if item.teacher_id != user.id:
+        return None, "That is not your assignment."
+    if item.closed:
+        return None, "That assignment is closed, so nothing could be "\
+                     "turned in to it."
+    return item, None
+
+
+def _slug_of_assignment(db, assignment_id):
+    if not assignment_id:
+        return ""
+    row = db.query(accounts.Assignment).filter_by(id=assignment_id).first()
+    return row.slug if row else ""
+
+
+def _title_of_assignment(db, assignment_id):
+    if not assignment_id:
+        return ""
+    row = db.query(accounts.Assignment).filter_by(id=assignment_id).first()
+    return row.title if row else ""
+
+
 @app.post("/api/live/start")
 def live_start():
     """Open a session, or hand back the one already running.
@@ -1317,6 +1376,11 @@ def live_start():
         if len(body.encode("utf-8")) > MAX_CODE_BYTES:
             return jsonify(error="That file is too large to share live."), 413
 
+        wanted = clean(data.get("assignment"), 16)
+        item, why = _assignment_for(db, user, wanted)
+        if why:
+            return jsonify(error=why), 400
+
         live = (db.query(accounts.LiveSession)
                   .filter_by(host_id=user.id, app=APP_NAME, ended=0)
                   .order_by(accounts.LiveSession.started_at.desc()).first())
@@ -1330,16 +1394,27 @@ def live_start():
                 body=body,
                 filename=clean(data.get("filename"), 200) or "main.py",
                 version=0,
+                assignment_id=item.id if item else None,
             )
             db.add(live)
         else:
             live.title = clean(data.get("title"), 200) or live.title
+            # Resuming after a reload must not quietly drop the assignment —
+            # the class would carry on with no way to hand anything in, and
+            # nothing would say so. Only an explicit choice changes it.
+            if "assignment" in data:
+                live.assignment_id = item.id if item else None
         live.updated_at = _live_now()
         db.commit()
 
         _sweep_live(db)
         return jsonify(code=live.code, version=live.version,
+                       assignment=(item.slug if item else
+                                   _slug_of_assignment(db, live.assignment_id)),
+                       assignment_title=(item.title if item else
+                                         _title_of_assignment(db, live.assignment_id)),
                        url=url_for("live_page", code=live.code, _external=True))
+
     finally:
         db.close()
 
@@ -1474,6 +1549,82 @@ def live_poll(code):
         db.close()
 
 
+@app.post("/api/live/<code>/keep")
+def live_keep(code):
+    """A student saving their own copy from the live page.
+
+    THIS IS NOT /api/draft, AND THE DIFFERENCE IS THE WHOLE POINT.
+
+    /api/draft makes a free-standing project with no assignment on it, and a
+    draft with no assignment can never be turned in — the button cannot even
+    appear. That is what made handing work in from a live lesson impossible.
+
+    When the lesson has an assignment, this creates or finds the draft for
+    (this student, that assignment): the very row /a/<slug> would have made.
+    So a student who opened the handout link this morning and joins the
+    lesson this afternoon carries on with ONE copy, and whichever way they
+    came in, Turn in is there.
+
+    With no assignment on the lesson it behaves exactly like /api/draft, so
+    a lesson that is just a lesson still saves.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first, then you can save your work."), 401
+
+        live = _find_live(db, code)
+        if live is None:
+            return jsonify(error="No such live lesson."), 404
+
+        data = request.get_json(silent=True) or {}
+        source = data.get("code", "")
+        if not isinstance(source, str) or not source.strip():
+            return jsonify(error="There's nothing to save yet."), 400
+        if len(source.encode("utf-8")) > MAX_CODE_BYTES:
+            return jsonify(error="That program is too large to save."), 413
+
+        item = None
+        if live.assignment_id:
+            item = db.query(accounts.Assignment).filter_by(
+                id=live.assignment_id).first()
+
+        draft = None
+        if item is not None:
+            # One per student per assignment — there is a unique constraint
+            # on exactly this pair, so looking first is what keeps the insert
+            # below from colliding with the handout link.
+            draft = db.query(accounts.Draft).filter_by(
+                owner_id=user.id, assignment_id=item.id).first()
+
+        if draft is None:
+            draft = accounts.Draft(
+                slug=accounts.new_id(db, accounts.Draft),
+                owner_id=user.id,
+                assignment_id=item.id if item else None,
+                app=APP_NAME,
+                title=(item.title if item else (live.title or "Live lesson")),
+                code=source,
+                files="{}",
+            )
+            db.add(draft)
+        else:
+            draft.code = source
+            draft.updated_at = accounts.now()
+
+        db.commit()
+        return jsonify(
+            slug=draft.slug,
+            url=url_for("open_draft", slug=draft.slug),
+            assignment=(item.slug if item else ""),
+            assignment_title=(item.title if item else ""),
+            can_turn_in=bool(item),
+        )
+    finally:
+        db.close()
+
+
 @app.get("/live/")
 @app.get("/live")
 def live_join():
@@ -1481,7 +1632,8 @@ def live_join():
     db = SessionLocal()
     try:
         ctx = user_context(db)
-        ctx.update(live=None, code="", joined=False,
+        ctx.update(live=None, code="", joined=False, is_host=False,
+                   assignment=None, submitted_at="",
                    error=request.args.get("error", ""))
         return render_template("live.html", **ctx)
     finally:
@@ -1496,12 +1648,26 @@ def live_page(code):
         if live is None:
             return redirect(url_for("live_join", error="No lesson with that code."))
         user = current_user(db)
+        item = None
+        submitted_at = ""
+        if live.assignment_id:
+            item = db.query(accounts.Assignment).filter_by(
+                id=live.assignment_id).first()
+        # If they have already handed this in, the button says so rather than
+        # pretending nothing happened — the same wording the editor uses.
+        if item is not None and user is not None:
+            done = db.query(accounts.Submission).filter_by(
+                assignment_id=item.id, student_id=user.id).first()
+            if done is not None:
+                submitted_at = done.submitted_at.strftime("%b %d at %I:%M %p")
         ctx = user_context(db)
         ctx.update(
             live=live,
             code=live.code,
             joined=True,
             is_host=bool(user is not None and user.id == live.host_id),
+            assignment=item,
+            submitted_at=submitted_at,
             error="",
         )
         return render_template("live.html", **ctx)

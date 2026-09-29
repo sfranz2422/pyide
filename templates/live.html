@@ -62,6 +62,16 @@
         <button id="live-save" class="btn"
                 title="Keep this in your projects. It saves itself from then on.">Save</button>
         <span id="live-save-state" class="savestate" aria-live="polite" hidden></span>
+        {#  Only once it is saved, and only when the lesson is for an
+            assignment. A Turn in button with nothing behind it is worse
+            than none: a student presses it, sees an error they cannot act
+            on, and assumes their work is lost. #}
+        {% if assignment %}
+          <button id="live-turn-in" class="btn btn-primary" hidden
+                  title="Hand this in to {{ live.host_name }}. You can keep working and turn it in again.">
+            {% if submitted_at %}Turn in again{% else %}Turn in{% endif %}
+          </button>
+        {% endif %}
         <a id="live-open" class="btn" hidden
            title="Open this copy in the full editor">Open in editor</a>
       {% endif %}
@@ -170,7 +180,10 @@
     filename: {{ (live.filename if live else 'main.py') | tojson }},
     ended: {{ 'true' if (live and live.ended) else 'false' }},
     title: {{ (live.title if live else '') | tojson }},
-    signedIn: {{ 'true' if user else 'false' }}
+    signedIn: {{ 'true' if user else 'false' }},
+    assignment: {{ (assignment.slug if assignment else '') | tojson }},
+    assignmentTitle: {{ (assignment.title if assignment else '') | tojson }},
+    submittedAt: {{ (submitted_at or '') | tojson }}
   };
 </script>
 {#  Only a student following the lesson needs an editor and Python. The join

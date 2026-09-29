@@ -90,6 +90,7 @@ def row(code):
 TEACHER = add_user("t1", "teacher@example.org", "Mr Franz")
 OTHER = add_user("t2", "other@example.org", "Another Teacher")
 STUDENT = add_user("s1", "kid@example.org", "A Student")
+STUDENT2 = add_user("s2", "kid2@example.org", "Another Student")
 
 teacher = client(TEACHER)
 other = client(OTHER)
@@ -316,6 +317,144 @@ check("  and live.js turns that back into a Save button",
       "otherwise it says Saved for the rest of the lesson and saves nothing")
 
 
+# ------------------------------------------------- handing work in
+#
+# THE THING THAT WAS IMPOSSIBLE.
+#
+# Turning work in needs a draft with an assignment on it. A live lesson had
+# no assignment and the live page saved through /api/draft, which makes a
+# free-standing project — so the Turn in button could not appear, on the
+# live page or on reopening the saved copy. Nothing errored; the lesson
+# worked, the saving worked, and handing in simply could not happen.
+print("\nHanding work in")
+
+hw = teacher.post("/api/assignment",
+                  json={"code": "# starter\n", "files": {},
+                        "title": "Loops homework"}).get_json()["slug"]
+
+r = teacher.get("/api/live/assignments")
+check("a teacher can list their open assignments", r.status_code == 200,
+      r.status_code)
+check("  and the new one is in it",
+      hw in [a["slug"] for a in r.get_json()["assignments"]])
+check("a student cannot", student.get("/api/live/assignments").status_code == 403)
+
+r = other.post("/api/live/start", json={"body": "x", "assignment": hw})
+check("a teacher cannot attach someone else's assignment",
+      r.status_code == 400, r.get_json())
+
+# CODE is still the teacher open lesson at this point; close it so
+# the next start makes a fresh one attached to the assignment.
+teacher.post("/api/live/%s/stop" % CODE)
+started = teacher.post("/api/live/start",
+                       json={"body": "for i in range(3):", "title": "Loops",
+                             "assignment": hw}).get_json()
+LESSON = started["code"]
+check("a lesson can be started for an assignment",
+      started.get("assignment") == hw, started)
+
+# Resuming after a page reload sends no assignment key at all.
+again2 = teacher.post("/api/live/start", json={"body": "more"}).get_json()
+check("  and reloading the editor does not drop it",
+      again2.get("assignment") == hw,
+      "the class would silently lose the ability to hand in")
+
+r = student.post("/api/live/%s/keep" % LESSON, json={"code": "my work"})
+check("a student's save lands in the assignment's own draft",
+      r.status_code == 200 and r.get_json()["can_turn_in"] is True,
+      r.get_json())
+KEPT = r.get_json()["slug"]
+
+def drafts_for(uid):
+    db = P.SessionLocal()
+    try:
+        item = db.query(accounts.Assignment).filter_by(slug=hw).first()
+        return db.query(accounts.Draft).filter_by(
+            owner_id=uid, assignment_id=item.id).count()
+    finally:
+        db.close()
+
+
+# THE DUPLICATE, EXERCISED PROPERLY.
+#
+# The first version of this saved once and then counted, which is one draft
+# however the code behaves — it passed a deliberately broken server that made
+# a fresh row every time. Two copies of one piece of work is the failure
+# worth catching: the student edits one and hands in the other.
+# THE STATUS, NOT JUST THE COUNT. Counting alone still passed a server that
+# inserted a fresh row every time — because the table's unique constraint on
+# (owner, assignment) rejected the second insert, so the count stayed at 1
+# while every save after the first was a 500 the student would have seen as
+# "could not save". The count was right for the wrong reason.
+again_a = student.post("/api/live/%s/keep" % LESSON,
+                       json={"code": "my work, further on"})
+again_b = student.post("/api/live/%s/keep" % LESSON,
+                       json={"code": "further still"})
+check("  and saving again succeeds rather than colliding",
+      again_a.status_code == 200 and again_b.status_code == 200,
+      "%s then %s" % (again_a.status_code, again_b.status_code))
+check("  writing to that same row, not a new one",
+      drafts_for(STUDENT) == 1,
+      "%d drafts for one student on one assignment" % drafts_for(STUDENT))
+check("  and the latest text is what was kept",
+      again_b.get_json().get("slug") == KEPT, again_b.get_json())
+
+# The other order, which is the one that happens in a real week: they open
+# the handout link in class on Monday, then join the live lesson on Tuesday.
+handout_first = client(STUDENT2)
+r = handout_first.get("/a/" + hw)
+check("  a student who opened the handout link first has one copy",
+      drafts_for(STUDENT2) == 1, drafts_for(STUDENT2))
+joined = handout_first.post("/api/live/%s/keep" % LESSON,
+                            json={"code": "typed along"})
+check("  and saving from the live lesson succeeds",
+      joined.status_code == 200, joined.status_code)
+check("  finding it rather than making another",
+      drafts_for(STUDENT2) == 1,
+      "%d drafts — they would edit one and hand in the other"
+      % drafts_for(STUDENT2))
+
+r = student.get("/a/" + hw)
+check("  so opening the handout link afterwards finds it",
+      r.status_code == 302 and KEPT in r.headers.get("Location", ""),
+      r.headers.get("Location", r.status_code))
+
+r = student.post("/api/submit", json={"draft": KEPT, "code": "my work",
+                                      "files": {}})
+check("the student can turn it in", r.status_code == 200, r.get_json())
+
+seen_by_teacher = teacher.get("/teacher/" + hw).get_data(as_text=True)
+check("  and it reaches the teacher's dashboard",
+      "A Student" in seen_by_teacher)
+
+page = student.get("/live/%s" % LESSON).get_data(as_text=True)
+check("the live page offers Turn in once there is an assignment",
+      'id="live-turn-in"' in page)
+check("  and says they have already handed it in",
+      "Turn in again" in page)
+
+# A lesson with no assignment still saves — it just cannot hand in, and
+# says nothing misleading about it.
+plain = teacher.post("/api/live/start", json={"body": "x"}).get_json()
+check("  (an open lesson is reused, so this is still the same one)",
+      plain["code"] == LESSON, plain["code"])
+
+teacher.post("/api/live/%s/stop" % LESSON)
+bare = teacher.post("/api/live/start",
+                    json={"body": "x", "assignment": ""}).get_json()
+r = student.post("/api/live/%s/keep" % bare["code"], json={"code": "notes"})
+check("a lesson with no assignment still saves",
+      r.status_code == 200 and r.get_json()["can_turn_in"] is False,
+      r.get_json())
+page = student.get("/live/%s" % bare["code"]).get_data(as_text=True)
+check("  and offers no Turn in button at all",
+      'id="live-turn-in"' not in page,
+      "a button that cannot work reads as lost work")
+
+r = stranger.post("/api/live/%s/keep" % bare["code"], json={"code": "x"})
+check("signed out, saving says to sign in", r.status_code == 401, r.status_code)
+
+
 # ------------------------------------------------------------------ ending
 print("\nEnding it")
 
@@ -513,6 +652,20 @@ check("  with links inside the notes still usable",
       re.search(r"(?m)^body:not\(\.is-authoring\) \.notes-body a \{", css)
       is not None and "is-live" in page,
       "unselectable notes with an unclickable link would be pointless")
+
+# THE CLIENT HALF. The server can do all of this correctly and the feature
+# still be broken, because it is live.js that chooses which endpoint to call
+# — and /api/draft makes a project with no assignment, which is the thing
+# that could never be turned in. Swapping the URL back passed the entire
+# server-side suite untouched.
+check("the live page saves through the lesson, not as a loose project",
+      "/keep" in live_code and 'fetch("/api/draft"' not in live_code,
+      "/api/draft makes a draft with no assignment, which cannot be handed in")
+check("  and offers Turn in only once the save says it can",
+      "can_turn_in" in live_code and "canTurnIn" in live_code)
+check("  handing in through the editor's own endpoint",
+      '"/api/submit"' in live_code,
+      "so the dashboard sees the same thing either way")
 
 check("the mirror cannot be typed into",
       '"nocursor"' in mirror_opts,

@@ -209,6 +209,20 @@ class LiveSession(Base):
     host_name = Column(String(160), nullable=False, default="")
     title = Column(String(200), nullable=False, default="Live lesson")
 
+    #: The assignment this lesson is for, if the teacher picked one.
+    #:
+    #: WITHOUT IT THE CLASS CANNOT HAND ANYTHING IN. Turning work in needs a
+    #: draft with an assignment on it — see Submission and /api/submit — and
+    #: a project saved from the live page had none, so the button could never
+    #: appear. Nothing about that was visible: the lesson worked, the saving
+    #: worked, and the hand-in was simply impossible.
+    #:
+    #: With it set, a student's save on the live page creates or finds the
+    #: SAME draft row the assignment link would have made, so a student who
+    #: also opened /a/<slug> has one copy of the work rather than two.
+    assignment_id = Column(Integer, ForeignKey("assignments.id"),
+                           index=True, nullable=True)
+
     #: What the class sees. `body` is the teacher's current file, whole —
     #: not a diff. A diff stream is smaller and needs every update to arrive
     #: in order and none to be missed, which polling cannot promise. Sending
@@ -272,6 +286,11 @@ LATER_COLUMNS = [
     ("assignments", "app",
      "ALTER TABLE assignments ADD COLUMN app VARCHAR(16) NOT NULL "
      "DEFAULT 'pyide'"),
+    # Live lessons shipped before they could be tied to an assignment. NULL
+    # is the right default: a lesson that existed before this has no
+    # assignment, which is exactly what it was.
+    ("live_sessions", "assignment_id",
+     "ALTER TABLE live_sessions ADD COLUMN assignment_id INTEGER"),
 ]
 
 
