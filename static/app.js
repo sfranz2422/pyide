@@ -1120,6 +1120,40 @@
 
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */
+  /* The safety net for anyone not signed in. Attached before the account
+     module, so a rescued project is in the editor before autosave has any
+     opinion about what the project is. */
+  var rescue = window.IDERescue.attach({
+    app: "pyide",
+    cfg: {
+      signedIn: window.PYIDE.signedIn,
+      assignmentSlug: window.PYIDE.assignmentSlug,
+      draftSlug: window.PYIDE.draftSlug,
+      draftFresh: window.PYIDE.draftFresh
+    },
+    readAll: function () {
+      var all = dataFiles();
+      all[MAIN] = mainSource();
+      return all;
+    },
+    writeAll: function (incoming) {
+      Object.keys(docs).forEach(function (name) {
+        if (name !== MAIN) delete docs[name];
+      });
+      Object.keys(incoming).forEach(function (name) {
+        if (name === MAIN) docs[MAIN].setValue(incoming[name]);
+        else docs[name] = makeDoc(incoming[name]);
+      });
+      active = MAIN;
+      lastCodeFile = MAIN;
+      mdSourceOpen = false;
+      showEditorDoc(MAIN);
+      renderTabs();
+      relayout();
+    },
+    onRestored: function () { if (account) account.noteEdit(); }
+  });
+
   account = window.PyIDEAccount.attach({
     read: function () {
       return {
@@ -1132,7 +1166,10 @@
   });
 
   // Every change to any file counts, including a data file or the notes
-  editor.on("change", function () { account.noteEdit(); });
+  editor.on("change", function () {
+    account.noteEdit();
+    rescue.noteEdit();
+  });
 
   $("close-projects").addEventListener("click", function () {
     $("projects-modal").hidden = true;
