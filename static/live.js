@@ -194,25 +194,49 @@
       return;
     }
     turnInBtn.disabled = true;
-    fetch("/api/submit", {
+    /* SAVE FIRST, THEN HAND IN WHAT WAS SAVED.
+       
+       Turning in replaces a draft's files with what is posted, and this pane
+       has only the one editor — so posting an empty map would delete every
+       data file the assignment shipped, at the exact moment the work is
+       handed in and without a word. Keeping first writes the edit and hands
+       back the whole project; that is what goes in. */
+    keep(mine.getValue()).then(function (saved) {
+      if (!saved) {
+        turnInBtn.disabled = false;
+        window.alert("Could not save before turning in. Try again.");
+        return;
+      }
+      return fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft: draftSlug,
+          code: mine.getValue(),          // theirs, never the mirror's
+          files: saved.files || {}
+        })
+      }).then(function (res) { return res.json(); })
+        .then(function (data) {
+          turnInBtn.disabled = false;
+          if (data.error) { window.alert(data.error); return; }
+          turnInBtn.textContent = "Turn in again";
+          savedNow("Turned in" + (data.submitted_at ? " " + data.submitted_at : ""));
+        });
+    }).catch(function () {
+      turnInBtn.disabled = false;
+      window.alert("Could not turn it in. Check your connection and try again.");
+    });
+  }
+
+  /* One place that writes to the lesson's draft, used by Save, by autosave
+     and by Turn in — so the three cannot disagree about what a project is. */
+  function keep(source) {
+    return fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        draft: draftSlug,
-        code: mine.getValue(),            // theirs, never the mirror's
-        files: {}
-      })
+      body: JSON.stringify({ code: source })
     }).then(function (res) { return res.json(); })
-      .then(function (data) {
-        turnInBtn.disabled = false;
-        if (data.error) { window.alert(data.error); return; }
-        turnInBtn.textContent = "Turn in again";
-        savedNow("Turned in" + (data.submitted_at ? " " + data.submitted_at : ""));
-      })
-      .catch(function () {
-        turnInBtn.disabled = false;
-        window.alert("Could not turn it in. Check your connection and try again.");
-      });
+      .then(function (data) { return data && !data.error ? data : null; });
   }
 
   if (turnInBtn) turnInBtn.addEventListener("click", turnIn);

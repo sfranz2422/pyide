@@ -1622,6 +1622,11 @@ def live_keep(code):
                 owner_id=user.id, assignment_id=item.id).first()
 
         if draft is None:
+            # SEEDED FROM THE ASSIGNMENT, exactly as /a/<slug> seeds one. An
+            # assignment can ship data files and notes; a student who joins
+            # the lesson without opening the handout link first would
+            # otherwise get a copy with none of them, and the program they
+            # were told to run would fail on a missing file.
             draft = accounts.Draft(
                 slug=accounts.new_id(db, accounts.Draft),
                 owner_id=user.id,
@@ -1629,7 +1634,7 @@ def live_keep(code):
                 app=APP_NAME,
                 title=(item.title if item else (live.title or "Live lesson")),
                 code=source,
-                files="{}",
+                files=(item.files if item is not None else "{}"),
             )
             db.add(draft)
         else:
@@ -1643,6 +1648,11 @@ def live_keep(code):
             assignment=(item.slug if item else ""),
             assignment_title=(item.title if item else ""),
             can_turn_in=bool(item),
+            # The whole project, not just the file they typed. Turning in
+            # replaces a draft's files with what is posted, so a live page
+            # that sent none would delete the assignment's attached data
+            # files at the moment the work was handed in.
+            files=draft.file_map(),
         )
     finally:
         db.close()

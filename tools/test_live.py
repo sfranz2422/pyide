@@ -34,6 +34,7 @@ WHAT IS ACTUALLY BEING GUARDED
       Checked against the row, not against the teacher list — a second
       teacher must not be able to write into somebody else's lesson.
 """
+import json
 import os
 import re
 import sys
@@ -371,6 +372,16 @@ check("  and reloading the editor does not drop it",
       again2.get("assignment") == hw,
       "the class would silently lose the ability to hand in")
 
+# The assignment ships an attached data file, which is the normal case for
+# anything that reads from one.
+db = P.SessionLocal()
+try:
+    row = db.query(accounts.Assignment).filter_by(slug=hw).first()
+    row.files = json.dumps({"data.csv": "a,b\n1,2\n"})
+    db.commit()
+finally:
+    db.close()
+
 r = student.post("/api/live/%s/keep" % LESSON, json={"code": "my work"})
 check("a student's save lands in the assignment's own draft",
       r.status_code == 200 and r.get_json()["can_turn_in"] is True,
@@ -431,9 +442,22 @@ check("  so opening the handout link afterwards finds it",
       r.status_code == 302 and KEPT in r.headers.get("Location", ""),
       r.headers.get("Location", r.status_code))
 
+kept_now = student.post("/api/live/%s/keep" % LESSON,
+                        json={"code": "my work"}).get_json()
 r = student.post("/api/submit", json={"draft": KEPT, "code": "my work",
-                                      "files": {}})
+                                      "files": kept_now["files"]})
 check("the student can turn it in", r.status_code == 200, r.get_json())
+
+# A student who joined the lesson without ever opening the handout link
+# must still get the assignment's attached files, or the program they were
+# told to run fails on a missing one.
+db = P.SessionLocal()
+try:
+    kept = db.query(accounts.Draft).filter_by(slug=KEPT).first().file_map()
+finally:
+    db.close()
+check("  and the assignment's attached files came with it",
+      "data.csv" in kept, sorted(kept))
 
 seen_by_teacher = teacher.get("/teacher/" + hw).get_data(as_text=True)
 check("  and it reaches the teacher's dashboard",
@@ -693,6 +717,19 @@ check("the live page saves through the lesson, not as a loose project",
       "/api/draft makes a draft with no assignment, which cannot be handed in")
 check("  and offers Turn in only once the save says it can",
       "can_turn_in" in live_code and "canTurnIn" in live_code)
+# WHAT TURN IN POSTS, which the server-side checks above cannot see: they
+# build the payload themselves. Posting an empty file map is accepted by the
+# server and deletes every other file in the project, at the moment the work
+# is handed in.
+submit_call = live_code[live_code.index('"/api/submit"'):]
+submit_call = submit_call[:submit_call.index("}).then")]
+check("  turning in posts the whole project, not an empty map",
+      "saved.files" in submit_call and "files: {}" not in submit_call,
+      "an empty map wipes the assignment's own files on hand-in")
+check("  having saved it first, so the two agree",
+      "keep(mine.getValue()).then" in live_code,
+      "otherwise what is handed in is not what was saved")
+
 check("  handing in through the editor's own endpoint",
       '"/api/submit"' in live_code,
       "so the dashboard sees the same thing either way")
