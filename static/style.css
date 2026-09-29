@@ -1189,6 +1189,53 @@ body:not(.is-authoring) .notes-body a {
 
 .live-mirror .CodeMirror { background: var(--bg-head); }
 
+/* THE TEACHER'S CODE IS NOT SELECTABLE.
+ *
+ * Same bargain as the notes above, and the same reason: the exercise is
+ * typing it. A student who can drag across the mirror and press Ctrl+C has
+ * the whole lesson in their own editor in two seconds, and nothing has been
+ * learnt. There is no copy button for exactly this reason, and a button is
+ * not much use if a selection does the same job.
+ *
+ * readOnly: "nocursor" on the mirror already stops it taking focus, so
+ * Ctrl+A and Ctrl+C inside it do nothing. This covers the other way in: a
+ * drag that starts outside the mirror and sweeps across it.
+ *
+ * IT IS A SPEED BUMP, NOT A LOCK, and it is worth being clear about that.
+ * The page is sent the file in order to display it, so developer tools and
+ * the poll's own address will always show the text to anyone who goes
+ * looking. What this removes is the ordinary path, which is the one thirty
+ * people would otherwise take. */
+.live-mirror,
+.live-mirror .CodeMirror,
+.live-mirror .CodeMirror-code {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Notes shown in the mirror scroll and sit in the pane like the editor does.
+ * The selection rules above still apply to them — they are the teacher's
+ * content — and the existing `.notes-body a` rule keeps links selectable, so
+ * a link put up for the class is still a link they can use. */
+.live-mirror .notes-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 18px;
+}
+.live-mirror .notes-body[hidden] { display: none; }
+
+/* The student's own editor is theirs: select, copy and paste normally. This
+ * is written out rather than left to inheritance because the rule above sits
+ * one container away, and a future change to the markup could quietly drag
+ * the lower editor into it — which would be a horrible bug to meet mid
+ * lesson, and a silent one. */
+.live-mine,
+.live-mine .CodeMirror,
+.live-mine .CodeMirror-code {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* Narrow enough that side by side would give both halves nothing: stack the
  * lot and let the page scroll, rather than three unusable slivers. */
 @media (max-width: 860px) {

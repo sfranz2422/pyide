@@ -70,6 +70,25 @@
     lineWrapping: false
   });
 
+  /* And if a selection is made anyway, it cannot be taken.
+   *
+   * The stylesheet stops the ordinary drag. This is the second half, because
+   * user-select is a rendering hint and not a rule: a browser extension, a
+   * "select all" from the browser's own menu, or find-on-page can still leave
+   * text selected inside the mirror, and then Ctrl+C would lift the lesson.
+   * Cancelling the event is what actually refuses.
+   *
+   * Only over the mirror. The student's own editor is theirs to copy from,
+   * and this listener is attached to the mirror's element, not the document,
+   * so there is no way for it to reach the wrong one. */
+  var mirrorEl = mirror.getWrapperElement();
+  ["copy", "cut"].forEach(function (kind) {
+    mirrorEl.addEventListener(kind, function (e) {
+      e.preventDefault();
+      note("Type it out — that is the exercise");
+    });
+  });
+
   var mine = CodeMirror.fromTextArea($("mine"), {
     mode: "python",
     theme: cmTheme(),
@@ -223,18 +242,52 @@
   // -------------------------------------------------------------- the mirror
 
   var seen = -1;
+  /* What the notes pane was last rendered from. Compared before re-rendering
+     because every poll hands over the whole file, and re-parsing markdown
+     once a second would throw away a link the moment anyone moved to click
+     it — the element under the cursor is replaced. */
+  var lastNotes = null;
+
+  var mirrorWrap = $("mirror-wrap");
+  var mirrorNotes = $("mirror-notes");
 
   function showMirror(data) {
-    // The ONLY setValue on the mirror, and there is no setValue on `mine`
-    // anywhere below this line.
-    if (typeof data.body === "string" && data.body !== mirror.getValue()) {
-      var scroll = mirror.getScrollInfo();
-      mirror.setValue(data.body);
-      // Keep the reader where they were. Without this every keystroke from
-      // the teacher throws a student who has scrolled back to look at line 4
-      // straight back to the top, which makes the mirror unreadable.
-      mirror.scrollTo(scroll.left, scroll.top);
+    /* A .md file is class notes, not code. Rendering it is what makes a link
+       the teacher puts up something the class can actually click — raw
+       markdown in a code pane is just `[click here](http://…)` in grey.
+       notes.js sanitises the HTML and points every link at a new tab. */
+    var asNotes = data.filename
+      && window.PyIDENotes && window.PyIDENotes.isMarkdown(data.filename);
+
+    if (asNotes) {
+      mirrorWrap.hidden = true;
+      mirrorNotes.hidden = false;
+      if (typeof data.body === "string" && data.body !== lastNotes) {
+        lastNotes = data.body;
+        window.PyIDENotes.render(mirrorNotes, data.body);
+      }
+    } else {
+      mirrorNotes.hidden = true;
+      var wasHidden = mirrorWrap.hidden;
+      mirrorWrap.hidden = false;
+      // The ONLY setValue on the mirror, and there is no setValue on `mine`
+      // anywhere below this line.
+      if (typeof data.body === "string" && data.body !== mirror.getValue()) {
+        var scroll = mirror.getScrollInfo();
+        mirror.setValue(data.body);
+        // Keep the reader where they were. Without this every keystroke from
+        // the teacher throws a student who has scrolled back to look at line 4
+        // straight back to the top, which makes the mirror unreadable.
+        mirror.scrollTo(scroll.left, scroll.top);
+      }
+      /* CodeMirror measures itself when it is built. Built or updated while
+         its container is display:none it measures zero, and comes back from
+         the notes pane as an empty box that only fills in when something
+         forces a redraw. Switching a tab in front of a class is exactly when
+         that would happen, so refresh on the way back. */
+      if (wasHidden) mirror.refresh();
     }
+
     if (data.filename) {
       var name = document.getElementById("mirror-name");
       if (name) name.textContent = data.filename;

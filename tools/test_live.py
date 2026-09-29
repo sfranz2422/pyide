@@ -448,6 +448,72 @@ check("  and nothing in the polling path touches it at all",
 
 mirror_opts = live_code[live_code.index('fromTextArea($("mirror")'):]
 mirror_opts = mirror_opts[:mirror_opts.index("});")]
+# THE TEACHER'S CODE IS NOT LIFTABLE. Without this a student drags across
+# the mirror, presses Ctrl+C, and has the whole lesson in their own editor
+# in two seconds — which is why there is no copy button either.
+css = open(os.path.join(PYIDE, "static", "style.css")).read()
+mirror_css = css[css.index(".live-mirror,"):]
+mirror_css = mirror_css[:mirror_css.index("}")]
+# ANCHORED TO THE START OF THE LINE. `"user-select: none" in block` looks
+# right and is not: `-webkit-user-select: none` contains it as a substring,
+# so flipping the real property to `text` left the check passing and the
+# teacher's code selectable. Both of these were written the lazy way first
+# and both passed a deliberately broken stylesheet.
+def declares(block, prop, value):
+    return re.search(r"(?m)^\s*%s:\s*%s\s*;" % (prop, value), block) is not None
+
+
+check("the teacher's code cannot be selected",
+      declares(mirror_css, "user-select", "none"),
+      "a drag and Ctrl+C would lift the whole lesson")
+check("  including on the browsers that need the prefix",
+      declares(mirror_css, "-webkit-user-select", "none"))
+mine_css = css[css.index(".live-mine,"):]
+mine_css = mine_css[:mine_css.index("}")]
+check("  while the student's own editor still can be",
+      declares(mine_css, "user-select", "text"),
+      "their own work has to be copyable — it is theirs")
+check("  and a copy made some other way is refused",
+      re.search(r'\["copy", "cut"\]', live_code) is not None
+      and "preventDefault" in live_code,
+      "user-select is a hint; find-on-page and extensions get round it")
+
+# A .md FILE IS A LINK THE CLASS CAN CLICK.
+#
+# The teacher opens a notes tab, puts an address in it, and it renders on
+# thirty screens as a real link. Without this it arrives as
+# `[click here](http://…)` in grey in a code pane, which is worse than
+# useless in front of a room.
+check("the live page can render notes, not just code",
+      'id="mirror-notes"' in page and "notes.js" in page)
+check("  and switches to them on a .md filename",
+      "PyIDENotes.isMarkdown(data.filename)" in live_code,
+      "the filename is already on the wire; this is what reads it")
+check("  rendering through the same sanitiser the editor uses",
+      "PyIDENotes.render(mirrorNotes" in live_code,
+      "notes.js drops scripts and forces links to a new tab")
+# THE GUARD, not the variable's name. Checking that `lastNotes` appears
+# somewhere passed happily when the condition it guards was replaced by
+# `true` — the name was still in the file, doing nothing.
+check("  and re-renders only when the text changed",
+      re.search(r"data\.body\s*!==\s*lastNotes", live_code) is not None,
+      "re-parsing every second replaces the link under the cursor, so a "
+      "click that lands mid-poll hits a dead element")
+# CodeMirror measures itself on build. Measured while display:none it
+# measures zero and comes back blank — switching tabs in front of a class is
+# exactly when that happens.
+check("  and the code pane is refreshed on the way back",
+      "mirror.refresh()" in live_code,
+      "CodeMirror returns from a hidden container as an empty box")
+# Verified in a real browser against these exact rules: the teacher's code
+# and notes text compute to user-select none, and a link inside the notes
+# computes to text. The :not(.is-authoring) rule applies because the live
+# page's body is is-live.
+check("  with links inside the notes still usable",
+      re.search(r"(?m)^body:not\(\.is-authoring\) \.notes-body a \{", css)
+      is not None and "is-live" in page,
+      "unselectable notes with an unclickable link would be pointless")
+
 check("the mirror cannot be typed into",
       '"nocursor"' in mirror_opts,
       "a plain readOnly still takes a cursor, so it looks typeable")
