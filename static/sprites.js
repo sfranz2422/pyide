@@ -6,9 +6,18 @@
  * run against the real bridge and the real engine — see tools/test_dungeon.mjs,
  * which types every one of these snippets into Kaplay and checks it loads.
  *
- * Both shapes are two lines, and deliberately so. Kaplay needs a sprite loaded
- * before it can be drawn, and a missing load is the commonest way a sprite
- * silently fails to appear: nothing errors, nothing shows.
+ * WHAT A CLICK WRITES, AND WHAT IT DELIBERATELY DOES NOT
+ *
+ * The load line only. A sprite has to be loaded before it can be drawn, and a
+ * missing load is the commonest way one silently fails to appear — nothing
+ * errors, nothing shows — so that is the line worth handing over.
+ *
+ * It used to write the `add([...])` as well, which put a bean on the screen
+ * at pos(100, 100) the moment you clicked. That reads as helpful and is not:
+ * deciding what to make and where to put it is the exercise, and a student
+ * who clicks four sprites ends up with four objects stacked on the same spot
+ * and a program they did not write. Loading is plumbing; adding is the
+ * lesson.
  */
 window.PyIDESprites = (function () {
   "use strict";
@@ -31,21 +40,17 @@ window.PyIDESprites = (function () {
     var path = dir + "/" + entry.name + ".png";
 
     if (!entry.anims) {
-      return 'loadSprite("' + entry.name + '", "' + path + '")\n' +
-             'add([sprite("' + entry.name + '"), pos(100, 100)])';
+      return 'loadSprite("' + entry.name + '", "' + path + '")';
     }
 
     /* An animated entry is a strip: every frame of every animation of one
        character, laid out left to right in a single file. `sliceX` says how
-       many frames to cut it into; `anims` names the runs of frames. The first
-       animation is started straight away, because a character standing on a
-       single frozen frame looks like a bug. */
-    var first = Object.keys(entry.anims)[0];
+       many frames to cut it into; `anims` names the runs of frames — written
+       out in full so the speeds and loops are numbers a student can see and
+       change, rather than something that happened to them. */
     return 'loadSprite("' + entry.name + '", "' + path + '",\n' +
            "            sliceX=" + entry.frames +
-           ", anims=" + animsLiteral(entry.anims) + ")\n" +
-           'add([sprite("' + entry.name + '", anim="' + first + '"), ' +
-           "pos(100, 100)])";
+           ", anims=" + animsLiteral(entry.anims) + ")";
   }
 
   /* ------------------------------------------------------------ atlases --
@@ -96,16 +101,10 @@ window.PyIDESprites = (function () {
       return regionLiteral(n, atlas.regions[n]);
     }).join("\n");
 
-    /* Whichever region animates comes out on screen, so the insert does
-       something visible rather than loading an atlas and stopping. */
-    var shown = names.filter(function (n) { return atlas.regions[n].anims; })[0]
-                || names[0];
-    var anim = atlas.regions[shown].anims
-             ? ', anim="' + Object.keys(atlas.regions[shown].anims)[0] + '"'
-             : "";
-
-    return 'loadSpriteAtlas("' + atlas.file + '", {\n' + body + "\n})\n" +
-           'add([sprite("' + shown + '"' + anim + '), pos(100, 100), scale(3)])';
+    /* The load alone, for the same reason as a single sprite above: every
+       region in the atlas is now a name that can be drawn, and which of them
+       to put on screen is the student's decision, not the panel's. */
+    return 'loadSpriteAtlas("' + atlas.file + '", {\n' + body + "\n})";
   }
 
   return {

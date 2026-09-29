@@ -187,6 +187,22 @@ inserts = json.loads(got.stdout)
 check(len(inserts["sprites"]) == sum(len(e) for _, e in packs),
       "the panel offers an insert for every sprite in the manifest")
 
+# A CLICK LOADS. IT DOES NOT BUILD.
+#
+# The panel used to write the `add([...])` too, so clicking a sprite put it
+# on screen at pos(100, 100) straight away. That reads as helpful and is not:
+# deciding what to make and where to put it is the exercise, and four clicks
+# left four objects stacked on one spot in a program the student did not
+# write. Pinned here because it is the kind of convenience that creeps back.
+building = [s["name"] for s in inserts["sprites"] if "add(" in s["insert"]]
+check(not building, "a sprite click writes the load line only — these also "
+      "build something: " + ", ".join(building[:3]))
+check(all("loadSprite(" in s["insert"] for s in inserts["sprites"]),
+      "and every sprite insert does write a load")
+atlas_building = [a["file"] for a in inserts["atlases"] if "add(" in a["insert"]]
+check(not atlas_building, "the atlas card writes the load only — "
+      + ", ".join(atlas_building[:3]))
+
 # --------------------------------------------------------- run them for real
 sys.path.insert(0, str(STATIC / "py"))
 os.chdir(ASSETS)
