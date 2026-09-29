@@ -1320,6 +1320,29 @@ def live_assignments():
         db.close()
 
 
+@app.get("/api/live/assignment/<slug>")
+def live_assignment_starter(slug):
+    """One assignment's starter, for opening it in the editor on Go live.
+
+    Separate from the list above on purpose: the list is shown every time
+    Go live is pressed and is only titles, while this is fetched once and
+    only if the teacher says yes to loading it. Sending every starter with
+    the list would be up to a few megabytes for a chooser most of which is
+    never read.
+    """
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="Only a teacher can do that."), 403
+        item, why = _assignment_for(db, user, clean(slug, 16))
+        if why or item is None:
+            return jsonify(error=why or "No such assignment."), 404
+        return jsonify(title=item.title, code=item.code, files=item.file_map())
+    finally:
+        db.close()
+
+
 def _assignment_for(db, user, slug):
     """The teacher's own assignment by slug, or (None, reason).
 

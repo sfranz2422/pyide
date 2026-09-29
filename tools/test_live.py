@@ -332,9 +332,21 @@ hw = teacher.post("/api/assignment",
                   json={"code": "# starter\n", "files": {},
                         "title": "Loops homework"}).get_json()["slug"]
 
+r = teacher.get("/api/live/assignment/" + hw)
+check("a teacher can fetch one assignment's starter for the editor",
+      r.status_code == 200 and r.get_json()["code"].startswith("# starter"),
+      r.status_code)
+check("  another teacher cannot",
+      other.get("/api/live/assignment/" + hw).status_code == 404)
+check("  nor can a student",
+      student.get("/api/live/assignment/" + hw).status_code == 403)
+
 r = teacher.get("/api/live/assignments")
 check("a teacher can list their open assignments", r.status_code == 200,
       r.status_code)
+check("  and the list stays light, with no starter code in it",
+      all("code" not in a for a in r.get_json()["assignments"]),
+      "every starter in the chooser would be megabytes nobody reads")
 check("  and the new one is in it",
       hw in [a["slug"] for a in r.get_json()["assignments"]])
 check("a student cannot", student.get("/api/live/assignments").status_code == 403)
@@ -658,6 +670,24 @@ check("  with links inside the notes still usable",
 # — and /api/draft makes a project with no assignment, which is the thing
 # that could never be turned in. Swapping the URL back passed the entire
 # server-side suite untouched.
+# The chooser must not read as "open this lesson" — it decides where the
+# CLASS's work goes, and the first wording sent a teacher looking for code
+# that never loaded.
+app_code = code_only(app_js)
+check("the chooser says what it actually does",
+      "Where should the class turn this work in?" in app_code
+      and "does not change what is in your editor" in app_code,
+      "the old wording read like it was about to open the assignment")
+check("  and loading the starter is a separate, confirmed step",
+      "function offerStarter" in app_code
+      and re.search(r"offerStarter[\s\S]{0,800}window\.confirm", app_code)
+      is not None,
+      "it replaces the editor, so it cannot be silent")
+check("  which the reload-resume path never takes",
+      re.search(r'localStorage\.getItem\("pyide-live-host"\)\) startLive\(\)',
+                app_code) is not None,
+      "resuming a broadcast must not wipe what is being demonstrated")
+
 check("the live page saves through the lesson, not as a loose project",
       "/keep" in live_code and 'fetch("/api/draft"' not in live_code,
       "/api/draft makes a draft with no assignment, which cannot be handed in")

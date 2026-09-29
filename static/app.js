@@ -1432,8 +1432,14 @@
         .then(function (data) {
           var list = (data && data.assignments) || [];
           if (!list.length) return "";       // nothing published yet
-          var lines = ["Which assignment is this lesson for?", "",
-                       "0 — none (they can still save, but not turn in)"];
+          /* WORDED AS WHAT IT DOES. "Which assignment is this lesson for?"
+             read like it was about to open the assignment, and it is not —
+             it decides where the CLASS's work goes when they press Save.
+             Loading the starter is offered separately below, because that
+             one does replace what is on screen. */
+          var lines = ["Where should the class turn this work in?",
+                       "(This does not change what is in your editor.)", "",
+                       "0 — nowhere (they can still save, but not turn in)"];
           list.forEach(function (a, i) {
             lines.push((i + 1) + " — " + a.title);
           });
@@ -1444,6 +1450,52 @@
           return list[n - 1].slug;
         })
         .catch(function () { return ""; });
+    }
+
+    /* Open an assignment's starter in the editor.
+     *
+     * ASKED, NEVER SILENT. This replaces everything open, so a teacher who
+     * pressed Go live in the middle of a lesson to resume a broadcast would
+     * otherwise lose what they were demonstrating. It is offered only when
+     * an assignment was actually chosen, and only on a fresh Go live — the
+     * reload-resume path never reaches here.
+     */
+    function offerStarter(slug) {
+      if (!slug) return Promise.resolve();
+      return fetch("/api/live/assignment/" + encodeURIComponent(slug))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.error) return;
+          if (!window.confirm(
+                "Open the starter for \u201c" + data.title + "\u201d?\n\n"
+                + "This replaces what is in your editor now.")) {
+            return;
+          }
+          loadStarter(data.code, data.files);
+        })
+        .catch(function () { /* the lesson still goes live without it */ });
+    }
+
+    function loadStarter(code, files) {
+      Object.keys(docs).forEach(function (name) {
+        if (name === MAIN) return;
+        delete docs[name];
+        // The old file is still in Pyodide's filesystem, where an `import`
+        // would find it long after its tab has gone.
+        try { pyodide.FS.unlink(PROJECT_DIR + "/" + name); } catch (e) {}
+      });
+      docs[MAIN].setValue(code || "");
+      Object.keys(files || {}).sort().forEach(function (name) {
+        docs[name] = makeDoc(files[name]);
+      });
+      active = MAIN;
+      lastCodeFile = MAIN;
+      mdSourceOpen = false;
+      showEditorDoc(MAIN);
+      showOutput();
+      renderTabs();
+      relayout();
+      if (account) account.noteEdit();
     }
 
     function startLive(assignment) {
@@ -1487,7 +1539,9 @@
       } else {
         chooseAssignment().then(function (slug) {
           if (slug === null) return;        // they cancelled the chooser
-          startLive(slug);
+          // Offer the starter first, so the file that goes out on the very
+          // first push is the one they are about to teach from.
+          offerStarter(slug).then(function () { startLive(slug); });
         });
       }
     });
