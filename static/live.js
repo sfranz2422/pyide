@@ -398,6 +398,90 @@
       if (name) name.textContent = data.filename;
     }
     seen = data.version;
+    showSnippet(data);
+  }
+
+  // ------------------------------------------------ what the teacher sent
+
+  /* Code the teacher highlighted and sent. Shown in a card above the
+     student's editor with an Insert button, and that button is the ONLY way
+     anything from the network reaches their editor — on their click, at
+     their cursor, added to what they have rather than replacing it. The poll
+     only ever fills the card.
+
+     `snippetSeen` is the stamp of the snippet already shown (or closed), so
+     a Close stays closed across polls, but the teacher sending again — even
+     the same text — brings it back. An empty snippet is the teacher taking
+     it back: the card goes, and with it the button. */
+  var snippetCard = $("snippet");
+  var snippetCode = $("snippet-code");
+  var snippetSeen = -1;
+  var snippetText = "";
+
+  function showSnippet(data) {
+    if (!snippetCard) return;
+    var text = typeof data.snippet === "string" ? data.snippet : "";
+    var seq = data.snippet_seq || 0;
+    if (!text) {
+      snippetText = "";
+      snippetCard.hidden = true;
+      return;
+    }
+    if (seq === snippetSeen) return;   // already shown, or closed
+    snippetSeen = seq;
+    snippetText = text;
+    snippetCode.textContent = text;
+    snippetCard.hidden = false;
+    // The card takes room from the editor above it; CodeMirror only notices
+    // on a window resize, so clicks would land on the wrong line without this.
+    setTimeout(function () { mine.refresh(); }, 0);
+  }
+
+  if (snippetCard) {
+    $("snippet-insert").addEventListener("click", function () {
+      if (!snippetText) return;
+      insertSnippet(snippetText);
+    });
+    $("snippet-close").addEventListener("click", function () {
+      snippetCard.hidden = true;
+      setTimeout(function () { mine.refresh(); }, 0);
+    });
+  }
+
+  /* At the caret, as its own line(s). Indented to match the line the caret
+     is on, because a snippet sent from inside a function would otherwise
+     land at column 0 — or at the teacher's indentation, not the student's —
+     and in Python either one is a different program. */
+  function insertSnippet(text) {
+    var lines = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n");
+    var least = null;
+    lines.forEach(function (ln) {
+      if (!ln.trim()) return;
+      var n = ln.match(/^ */)[0].length;
+      if (least === null || n < least) least = n;
+    });
+    lines = lines.map(function (ln) { return ln.slice(least || 0); });
+
+    var cur = mine.getCursor();
+    var here = mine.getLine(cur.line);
+    var indent = here.match(/^ */)[0];
+    var blank = !here.trim();
+    var body = lines.map(function (ln, i) {
+      return (ln && (i > 0 || !blank)) ? indent + ln : ln;
+    }).join("\n");
+
+    if (blank) {
+      // On an empty line: fill it, keeping the indentation already there.
+      mine.replaceRange(indent + body,
+                        { line: cur.line, ch: 0 },
+                        { line: cur.line, ch: here.length }, "+snippet");
+    } else {
+      // Mid-code: never split what they wrote; go on the next line.
+      mine.replaceRange("\n" + body, { line: cur.line, ch: here.length },
+                        null, "+snippet");
+    }
+    mine.focus();
+    note("Inserted");
   }
 
   function setState(text, kind) {
@@ -407,7 +491,8 @@
   }
 
   if (typeof L.body === "string") {
-    showMirror({ body: L.body, version: L.version, filename: L.filename });
+    showMirror({ body: L.body, version: L.version, filename: L.filename,
+                 snippet: L.snippet, snippet_seq: L.snippetSeq });
   }
 
   var POLL_MS = 1000;

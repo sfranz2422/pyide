@@ -194,6 +194,74 @@ r = stranger.get("/api/live/nosuchcode")
 check("an unknown code is a clean 404", r.status_code == 404, r.status_code)
 
 
+# ------------------------------------------------- sending a snippet
+print("\nSending a snippet")
+
+def poll_json(v=-1):
+    return stranger.get("/api/live/%s?v=%s" % (CODE, v)).get_json()
+
+before = poll_json()
+r = teacher.post("/api/live/%s/send" % CODE,
+                 json={"snippet": "scores = [3, 1, 4]", "seq": 4000})
+check("the host can send a snippet", r.status_code == 200
+      and r.get_json().get("sent") is True, r.get_json())
+
+# It has to move the version: the class polls with the version it has, and
+# a send that left it alone would be answered 304 and never seen.
+r = stranger.get("/api/live/%s?v=%s" % (CODE, before["version"]))
+check("  and a student polling with the old version gets it",
+      r.status_code == 200 and r.get_json().get("snippet") == "scores = [3, 1, 4]",
+      r.status_code)
+check("  with the stamp that tells a new send from an old one",
+      r.get_json().get("snippet_seq") == 4000, r.get_json().get("snippet_seq"))
+check("  and the teacher's file is untouched by it",
+      r.get_json().get("body") == before.get("body"))
+
+page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+check("a student who joins late is handed it in the page",
+      '"scores = [3, 1, 4]"' in page and "snippetSeq: 4000" in page)
+
+r = other.post("/api/live/%s/send" % CODE, json={"snippet": "x", "seq": 9999})
+check("another teacher cannot send to this class", r.status_code == 403,
+      r.status_code)
+r = student.post("/api/live/%s/send" % CODE, json={"snippet": "x", "seq": 9999})
+check("  nor can a student", r.status_code == 403, r.status_code)
+r = stranger.post("/api/live/%s/send" % CODE, json={"snippet": "x", "seq": 9999})
+check("  nor anyone signed out", r.status_code == 403, r.status_code)
+check("  and none of them changed it",
+      poll_json().get("snippet") == "scores = [3, 1, 4]")
+
+r = teacher.post("/api/live/%s/send" % CODE, json={"snippet": "old", "seq": 3999})
+check("a send that arrives late is refused like a late push",
+      r.get_json().get("stale") is True
+      and poll_json().get("snippet") == "scores = [3, 1, 4]", r.get_json())
+
+# And the other direction, which is the one that bit: a push can lose to a
+# send too, and must say so, because app.js relies on `stale` to push again.
+r = teacher.post("/api/live/%s/push" % CODE, json={"body": "lost", "seq": 3998})
+check("  and a push that loses to a send says it was stale",
+      r.get_json().get("stale") is True, r.get_json())
+
+r = teacher.post("/api/live/%s/send" % CODE, json={"snippet": "", "seq": 4001})
+check("sending nothing takes it back", r.status_code == 200
+      and poll_json().get("snippet") == "", r.get_json())
+
+r = teacher.post("/api/live/start", json={})
+check("a teacher who reloads is told whether something is out",
+      r.get_json().get("snippet_out") is False, r.get_json())
+teacher.post("/api/live/%s/send" % CODE, json={"snippet": "y = 1", "seq": 4002})
+r = teacher.post("/api/live/start", json={})
+check("  (and it says so when there is)", r.get_json().get("snippet_out") is True,
+      r.get_json())
+
+big = "#" * (P.MAX_CODE_BYTES + 1)
+r = teacher.post("/api/live/%s/send" % CODE, json={"snippet": big, "seq": 4003})
+check("an oversized snippet is refused", r.status_code == 413, r.status_code)
+
+teacher.post("/api/live/%s/push" % CODE, json={"body": before["body"],
+                                               "seq": 4100})
+
+
 # -------------------------------------------------------------- the pages
 print("\nThe pages")
 
@@ -811,6 +879,108 @@ for name, src in (("live.js", live_code),
 check("a finished lesson stops the polling",
       'throw new Error("ended")' in live_code,
       "thirty browsers polling an ended lesson until home time")
+
+# THE SNIPPET IS THE ONE THING FROM THE NETWORK THAT MAY REACH THE STUDENT'S
+# EDITOR, and only by their own click. Every write into `mine` other than
+# the localStorage restore has to be inside insertSnippet, and insertSnippet
+# has to be called from the Insert button and nowhere else — in particular
+# not from the poll, which would put the teacher's code into thirty editors
+# without anyone pressing anything.
+def fn_body(src, name):
+    start = src.find("function %s(" % name)
+    if start < 0:
+        return ""
+    depth, i = 0, src.index("{", start)
+    while i < len(src):
+        depth += {"{": 1, "}": -1}.get(src[i], 0)
+        if depth == 0:
+            return src[start:i + 1]
+        i += 1
+    return ""
+
+insert_fn = fn_body(live_code, "insertSnippet")
+outside = live_code.replace(insert_fn, "") if insert_fn else live_code
+writes = re.findall(r"mine\.(replaceRange|replaceSelection)\(", outside)
+check("the snippet is written into their editor only by insertSnippet",
+      bool(insert_fn) and not writes,
+      "other writes: %s" % writes)
+callers = [m.start() for m in re.finditer(r"insertSnippet\(", live_code)]
+calls = [c for c in callers if not live_code[:c].endswith("function ")]
+click = live_code.find('$("snippet-insert").addEventListener("click"')
+click_block = live_code[click:live_code.find("});", click)] if click >= 0 else ""
+check("  and insertSnippet runs only from the Insert button",
+      len(calls) == 1 and "insertSnippet(" in click_block,
+      "%d call(s)" % len(calls))
+check("  and the poll only fills the card",
+      "insertSnippet" not in fn_body(live_code, "showSnippet")
+      and "insertSnippet" not in fn_body(live_code, "showMirror")
+      and "insertSnippet" not in fn_body(live_code, "poll"))
+
+# Insert goes where the student is, and never through the middle of a line
+# they wrote. The function is lifted and run in node against a stand-in
+# editor, because "indents to match" is exactly the kind of thing a reading
+# of the code gets wrong.
+import shutil
+import subprocess
+if shutil.which("node") and insert_fn:
+    harness = r"""
+function makeEditor(text, line, ch) {
+  var lines = text.split("\n");
+  return {
+    getCursor: function () { return { line: line, ch: ch }; },
+    getLine: function (n) { return lines[n]; },
+    replaceRange: function (t, from, to) {
+      var all = lines.join("\n");
+      function off(p) {
+        var o = 0; for (var i = 0; i < p.line; i++) o += lines[i].length + 1;
+        return o + p.ch;
+      }
+      var a = off(from), b = to ? off(to) : a;
+      lines = (all.slice(0, a) + t + all.slice(b)).split("\n");
+    },
+    focus: function () {},
+    value: function () { return lines.join("\n"); }
+  };
+}
+function note() {}
+var mine;
+%s
+var out = {};
+mine = makeEditor("def f():\n    ", 1, 4);
+insertSnippet("x = 1\ny = 2\n");
+out.inBlock = mine.value();
+mine = makeEditor("print(1)", 0, 3);
+insertSnippet("if a:\n    b()");
+out.midLine = mine.value();
+mine = makeEditor("", 0, 0);
+insertSnippet("        z = 3\n        w = 4");
+out.teacherIndent = mine.value();
+console.log(JSON.stringify(out));
+""" % insert_fn
+    res = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    try:
+        got = json.loads(res.stdout)
+    except ValueError:
+        got = {}
+    check("Insert on an indented blank line keeps the block's indentation",
+          got.get("inBlock") == "def f():\n    x = 1\n    y = 2",
+          repr(got.get("inBlock") or res.stderr[-200:]))
+    check("  mid-line it goes on the next line, not through their code",
+          got.get("midLine") == "print(1)\nif a:\n    b()",
+          repr(got.get("midLine")))
+    check("  and the teacher's own indentation is not carried over",
+          got.get("teacherIndent") == "z = 3\nw = 4",
+          repr(got.get("teacherIndent")))
+else:
+    check("node is available to run insertSnippet", False,
+          "brew install node")
+
+# The teacher's side: a push that comes back stale must be pushed again.
+check("app.js pushes again after losing to a send",
+      re.search(r"data\.stale\) lastSent = null", code_only(app_js)) is not None,
+      "the class would sit on the old file until the next keystroke")
+check("  and the send menu only opens while live with a selection",
+      "if (!liveCode || !cm.somethingSelected()) return;" in code_only(app_js))
 
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"

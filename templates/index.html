@@ -102,6 +102,10 @@
         <button id="go-live" class="btn"
                 title="Put this file on your class's screens while you teach.">Go live</button>
         <span id="live-code" class="chip live-code" hidden></span>
+        {#  Shows while a snippet is out on the class's screens. Clicking it
+            takes the snippet back, which removes their Insert button. #}
+        <button id="live-sent" class="chip live-sent" hidden
+                title="Your class can insert what you sent. Click to take it back.">Sent ✕</button>
       {% endif %}
 
       {% if is_teacher %}
