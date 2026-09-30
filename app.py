@@ -1805,6 +1805,29 @@ def live_page(code):
                 assignment_id=item.id, student_id=user.id).first()
             if done is not None:
                 submitted_at = done.submitted_at.strftime("%b %d at %I:%M %p")
+
+        # WHAT THE STUDENT'S EDITOR STARTS WITH, when their browser has nothing
+        # of its own for this lesson. The same as /a/<slug> would give them:
+        # their own draft of the assignment if they have one, else its starter.
+        #
+        # THE DRAFT IS NOT A NICETY. Saving from the live page writes into
+        # that draft (see live_keep), replacing its code with the live editor.
+        # Started empty, a student who did half the assignment from the link
+        # this morning would type one line here, press Save, and lose the
+        # morning's work without a word.
+        #
+        # Rendered into the page, never sent on the poll: it is the student's
+        # starting point, like opening the link, not the teacher reaching into
+        # their editor.
+        starter = ""
+        if item is not None:
+            starter = item.code or ""
+            if user is not None:
+                mine = db.query(accounts.Draft).filter_by(
+                    owner_id=user.id, assignment_id=item.id).first()
+                if mine is not None:
+                    starter = mine.code or ""
+
         ctx = user_context(db)
         ctx.update(
             live=live,
@@ -1813,6 +1836,7 @@ def live_page(code):
             is_host=bool(user is not None and user.id == live.host_id),
             assignment=item,
             submitted_at=submitted_at,
+            starter=starter,
             error="",
         )
         return render_template("live.html", **ctx)
