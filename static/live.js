@@ -98,11 +98,39 @@
     indentWithTabs: false,
     matchBrackets: true,
     autoCloseBrackets: true,
+    /* The same keys as the main editor. This editor was once configured on
+       its own and went without both tab stops and name completion — nothing
+       broke, it just behaved worse than the editor students already knew,
+       in the one lesson where the whole class is copying indentation. */
     extraKeys: {
-      "Ctrl-/": "toggleComment",
-      "Cmd-/": "toggleComment",
+      Tab: window.PyIDETabStops.indentToTabStop,
+      Backspace: window.PyIDETabStops.backspaceToTabStop,
+      "Shift-Tab": function (cm) { cm.indentSelection("subtract"); },
+      "Ctrl-/": function (cm) { cm.toggleComment({ indent: true }); },
+      "Cmd-/": function (cm) { cm.toggleComment({ indent: true }); },
       "Ctrl-Enter": function () { run(); },
       "Cmd-Enter": function () { run(); }
+    }
+  });
+
+  /* Completion of the student's own names, exactly as in the editor. Names
+     come from what the student has typed, never from the teacher's pane —
+     suggesting the lesson's variables would be the copy button by another
+     route. Until Python loads, refresh() and show() do nothing. */
+  var nameTimer = null, hintTimer = null;
+  mine.on("change", function (cm, change) {
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(function () {
+      window.PyIDEComplete.refresh(mine.getValue());
+    }, 250);
+
+    // only offer suggestions while a word is actually being typed
+    var typed = change.origin === "+input" && change.text.join("");
+    if (typed && /^[A-Za-z0-9_]$/.test(typed)) {
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(function () {
+        if (!cm.state.completionActive) window.PyIDEComplete.show(cm);
+      }, 120);
     }
   });
 
@@ -477,6 +505,8 @@
       pyodide = await loadPyodide();
       window.PyIDERuntime.pipeOutput(pyodide, write);
       pyodide.runPython(window.PyIDERuntime.BOOTSTRAP);
+      window.PyIDEComplete.attach(pyodide);
+      window.PyIDEComplete.refresh(mine.getValue());
       clearOutput();
       write("Python is ready. Type along, then press Run.\n", "dim");
       runBtn.disabled = false;

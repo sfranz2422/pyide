@@ -278,6 +278,34 @@ check("a signed-out student is not offered Save",
 check("  and is told where their work is kept instead",
       "sign in to save it properly" in out_page)
 
+# Sign in, on the lesson page itself. Save and Turn in only exist once signed
+# in, so without this a student had no way to get them short of leaving the
+# lesson — and nothing on the page said so. Login is off in this suite (no
+# Google keys), so it is switched on just for these two requests.
+_login = accounts.login_configured
+accounts.login_configured = lambda: True
+try:
+    signin_out = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+    signin_in = student.get("/live/%s" % CODE).get_data(as_text=True)
+finally:
+    accounts.login_configured = _login
+check("a signed-out student is offered Sign in on the lesson",
+      "/login?next=/live/%s" % CODE in signin_out
+      or "/login?next=%%2Flive%%2F%s" % CODE in signin_out)
+check("  and a signed-in one is not",
+      ">Sign in</a>" not in signin_in)
+
+# Their own editor behaves like the main one: name completion is loaded and
+# wired up. It was missing for a term because this page was built separately.
+check("the live page loads completion and its popup",
+      "complete.js" in out_page and "show-hint.min.js" in out_page
+      and "show-hint.min.css" in out_page)
+check("  and tab stops", "tabstops.js" in out_page)
+_lj = open(os.path.join(PYIDE, "static", "live.js")).read()
+check("  and live.js attaches completion once Python loads",
+      "PyIDEComplete.attach(pyodide)" in _lj
+      and "PyIDEComplete.show(cm)" in _lj)
+
 # The live page saves through the editor's own endpoints, so a project made
 # here is an ordinary project: it opens at /p/<slug>, lists in My projects,
 # and can be turned in. Nothing about it is special-cased.
