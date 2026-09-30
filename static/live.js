@@ -407,6 +407,23 @@
     }
     seen = data.version;
     showSnippet(data);
+    showNotes(data);
+  }
+
+  /* The project's notes, in their own pane under the output. Re-rendered
+     only when they change, for the same reason as the mirror's notes above:
+     every poll carries them whole, and re-rendering once a second would
+     replace a link under the cursor just as someone clicked it. */
+  var notesView = $("live-notes-view");
+  var notesBody = $("live-notes");
+  var shownNotes = null;
+
+  function showNotes(data) {
+    if (!notesView || typeof data.notes !== "string") return;
+    if (data.notes === shownNotes) return;
+    shownNotes = data.notes;
+    notesView.hidden = !data.notes.trim();
+    if (!notesView.hidden) window.PyIDENotes.render(notesBody, data.notes);
   }
 
   // ------------------------------------------------ what the teacher sent
@@ -500,7 +517,8 @@
 
   if (typeof L.body === "string") {
     showMirror({ body: L.body, version: L.version, filename: L.filename,
-                 snippet: L.snippet, snippet_seq: L.snippetSeq });
+                 snippet: L.snippet, snippet_seq: L.snippetSeq,
+                 notes: L.notes });
   }
 
   var POLL_MS = 1000;

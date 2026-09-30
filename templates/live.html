@@ -191,6 +191,15 @@
       <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
     </div>
+
+    {#  The project's notes, always in view — not only while the teacher has
+        the .md tab open. Rendered by notes.js, which sanitises the HTML and
+        opens every link in a new tab, so thirty students clicking a link at
+        once lose nothing. Hidden when the project has no notes. #}
+    <div id="live-notes-view" class="subpane live-notes" hidden>
+      <div class="pane-head"><span>Notes</span></div>
+      <div id="live-notes" class="notes-body prose"></div>
+    </div>
   </section>
 </main>
 {% endif %}
@@ -206,6 +215,7 @@
     ended: {{ 'true' if (live and live.ended) else 'false' }},
     snippet: {{ (live.snippet if live else '') | tojson }},
     snippetSeq: {{ (live.snippet_seq if live else 0) | tojson }},
+    notes: {{ (live.notes if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},
     signedIn: {{ 'true' if user else 'false' }},
     assignment: {{ (assignment.slug if assignment else '') | tojson }},

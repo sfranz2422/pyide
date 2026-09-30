@@ -1336,3 +1336,14 @@ body:not(.is-authoring) .notes-body a {
   cursor: pointer;
 }
 .live-sent[hidden] { display: none; }
+
+/* The project's notes on the live page, under the output. A fixed share of
+ * the column rather than whatever is left, so a long output cannot squeeze
+ * the notes to nothing and long notes cannot push Output off the screen —
+ * each scrolls on its own. */
+.live-right .live-notes {
+  flex: 1 1 45%;
+  border-top: 1px solid var(--line);
+}
+.live-right .live-notes[hidden] { display: none; }
+.live-right #output-view { flex: 1 1 55%; }
