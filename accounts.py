@@ -282,6 +282,13 @@ class LiveSession(Base):
     #: not sent, only whatever it printed. Empty until they press Run.
     output = Column(Text, nullable=False, default="")
 
+    #: The teacher's rendered page after their last Run, as HTML, for the
+    #: apps whose Run makes a page rather than text: WebIDE sends the page it
+    #: built, FlaskIDE the response its preview is showing. The class sees it
+    #: in a sandboxed frame beside their own. PyIDE has no page and never
+    #: sets it. Empty until the teacher presses Run.
+    page = Column(Text, nullable=False, default="")
+
     started_at = Column(DateTime, nullable=False, default=now)
     updated_at = Column(DateTime, nullable=False, default=now)
     #: Set when the teacher stops. The row stays so that a student still on
@@ -343,6 +350,9 @@ LATER_COLUMNS = [
      "DEFAULT ''"),
     ("live_sessions", "output",
      "ALTER TABLE live_sessions ADD COLUMN output TEXT NOT NULL DEFAULT ''"),
+    # The teacher's rendered page. Empty is true of every earlier lesson.
+    ("live_sessions", "page",
+     "ALTER TABLE live_sessions ADD COLUMN page TEXT NOT NULL DEFAULT ''"),
 ]
 
 
