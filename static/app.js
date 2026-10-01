@@ -1407,6 +1407,35 @@
       $("slide-next").addEventListener("click", function () { moveSlide(1); });
     }
 
+    /* What the class's Notes pane shows, shown here under the output: the
+       current slide, or the whole notes when they are not slides. Fed the
+       very `notes` and `slide` pushNow sends, so it cannot disagree with
+       the class about which slide they are on — a copy worked out
+       separately from slideAt could.
+
+       Re-rendered only when they change. pushNow runs on every tick, and
+       rendering markdown that often would reset the scroll under the
+       teacher's hand. */
+    var classView = $("class-view");
+    var classNotes = $("class-notes");
+    var classSlide = $("class-slide");
+    var classShownNotes = null, classShownSlide = null;
+
+    function paintClassView(notes, slide) {
+      if (!classView) return;
+      if (notes === classShownNotes && slide === classShownSlide) return;
+      var moved = slide !== classShownSlide;
+      classShownNotes = notes;
+      classShownSlide = slide;
+      classView.hidden = !(notes && notes.trim());
+      if (classView.hidden) return;
+      var m = /^(\d+)\/(\d+)$/.exec(slide);
+      classSlide.textContent = m ? "Slide " + m[1] + " of " + m[2] : "";
+      window.PyIDENotes.render(classNotes, notes).then(function () {
+        if (moved) classNotes.scrollTop = 0;
+      });
+    }
+
     /* The tail of what the last Run printed. textContent, so an input()
        prompt waiting for the teacher's answer goes as the words of the
        prompt and nothing else. Trimmed here as well as on the server, to
@@ -1435,6 +1464,7 @@
         if (name === notesFile()) text = notes;
       }
       paintSlides(cut);
+      paintClassView(notes, slide);
       var output = liveOutput();
       var stamp = [name, text, notes, slide, output].join("\u0000");
       if (stamp === lastSent) return;      // nothing typed since last time
@@ -1569,6 +1599,7 @@
         liveChip.hidden = true;
         paintSent(false);
         paintSlides(null);
+        paintClassView(null, "");
         closeCtxMenu();
       }
     }
