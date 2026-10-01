@@ -183,13 +183,24 @@
       </div>
     </div>
 
+    {#  Their output and the teacher's share one pane, as two tabs, because
+        the column has no room for a third box. The teacher's tab appears
+        the first time they press Run, and comes to the front whenever
+        their output changes; pressing Run here goes back to the student's
+        own. Two separate <pre>s, never one: the student's is where input()
+        types, and nothing from the network may land in it. #}
     <div id="output-view" class="subpane">
       <div class="pane-head">
-        <span>Output</span>
+        <span class="out-tabs">
+          <button id="out-mine" class="out-tab is-on" type="button">Output</button>
+          <button id="out-teacher" class="out-tab" type="button" hidden
+                  title="What {{ live.host_name or 'your teacher' }}'s program printed">{{ live.host_name or "Teacher" }}'s output</button>
+        </span>
         <button id="clear" class="linkbtn">Clear</button>
       </div>
       <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
+      <pre id="teacher-output" class="output" hidden></pre>
     </div>
 
     {#  The project's notes, always in view — not only while the teacher has
@@ -197,7 +208,8 @@
         opens every link in a new tab, so thirty students clicking a link at
         once lose nothing. Hidden when the project has no notes. #}
     <div id="live-notes-view" class="subpane live-notes" hidden>
-      <div class="pane-head"><span>Notes</span></div>
+      <div class="pane-head"><span>Notes</span>
+        <span id="live-slide" class="dim" aria-live="polite"></span></div>
       <div id="live-notes" class="notes-body prose"></div>
     </div>
   </section>
@@ -216,6 +228,8 @@
     snippet: {{ (live.snippet if live else '') | tojson }},
     snippetSeq: {{ (live.snippet_seq if live else 0) | tojson }},
     notes: {{ (live.notes if live else '') | tojson }},
+    slide: {{ (live.slide if live else '') | tojson }},
+    output: {{ (live.output if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},
     signedIn: {{ 'true' if user else 'false' }},
     assignment: {{ (assignment.slug if assignment else '') | tojson }},

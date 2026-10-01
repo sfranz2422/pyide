@@ -303,6 +303,65 @@ check("a project with no notes clears them",
       poll_json().get("notes") == "", repr(poll_json().get("notes")))
 
 
+# ------------------------------------------------ slides and output
+print("\nSlides, and the teacher's output")
+
+base = poll_json()
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": base.get("body"), "filename": "main.py",
+                       "notes": "## Two", "slide": "2/4",
+                       "output": "Spawning ghosty\n", "seq": 4400})
+got = poll_json()
+check("the slide a push names reaches the class",
+      r.status_code == 200 and got.get("slide") == "2/4", repr(got.get("slide")))
+check("  and so does what the teacher's Run printed",
+      got.get("output") == "Spawning ghosty\n", repr(got.get("output")))
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "typing on", "filename": "main.py", "seq": 4401})
+got = poll_json()
+check("a push from an older editor leaves both alone",
+      got.get("slide") == "2/4" and got.get("output") == "Spawning ghosty\n",
+      "an old tab would wipe them every 400ms")
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "x", "slide": "<b>9</b>", "seq": 4402})
+check("a slide that is not N/M is stored as none",
+      poll_json().get("slide") == "", repr(poll_json().get("slide")))
+
+# A runaway print loop. Refusing it would take the code down with it, and
+# the mirror would freeze for as long as the loop ran.
+flood = "".join("line %d\n" % i for i in range(20000))
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": "while True: print()", "output": flood,
+                       "seq": 4403})
+got = poll_json()
+check("huge output is trimmed, not refused",
+      r.status_code == 200 and got.get("body") == "while True: print()",
+      r.status_code)
+check("  keeping the end of it, which is the part anyone reads",
+      got.get("output", "").endswith("line 19999\n")
+      and len(got["output"].encode()) <= P.LIVE_OUTPUT_BYTES,
+      len(got.get("output", "")))
+
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "x", "slide": "3/5", "output": "hi\n",
+                   "seq": 4404})
+again = teacher.post("/api/live/start", json={"body": "x"}).get_json()
+check("a reload is told which slide the class is on",
+      again.get("slide") == "3/5", repr(again.get("slide")))
+page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
+check("a late joiner gets both in the page",
+      re.search(r'^\s*slide: "3/5"', page, re.M) is not None
+      and re.search(r'^\s*output: "hi\\n"', page, re.M) is not None)
+check("  with a slide marker and a tab for the teacher's output",
+      'id="live-slide"' in page and 'id="out-teacher"' in page
+      and 'id="teacher-output"' in page)
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": base.get("body"), "filename": "main.py",
+                   "notes": "", "slide": "", "output": "", "seq": 4500})
+
+
 # -------------------------------------------------------------- the pages
 print("\nThe pages")
 
@@ -1135,8 +1194,10 @@ check("  and a change to the notes alone is pushed",
       re.search(r"var stamp = [^;]*\bnotes\b", _push_fn) is not None,
       "editing the notes with main.py open would reach nobody")
 check("  and they are the project's first .md, as the handout link opens",
-      re.search(r"function liveNotes\(\)[\s\S]{0,200}fileNames\(\)\.filter\(window\.PyIDENotes\.isMarkdown\)[\s\S]{0,80}md\[0\]",
-                _push) is not None)
+      re.search(r"function notesFile\(\)[\s\S]{0,200}fileNames\(\)\.filter\(window\.PyIDENotes\.isMarkdown\)[\s\S]{0,80}md\[0\]",
+                _push) is not None
+      and re.search(r"function liveNotes\(\)\s*\{\s*var md = notesFile\(\);",
+                    _push) is not None)
 _mirror_fn = live_code[live_code.index("function showMirror"):]
 _mirror_fn = _mirror_fn[:_mirror_fn.index("\n  }\n")]
 check("the live page shows them on every update, not only the first",
@@ -1147,8 +1208,86 @@ check("  and on the page's first paint, before any poll",
 _notes_fn = live_code[live_code.index("function showNotes"):]
 _notes_fn = _notes_fn[:_notes_fn.index("\n  }\n")]
 check("  re-rendering only when they change",
-      "if (data.notes === shownNotes) return;" in _notes_fn,
+      "if (data.notes === shownNotes && slide === shownSlide) return;" in _notes_fn,
       "a re-render every second replaces the link a student is clicking")
+
+# ------------------------------------------------ slides and output, built
+# The teacher's output goes in its own <pre>. The student's #output is where
+# input() takes their typing, and is theirs exactly as their editor is.
+_tout = fn_body(live_code, "showTeacherOutput")
+check("the teacher's output is written only into its own pane",
+      "teacherOut.textContent = data.output" in _tout
+      and not re.search(r"outputEl[^;]*data\.output|data\.output[^;]*outputEl|write\(data\.output",
+                        live_code),
+      "the student's own output pane must never be given it")
+check("  and does not jump to the front while their program runs",
+      re.search(r"if \(running\) teacherTab\.classList\.add\(\"has-new\"\);\s*else showOutputTab\(true\);",
+                _tout) is not None,
+      "it would hide the input() prompt they are answering")
+check("  and their own Run brings their output back",
+      re.search(r"async function run\(\)[\s\S]{0,200}showOutputTab\(false\)",
+                live_code) is not None)
+check("the editor sends the slide and its output with every push",
+      "slide: slide, output: output" in _push_fn
+      and re.search(r"var stamp = [^;]*\bslide\b[^;]*\boutput\b", _push_fn)
+      is not None,
+      "moving a slide, or a Run, would otherwise reach nobody")
+check("  only the current slide goes out as the notes",
+      "notes = cut[slideAt];" in _push_fn)
+check("  and the notes tab, if open, mirrors that slide, not the file",
+      "if (name === notesFile()) text = notes;" in _push_fn,
+      "the mirror would put every slide on screen at once")
+check("  and no output is sent before the first Run",
+      re.search(r"function liveOutput\(\)\s*\{\s*if \(!hasRun\) return \"\";",
+                _push) is not None,
+      "every class would be shown 'Python is ready' as if it were a program")
+
+# The splitter, run for real on the notes this feature was asked for.
+notes_js = open(os.path.join(PYIDE, "static", "notes.js")).read()
+if shutil.which("node"):
+    sample = (
+        "# Looping Over a List\n\n---\n\n## for Each Item\n\n"
+        "```python\n## not a slide\nfor e in enemies:\n    print(e)\n```\n\n"
+        "```text\n---\n```\n\n---\n\n"
+        "## enumerate()\n\nPosition and item.\n\n---\n\n"
+        "### still enumerate\n\n---\n\n"
+        "## ✏ Mini Assignment\n\n> Extension\n")
+    harness = "var window = {};\n" + notes_js + """
+var N = window.PyIDENotes;
+console.log(JSON.stringify({
+  cut: N.slides(%s),
+  none: N.slides("# Just notes\\n\\nNo sections here."),
+  crlf: N.slides("## A\\r\\nx\\r\\n---\\r\\n## B\\r\\ny")
+}));
+""" % json.dumps(sample)
+    res = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    try:
+        got = json.loads(res.stdout)
+    except ValueError:
+        got = {}
+    cut = got.get("cut") or []
+    check("notes split into a title and one slide per ## heading",
+          len(cut) == 4 and cut[0] == "# Looping Over a List"
+          and cut[1].startswith("## for Each Item")
+          and cut[3].startswith("## ✏ Mini Assignment"),
+          repr([c[:20] for c in cut] or res.stderr[-200:]))
+    check("  ## and --- inside a code fence do not cut it",
+          len(cut) > 1 and "## not a slide" in cut[1]
+          and "```text\n---\n```" in cut[1],
+          "a Python comment would cut a slide in half")
+    check("  the --- between slides is dropped from both sides",
+          all(not c.startswith("---") and not c.endswith("---") for c in cut),
+          repr(cut[1][-12:] if len(cut) > 1 else ""))
+    check("  a ### stays inside its slide, rules and all",
+          len(cut) > 2 and cut[2].endswith("### still enumerate"),
+          repr(cut[2] if len(cut) > 2 else ""))
+    check("  notes with no ## are not slides at all",
+          got.get("none") == [], repr(got.get("none")))
+    check("  Windows line endings split the same way",
+          got.get("crlf") == ["## A\nx", "## B\ny"], repr(got.get("crlf")))
+else:
+    check("node is available to run the slide splitter", False,
+          "brew install node")
 
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"

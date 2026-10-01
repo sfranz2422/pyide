@@ -106,6 +106,14 @@
             takes the snippet back, which removes their Insert button. #}
         <button id="live-sent" class="chip live-sent" hidden
                 title="Your class can insert what you sent. Click to take it back.">Sent ✕</button>
+        {#  Only while live, and only when the notes have two or more `## `
+            sections. The class sees the one slide; this editor keeps the
+            whole file. #}
+        <span id="live-slides" class="slide-ctl" hidden>
+          <button id="slide-prev" class="btn" title="Previous slide for the class">◀</button>
+          <span id="slide-at" class="slide-at" title="The slide your class is on"></span>
+          <button id="slide-next" class="btn" title="Next slide for the class">▶</button>
+        </span>
       {% endif %}
 
       {% if is_teacher %}

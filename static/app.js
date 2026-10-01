@@ -676,8 +676,15 @@
   }
 
   // ---------------------------------------------------------------- run it
+  /* Whether anything here has been run yet. Until it has, the output pane
+     holds only "Python is ready" and the like, and a live lesson sends no
+     output at all — otherwise every class would be shown the teacher's
+     loading messages as if they were a program. */
+  var hasRun = false;
+
   async function run() {
     if (running || !pyRun) return;
+    hasRun = true;
     var source = mainSource();
     var mode = currentMode(source);
     paintMode(mode);
@@ -1350,9 +1357,65 @@
        opening the assignment link is shown first. Sent on every push so the
        class keeps them beside the lesson whichever tab is open here — before
        this, they reached the class only while the .md tab was selected. */
-    function liveNotes() {
+    function notesFile() {
       var md = fileNames().filter(window.PyIDENotes.isMarkdown);
-      return md.length ? docs[md[0]].getValue() : "";
+      return md.length ? md[0] : null;
+    }
+
+    function liveNotes() {
+      var md = notesFile();
+      return md ? docs[md].getValue() : "";
+    }
+
+    /* ------------------------------------------------------------ slides
+       Notes with `## ` headings are slides, and the class is sent ONE: the
+       one this teacher is on. Here the whole file stays in the editor, as
+       ever. The cutting happens in this browser, so the server stores and
+       students render exactly what they did before — the only new thing on
+       the wire is "3/5".
+
+       `slideAt` is an index that survives editing the notes mid-lesson, and
+       is clamped when slides are deleted out from under it. Two slides at
+       least, or it is not slides: a file with a single `## ` goes whole. */
+    var slideAt = 0;
+    var slideCtl = $("live-slides");
+    var slideLabel = $("slide-at");
+
+    function currentSlides() {
+      var cut = window.PyIDENotes.slides(liveNotes());
+      return cut.length >= 2 ? cut : null;
+    }
+
+    function paintSlides(cut) {
+      if (!slideCtl) return;
+      slideCtl.hidden = !(liveCode && cut);
+      if (slideCtl.hidden) return;
+      slideLabel.textContent = (slideAt + 1) + " / " + cut.length;
+      $("slide-prev").disabled = slideAt <= 0;
+      $("slide-next").disabled = slideAt >= cut.length - 1;
+    }
+
+    function moveSlide(by) {
+      var cut = currentSlides();
+      if (!liveCode || !cut) return;
+      slideAt = Math.max(0, Math.min(cut.length - 1, slideAt + by));
+      pushNow();                 // now, not on the next tick
+    }
+
+    if (slideCtl) {
+      $("slide-prev").addEventListener("click", function () { moveSlide(-1); });
+      $("slide-next").addEventListener("click", function () { moveSlide(1); });
+    }
+
+    /* The tail of what the last Run printed. textContent, so an input()
+       prompt waiting for the teacher's answer goes as the words of the
+       prompt and nothing else. Trimmed here as well as on the server, to
+       keep a print loop from sending 200 KB every 400ms to thirty polls. */
+    var OUTPUT_CHARS = 16000;
+    function liveOutput() {
+      if (!hasRun) return "";
+      var text = outputEl.textContent || "";
+      return text.length > OUTPUT_CHARS ? text.slice(-OUTPUT_CHARS) : text;
     }
 
     function pushNow() {
@@ -1360,13 +1423,27 @@
       var name = active;
       var text = docs[name] ? docs[name].getValue() : mainSource();
       var notes = liveNotes();
-      var stamp = name + "\u0000" + text + "\u0000" + notes;
+      var slide = "";
+      var cut = currentSlides();
+      if (cut) {
+        slideAt = Math.min(slideAt, cut.length - 1);
+        notes = cut[slideAt];
+        slide = (slideAt + 1) + "/" + cut.length;
+        /* With the notes tab open, the mirror shows that file too — whole,
+           which would put every slide on screen at once and defeat the
+           point. It gets the current slide like the notes pane does. */
+        if (name === notesFile()) text = notes;
+      }
+      paintSlides(cut);
+      var output = liveOutput();
+      var stamp = [name, text, notes, slide, output].join("\u0000");
       if (stamp === lastSent) return;      // nothing typed since last time
       lastSent = stamp;
       fetch("/api/live/" + encodeURIComponent(liveCode) + "/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: text, filename: name, notes: notes,
+                               slide: slide, output: output,
                                seq: nextSeq() })
       }).then(function (res) {
         if (res.status === 403 || res.status === 409) { stopLive(true); return; }
@@ -1491,6 +1568,7 @@
         liveBtn.classList.remove("btn-live-on");
         liveChip.hidden = true;
         paintSent(false);
+        paintSlides(null);
         closeCtxMenu();
       }
     }
@@ -1615,6 +1693,10 @@
           liveCode = data.code;
           liveFor = data.assignment_title || "";
           lastVersion = data.version || 0;
+          // Back on the slide the class is looking at, after a reload. A
+          // fresh lesson has none and starts at the beginning.
+          var at = /^(\d+)\//.exec(data.slide || "");
+          slideAt = at ? Math.max(0, parseInt(at[1], 10) - 1) : 0;
           lastSent = null;
           try { localStorage.setItem("pyide-live-host", liveCode); } catch (e) {}
           paintLive();

@@ -34,6 +34,7 @@ APP_NAME = "pyide"          # this editor, in the shared account tables
 # --------------------------------------------------------------------------
 
 MAX_CODE_BYTES = 200_000          # ~200 KB, generous for a class assignment
+LIVE_OUTPUT_BYTES = 20_000        # the tail of a Run, sent to the class
 MAX_FILES = 12
 MAX_FILE_BYTES = 100_000          # per attached data file
 MAX_FILES_TOTAL = 400_000         # all attached files together
@@ -1488,6 +1489,9 @@ def live_start():
                        # so a teacher who reloads mid-lesson is shown that
                        # something is still out, and can take it back
                        snippet_out=bool(live.snippet),
+                       # so a reload carries on from the same slide rather
+                       # than sending the class back to the title
+                       slide=live.slide or "",
                        url=url_for("live_page", code=live.code, _external=True))
 
     finally:
@@ -1562,6 +1566,23 @@ def live_push(code):
             if len(notes.encode("utf-8")) > MAX_CODE_BYTES:
                 return jsonify(error="Those notes are too large to share live."), 413
             fields["notes"] = notes
+
+        # Which slide those notes are, "3/5", or "" when they are not slides.
+        # Same rule as notes: only when sent.
+        slide = data.get("slide")
+        if isinstance(slide, str):
+            fields["slide"] = slide if re.fullmatch(r"\d{1,4}/\d{1,4}", slide) else ""
+
+        # What the teacher's Run printed. Trimmed here rather than refused:
+        # a runaway print loop is exactly when the output is huge, and a 413
+        # would throw away the code that came with it, freezing the mirror
+        # for as long as the loop ran. The tail is what anyone wants to read.
+        output = data.get("output")
+        if isinstance(output, str):
+            raw = output.encode("utf-8")
+            if len(raw) > LIVE_OUTPUT_BYTES:
+                output = raw[-LIVE_OUTPUT_BYTES:].decode("utf-8", "ignore")
+            fields["output"] = output
 
         # One statement, so two workers cannot interleave a read and a write.
         # `version < seq` is what drops a stale push, and it is also why this
@@ -1689,6 +1710,8 @@ def live_poll(code):
             snippet=live.snippet or "",
             snippet_seq=live.snippet_seq or 0,
             notes=live.notes or "",
+            slide=live.slide or "",
+            output=live.output or "",
         )
     finally:
         db.close()

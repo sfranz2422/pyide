@@ -408,6 +408,7 @@
     seen = data.version;
     showSnippet(data);
     showNotes(data);
+    showTeacherOutput(data, data.initial);
   }
 
   /* The project's notes, in their own pane under the output. Re-rendered
@@ -418,12 +419,75 @@
   var notesBody = $("live-notes");
   var shownNotes = null;
 
+  var slideMark = $("live-slide");
+  var shownSlide = null;
+
+  /* Slides need nothing special here. When the teacher's notes are cut into
+     slides, `notes` is only the current one — the editor does the cutting —
+     and `slide` says where it is ("3/5"). A new slide is new notes, so it
+     renders through the same path; all this adds is the marker, and going
+     back to the top, because the last slide's scroll position means nothing
+     on the next one and a class would start reading it halfway down. */
   function showNotes(data) {
     if (!notesView || typeof data.notes !== "string") return;
-    if (data.notes === shownNotes) return;
+    var slide = typeof data.slide === "string" ? data.slide : "";
+    if (data.notes === shownNotes && slide === shownSlide) return;
+    var moved = slide !== shownSlide;
     shownNotes = data.notes;
+    shownSlide = slide;
+    if (slideMark) {
+      var m = slide.match(/^(\d+)\/(\d+)$/);
+      slideMark.textContent = m ? "Slide " + m[1] + " of " + m[2] : "";
+    }
     notesView.hidden = !data.notes.trim();
-    if (!notesView.hidden) window.PyIDENotes.render(notesBody, data.notes);
+    if (notesView.hidden) return;
+    window.PyIDENotes.render(notesBody, data.notes).then(function () {
+      if (moved) notesBody.scrollTop = 0;
+    });
+  }
+
+  // --------------------------------------------- what the teacher's Run printed
+
+  /* In its own <pre>, next to the student's, never in it: the student's is
+     where input() takes their typing, and the one rule of this page is that
+     nothing from the network is written into anything of theirs.
+
+     Comes to the front when it changes — that is the teacher pressing Run
+     and wanting the class to look — unless the student's own program is
+     running, when snatching the pane away would hide a prompt they are
+     answering. Then the tab is only marked, and waits to be clicked. */
+  var teacherOut = $("teacher-output");
+  var mineTab = $("out-mine");
+  var teacherTab = $("out-teacher");
+  var clearBtn = $("clear");
+  var shownOutput = null;
+
+  function showOutputTab(teachers) {
+    if (!teacherOut) return;
+    teacherOut.hidden = !teachers;
+    outputEl.hidden = teachers;
+    mineTab.classList.toggle("is-on", !teachers);
+    teacherTab.classList.toggle("is-on", teachers);
+    if (teachers) teacherTab.classList.remove("has-new");
+    clearBtn.hidden = teachers;               // Clear is for their own
+  }
+
+  function showTeacherOutput(data, quietly) {
+    if (!teacherOut || typeof data.output !== "string") return;
+    if (data.output === shownOutput) return;
+    shownOutput = data.output;
+    teacherOut.textContent = data.output;
+    teacherOut.scrollTop = teacherOut.scrollHeight;
+    if (!data.output) return;
+    teacherTab.hidden = false;
+    if (quietly) return;
+    if (running) teacherTab.classList.add("has-new");
+    else showOutputTab(true);
+  }
+
+  if (teacherOut) {
+    mineTab.addEventListener("click", function () { showOutputTab(false); });
+    teacherTab.addEventListener("click", function () { showOutputTab(true); });
   }
 
   // ------------------------------------------------ what the teacher sent
@@ -518,7 +582,10 @@
   if (typeof L.body === "string") {
     showMirror({ body: L.body, version: L.version, filename: L.filename,
                  snippet: L.snippet, snippet_seq: L.snippetSeq,
-                 notes: L.notes });
+                 notes: L.notes, slide: L.slide, output: L.output,
+                 // joining mid-lesson: offer the teacher's output, but leave
+                 // the student looking at their own pane until it changes
+                 initial: true });
   }
 
   var POLL_MS = 1000;
@@ -631,6 +698,7 @@
   async function run() {
     if (running || !pyodide) return;
     var source = mine.getValue();          // theirs, never the mirror's
+    showOutputTab(false);                  // their Run, their output
 
     if (!window.PyIDEGame.looksLikeGame(source)) {
       setBusy(true, "console");
