@@ -1257,6 +1257,35 @@ check("  re-rendered only when it changes",
 check("  and put away when the lesson ends",
       re.search(r"function paintLive\(\)[\s\S]*?\} else \{[\s\S]*?paintClassView\(null, \"\"\);",
                 _push) is not None)
+# Show all, and the slide controls in the Class sees pane head.
+r = teacher.get("/")
+_page = r.get_data(as_text=True)
+_cv = _page.find('id="class-view"')
+check("the slide controls sit in the Class sees pane, not the top bar",
+      -1 < _cv < _page.find('id="live-slides"') < _page.find('id="class-notes"'),
+      "the top bar had no room for them")
+check("  with a Show all button beside them",
+      _cv < _page.find('id="slide-whole"') < _page.find('id="class-notes"'))
+check("Show all sends the whole notes file instead of one slide",
+      "if (cut && !wholeNotes) {" in _push_fn,
+      "the button would change nothing the class sees")
+check("  and survives a reload of the editor, for this lesson only",
+      'wholeNotes = !!whole && whole.split("/")[0] === liveCode;' in _push,
+      "a reload would snap every screen back to one slide")
+check("  keeping the slide to go back to when it is turned off",
+      'localStorage.setItem("pyide-live-whole", liveCode + "/" + slideAt);' in _push
+      and 'if (wholeNotes) slideAt = parseInt(whole.split("/")[1], 10) || 0;' in _push,
+      "off after a reload would start the class at slide 1")
+_stop_fn = fn_body(_push, "stopLive")
+check("  and is put away when the lesson ends",
+      "wholeNotes = false;" in _stop_fn
+      and 'localStorage.removeItem("pyide-live-whole");' in _stop_fn,
+      "the next lesson would start with no slides")
+check("  the arrows really hide while it is on",
+      re.search(r"\.slide-ctl \.btn\[hidden\]\s*\{\s*display:\s*none",
+                open(os.path.join(PYIDE, "static", "style.css")).read())
+      is not None,
+      ".btn sets display, so [hidden] alone shows them anyway")
 check("  and no output is sent before the first Run",
       re.search(r"function liveOutput\(\)\s*\{\s*if \(!hasRun\) return \"\";",
                 _push) is not None,
