@@ -195,13 +195,19 @@
 
     {#  Their output and the teacher's share one pane, as two tabs, because
         the column has no room for a third box. The teacher's tab appears
-        the first time they press Run, and comes to the front whenever
-        their output changes; pressing Run here goes back to the student's
-        own. Two separate <pre>s, never one: the student's is where input()
-        types, and nothing from the network may land in it. #}
-    <div id="output-view" class="subpane">
+        the first time they press Run and gets a dot when it changes, but
+        never comes to the front by itself — the student clicks it. Two
+        separate <pre>s, never one: the student's is where input() types,
+        and nothing from the network may land in it.
+
+        Folded to its head until opened or until the student presses Run;
+        see openConsole in live.js. #}
+    <div id="output-view" class="subpane is-folded">
       <div class="pane-head">
         <span class="out-tabs">
+          <button id="out-fold" class="out-fold" type="button"
+                  aria-controls="output-view" aria-expanded="false"
+                  title="Show the output">▸</button>
           <button id="out-mine" class="out-tab is-on" type="button">Output</button>
           <button id="out-teacher" class="out-tab" type="button" hidden
                   title="What {{ live.host_name or 'your teacher' }}'s program printed">{{ live.host_name or "Teacher" }}'s output</button>
@@ -240,6 +246,7 @@
     notes: {{ (live.notes if live else '') | tojson }},
     slide: {{ (live.slide if live else '') | tojson }},
     output: {{ (live.output if live else '') | tojson }},
+    cursor: {{ (live.cursor if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},
     signedIn: {{ 'true' if user else 'false' }},
     assignment: {{ (assignment.slug if assignment else '') | tojson }},

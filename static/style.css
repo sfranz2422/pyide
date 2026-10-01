@@ -1348,6 +1348,39 @@ body:not(.is-authoring) .notes-body a {
 .live-right .live-notes[hidden] { display: none; }
 .live-right #output-view { flex: 1 1 45%; }
 
+/* Folded: just the head, and the notes under it get the column. The <pre>s
+ * are hidden rather than squeezed to zero so the student's own output keeps
+ * its scroll position for when they open it again. */
+.live-right #output-view.is-folded { flex: 0 0 auto; }
+.live-right #output-view.is-folded .output { display: none; }
+.out-fold {
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.out-fold:hover { color: var(--text); }
+
+/* The teacher's caret in the mirror: a bookmark widget, not a real cursor,
+ * so the mirror still cannot be focused. Zero width with a negative margin
+ * so drawing it does not push the rest of the line two pixels sideways. */
+.mirror-caret {
+  display: inline-block;
+  width: 0;
+  height: 1.2em;
+  margin-right: -2px;
+  border-left: 2px solid var(--accent);
+  vertical-align: text-bottom;
+  animation: mirror-blink 1.06s steps(1) infinite;
+}
+@keyframes mirror-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mirror-caret { animation: none; }
+}
+.live-mirror .mirror-caret-line { background: var(--banner-bg); }
+
 /* The student's file tabs share the pane head with "Your turn" and the
  * saved note, so the tabs are the part that gives: they scroll sideways
  * rather than pushing the note off the end of the head. */

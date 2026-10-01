@@ -513,6 +513,7 @@
       // The ONLY setValue on the mirror. `mine` is never given anything from
       // the network: its tabs are filled from the page and from their own Run.
       if (typeof data.body === "string" && data.body !== mirror.getValue()) {
+        clearCaret();                // its line is about to be replaced
         var scroll = mirror.getScrollInfo();
         mirror.setValue(data.body);
         // Keep the reader where they were. Without this every keystroke from
@@ -526,6 +527,7 @@
          forces a redraw. Switching a tab in front of a class is exactly when
          that would happen, so refresh on the way back. */
       if (wasHidden) mirror.refresh();
+      showCaret(typeof data.cursor === "string" ? data.cursor : "");
     }
 
     if (data.filename) {
@@ -536,6 +538,56 @@
     showSnippet(data);
     showNotes(data);
     showTeacherOutput(data, data.initial);
+  }
+
+  /* ------------------------------------------------ the teacher's caret
+     Where the teacher is typing, drawn as a blinking caret on a tinted line,
+     and followed: when it moves off screen the mirror scrolls to it. It is a
+     bookmark widget, not a selection or a real cursor, so the mirror stays
+     "nocursor" and still cannot be focused or copied from.
+
+     Following is the point — a class otherwise watches line 1 while the
+     teacher types on line 40 — but a student who scrolls back to read
+     something must not be yanked away mid-sentence. So scrolling the
+     mirror by hand pauses following for a few seconds, and only that does:
+     the scroll events CodeMirror fires for its own scrolling are ignored by
+     listening for the wheel, a touch and the scrollbar instead. */
+  var caretMark = null;
+  var caretLine = null;
+  var followAfter = 0;
+  var FOLLOW_PAUSE_MS = 5000;
+
+  ["wheel", "touchmove", "mousedown"].forEach(function (kind) {
+    mirrorEl.addEventListener(kind, function () {
+      followAfter = Date.now() + FOLLOW_PAUSE_MS;
+    }, { passive: true });
+  });
+
+  function clearCaret() {
+    if (caretMark) { caretMark.clear(); caretMark = null; }
+    /* A line handle from before a setValue is detached, and removing a
+       class from it throws — getLineNumber is null for exactly those. */
+    if (caretLine && mirror.getLineNumber(caretLine) !== null) {
+      mirror.removeLineClass(caretLine, "background", "mirror-caret-line");
+    }
+    caretLine = null;
+  }
+
+  function showCaret(cursor) {
+    clearCaret();
+    var m = /^(\d+):(\d+)$/.exec(cursor);
+    if (!m) return;                  // a notes file, or an older editor
+    // Clamped: the caret and the text arrive together, but a student's
+    // mirror is never trusted to be the exact shape the stamp assumed.
+    var line = Math.min(+m[1], mirror.lastLine());
+    var at = { line: line, ch: Math.min(+m[2], mirror.getLine(line).length) };
+    var mark = document.createElement("span");
+    mark.className = "mirror-caret";
+    caretMark = mirror.setBookmark(at, { widget: mark, insertLeft: true });
+    caretLine = mirror.addLineClass(line, "background", "mirror-caret-line");
+    // Only scrolls when the caret is off screen, so a mirror that already
+    // shows it does not twitch on every keystroke.
+    if (Date.now() >= followAfter) mirror.scrollIntoView(at, 60);
   }
 
   /* The project's notes, in their own pane under the output. Re-rendered
@@ -579,10 +631,10 @@
      where input() takes their typing, and the one rule of this page is that
      nothing from the network is written into anything of theirs.
 
-     Comes to the front when it changes — that is the teacher pressing Run
-     and wanting the class to look — unless the student's own program is
-     running, when snatching the pane away would hide a prompt they are
-     answering. Then the tab is only marked, and waits to be clicked. */
+     NEVER COMES TO THE FRONT BY ITSELF. It used to, whenever the teacher
+     pressed Run, and every Run in a lesson then took thirty students away
+     from their own output mid-thought. Now the tab appears and gets a dot,
+     and the student looks when they choose to. */
   var teacherOut = $("teacher-output");
   var mineTab = $("out-mine");
   var teacherTab = $("out-teacher");
@@ -607,15 +659,43 @@
     teacherOut.scrollTop = teacherOut.scrollHeight;
     if (!data.output) return;
     teacherTab.hidden = false;
-    if (quietly) return;
-    if (running) teacherTab.classList.add("has-new");
-    else showOutputTab(true);
+    if (quietly || !teacherOut.hidden) return;
+    teacherTab.classList.add("has-new");
   }
 
   if (teacherOut) {
-    mineTab.addEventListener("click", function () { showOutputTab(false); });
-    teacherTab.addEventListener("click", function () { showOutputTab(true); });
+    mineTab.addEventListener("click", function () {
+      showOutputTab(false); openConsole(true);
+    });
+    teacherTab.addEventListener("click", function () {
+      showOutputTab(true); openConsole(true);
+    });
   }
+
+  /* The output pane starts folded to its head, leaving the column to the
+     notes; the head's arrow opens it. The student's own Run opens it too,
+     because a program waiting on input() in a folded pane looks exactly
+     like one that has hung. Not remembered between visits: folded is the
+     state every lesson should start in. */
+  var outputView = $("output-view");
+  var foldBtn = $("out-fold");
+
+  function openConsole(open) {
+    if (!outputView) return;
+    outputView.classList.toggle("is-folded", !open);
+    if (foldBtn) {
+      foldBtn.textContent = open ? "▾" : "▸";
+      foldBtn.title = open ? "Fold the output away" : "Show the output";
+      foldBtn.setAttribute("aria-expanded", String(open));
+    }
+  }
+
+  if (foldBtn) {
+    foldBtn.addEventListener("click", function () {
+      openConsole(outputView.classList.contains("is-folded"));
+    });
+  }
+  openConsole(false);
 
   // ------------------------------------------------ what the teacher sent
 
@@ -710,6 +790,7 @@
     showMirror({ body: L.body, version: L.version, filename: L.filename,
                  snippet: L.snippet, snippet_seq: L.snippetSeq,
                  notes: L.notes, slide: L.slide, output: L.output,
+                 cursor: L.cursor,
                  // joining mid-lesson: offer the teacher's output, but leave
                  // the student looking at their own pane until it changes
                  initial: true });
@@ -874,6 +955,7 @@
     var source = mainSource();             // theirs, never the mirror's
     showOutputTab(false);                  // their Run, their output
     pushFilesToPython();
+    openConsole(true);
 
     if (!window.PyIDEGame.looksLikeGame(source)) {
       setBusy(true, "console");
