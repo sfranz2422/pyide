@@ -1416,6 +1416,18 @@ def _title_of_assignment(db, assignment_id):
     return row.title if row else ""
 
 
+def _live_host_name(user):
+    """What the class's page calls the teacher: the last word of their name.
+
+    Google hands over the whole name, and "Stephen Franz's output" across
+    thirty screens is long and not what a class calls anyone. A one-word
+    name is used as it is, and an account with no name at all falls back to
+    the email's first half, as everywhere else.
+    """
+    words = (user.name or "").split()
+    return words[-1] if words else user.display_name()
+
+
 @app.post("/api/live/start")
 def live_start():
     """Open a session, or hand back the one already running.
@@ -1462,7 +1474,7 @@ def live_start():
                 code=accounts.new_id(db, accounts.LiveSession, "code"),
                 app=APP_NAME,
                 host_id=user.id,
-                host_name=user.display_name(),
+                host_name=_live_host_name(user),
                 title=clean(data.get("title"), 200) or "Live lesson",
                 body=body,
                 filename=clean(data.get("filename"), 200) or "main.py",
@@ -1472,6 +1484,9 @@ def live_start():
             db.add(live)
         else:
             live.title = clean(data.get("title"), 200) or live.title
+            # Refreshed on every resume, so a lesson opened before the name
+            # rule changed picks it up at the teacher's next reload.
+            live.host_name = _live_host_name(user)
             # Resuming after a reload must not quietly drop the assignment —
             # the class would carry on with no way to hand anything in, and
             # nothing would say so. Only an explicit choice changes it.
@@ -1573,13 +1588,18 @@ def live_push(code):
         if isinstance(slide, str):
             fields["slide"] = slide if re.fullmatch(r"\d{1,4}/\d{1,4}", slide) else ""
 
-        # Where the teacher's caret is, "line:ch". Same rule as notes: only
+        # Where the teacher's caret is, "line:ch", or what they have
+        # highlighted, "anchor-head" as two of those. Same rule as notes: only
         # when sent. Anything else is stored as none rather than refused, so a
         # bad caret can never cost the class the code that came with it.
+        # A selection's numbers are one digit shorter so the pair still fits
+        # the 24 characters of the cursor column — a longer value would be
+        # refused by Postgres and lose the whole push, code and all.
         cursor = data.get("cursor")
         if isinstance(cursor, str):
-            fields["cursor"] = (cursor if re.fullmatch(r"\d{1,6}:\d{1,6}", cursor)
-                                else "")
+            fields["cursor"] = (cursor if re.fullmatch(
+                r"\d{1,6}:\d{1,6}|\d{1,5}:\d{1,5}-\d{1,5}:\d{1,5}", cursor)
+                else "")
 
         # What the teacher's Run printed. Trimmed here rather than refused:
         # a runaway print loop is exactly when the output is huge, and a 413

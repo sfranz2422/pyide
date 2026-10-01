@@ -537,7 +537,7 @@
     seen = data.version;
     showSnippet(data);
     showNotes(data);
-    showTeacherOutput(data, data.initial);
+    showTeacherOutput(data);
   }
 
   /* ------------------------------------------------ the teacher's caret
@@ -545,6 +545,12 @@
      and followed: when it moves off screen the mirror scrolls to it. It is a
      bookmark widget, not a selection or a real cursor, so the mirror stays
      "nocursor" and still cannot be focused or copied from.
+
+     What the teacher has highlighted comes as "anchor-head" and is painted
+     yellow with markText — again a mark, not a selection, for the same
+     reason. The caret sits at the head, where the drag ended, as it does in
+     the teacher's own editor; the line tint is left off then, because a
+     tinted line inside a yellow block reads as a second thing to look at.
 
      Following is the point — a class otherwise watches line 1 while the
      teacher types on line 40 — but a student who scrolls back to read
@@ -554,6 +560,7 @@
      listening for the wheel, a touch and the scrollbar instead. */
   var caretMark = null;
   var caretLine = null;
+  var pickMark = null;
   var followAfter = 0;
   var FOLLOW_PAUSE_MS = 5000;
 
@@ -565,6 +572,7 @@
 
   function clearCaret() {
     if (caretMark) { caretMark.clear(); caretMark = null; }
+    if (pickMark) { pickMark.clear(); pickMark = null; }
     /* A line handle from before a setValue is detached, and removing a
        class from it throws — getLineNumber is null for exactly those. */
     if (caretLine && mirror.getLineNumber(caretLine) !== null) {
@@ -573,21 +581,35 @@
     caretLine = null;
   }
 
+  // "line:ch" to a position in the mirror. Clamped: the caret and the text
+  // arrive together, but a student's mirror is never trusted to be the
+  // exact shape the stamp assumed.
+  function mirrorPos(line, ch) {
+    line = Math.min(+line, mirror.lastLine());
+    return { line: line, ch: Math.min(+ch, mirror.getLine(line).length) };
+  }
+
   function showCaret(cursor) {
     clearCaret();
-    var m = /^(\d+):(\d+)$/.exec(cursor);
+    var m = /^(?:(\d+):(\d+)-)?(\d+):(\d+)$/.exec(cursor);
     if (!m) return;                  // a notes file, or an older editor
-    // Clamped: the caret and the text arrive together, but a student's
-    // mirror is never trusted to be the exact shape the stamp assumed.
-    var line = Math.min(+m[1], mirror.lastLine());
-    var at = { line: line, ch: Math.min(+m[2], mirror.getLine(line).length) };
+    var at = mirrorPos(m[3], m[4]);
     var mark = document.createElement("span");
     mark.className = "mirror-caret";
     caretMark = mirror.setBookmark(at, { widget: mark, insertLeft: true });
-    caretLine = mirror.addLineClass(line, "background", "mirror-caret-line");
-    // Only scrolls when the caret is off screen, so a mirror that already
-    // shows it does not twitch on every keystroke.
-    if (Date.now() >= followAfter) mirror.scrollIntoView(at, 60);
+    var show = at;
+    if (m[1] !== undefined) {
+      var other = mirrorPos(m[1], m[2]);
+      var backwards = CodeMirror.cmpPos(other, at) > 0;  // dragged upwards
+      var from = backwards ? at : other, to = backwards ? other : at;
+      pickMark = mirror.markText(from, to, { className: "mirror-pick" });
+      show = { from: from, to: to };
+    } else {
+      caretLine = mirror.addLineClass(at.line, "background", "mirror-caret-line");
+    }
+    // Only scrolls when it is off screen, so a mirror that already shows it
+    // does not twitch on every keystroke.
+    if (Date.now() >= followAfter) mirror.scrollIntoView(show, 60);
   }
 
   /* The project's notes, in their own pane under the output. Re-rendered
@@ -627,49 +649,31 @@
 
   // --------------------------------------------- what the teacher's Run printed
 
-  /* In its own <pre>, next to the student's, never in it: the student's is
-     where input() takes their typing, and the one rule of this page is that
-     nothing from the network is written into anything of theirs.
+  /* In its own pane beside the teacher's code, never in the student's
+     output: that is where input() takes their typing, and the one rule of
+     this page is that nothing from the network is written into anything of
+     theirs.
 
-     NEVER COMES TO THE FRONT BY ITSELF. It used to, whenever the teacher
-     pressed Run, and every Run in a lesson then took thirty students away
-     from their own output mid-thought. Now the tab appears and gets a dot,
-     and the student looks when they choose to. */
+     The pane appears with the first output and then stays, even when an
+     output comes back empty — the teacher's Run clears before it prints,
+     and a push can land in between, which would make the code beside it
+     jump sideways and back on every Run. */
   var teacherOut = $("teacher-output");
-  var mineTab = $("out-mine");
-  var teacherTab = $("out-teacher");
-  var clearBtn = $("clear");
+  var teacherView = $("teacher-output-view");
   var shownOutput = null;
 
-  function showOutputTab(teachers) {
-    if (!teacherOut) return;
-    teacherOut.hidden = !teachers;
-    outputEl.hidden = teachers;
-    mineTab.classList.toggle("is-on", !teachers);
-    teacherTab.classList.toggle("is-on", teachers);
-    if (teachers) teacherTab.classList.remove("has-new");
-    clearBtn.hidden = teachers;               // Clear is for their own
-  }
-
-  function showTeacherOutput(data, quietly) {
+  function showTeacherOutput(data) {
     if (!teacherOut || typeof data.output !== "string") return;
     if (data.output === shownOutput) return;
     shownOutput = data.output;
     teacherOut.textContent = data.output;
     teacherOut.scrollTop = teacherOut.scrollHeight;
-    if (!data.output) return;
-    teacherTab.hidden = false;
-    if (quietly || !teacherOut.hidden) return;
-    teacherTab.classList.add("has-new");
-  }
-
-  if (teacherOut) {
-    mineTab.addEventListener("click", function () {
-      showOutputTab(false); openConsole(true);
-    });
-    teacherTab.addEventListener("click", function () {
-      showOutputTab(true); openConsole(true);
-    });
+    if (!data.output || !teacherView.hidden) return;
+    teacherView.hidden = false;
+    /* The mirror just got narrower, and CodeMirror only measures itself
+       on a window resize — without this its scrollbar and the caret's
+       follow are worked out for the old width. */
+    mirror.refresh();
   }
 
   /* The output pane starts folded to its head, leaving the column to the
@@ -790,10 +794,7 @@
     showMirror({ body: L.body, version: L.version, filename: L.filename,
                  snippet: L.snippet, snippet_seq: L.snippetSeq,
                  notes: L.notes, slide: L.slide, output: L.output,
-                 cursor: L.cursor,
-                 // joining mid-lesson: offer the teacher's output, but leave
-                 // the student looking at their own pane until it changes
-                 initial: true });
+                 cursor: L.cursor });
   }
 
   var POLL_MS = 1000;
@@ -953,7 +954,6 @@
   async function run() {
     if (running || !pyodide) return;
     var source = mainSource();             // theirs, never the mirror's
-    showOutputTab(false);                  // their Run, their output
     pushFilesToPython();
     openConsole(true);
 

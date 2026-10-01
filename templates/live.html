@@ -136,18 +136,34 @@
         arriving from the network is ever given to the lower one, so there is
         no path — not even a buggy one — by which a student loses their own
         work because the teacher typed. #}
+    {#  The teacher's code on the left and what their Run printed on the
+        right, in one row. The teacher's output was a second tab in the
+        student's output pane once, and the class had to flick between the
+        two to compare them — on a laptop screen that was a page and a half
+        of switching for one exercise. The output half appears with the
+        teacher's first Run and stays, so the code does not jump sideways
+        every time they run it. #}
     <div class="live-pane live-mirror">
-      <div class="pane-head">
-        <span>What {{ live.host_name or "your teacher" }} is typing</span>
-        <span id="mirror-name" class="dim">{{ live.filename }}</span>
+      <div class="live-mirror-code">
+        <div class="pane-head">
+          <span>What {{ live.host_name or "your teacher" }} is typing</span>
+          <span id="mirror-name" class="dim">{{ live.filename }}</span>
+        </div>
+        <div id="mirror-wrap" class="editor-wrap"><textarea id="mirror"></textarea></div>
+        {#  A .md file the teacher opens is class notes, not code: it renders
+            here instead, so a link they put up is a link the class can click.
+            notes.js sanitises it and forces every link to open in a new tab,
+            which matters more here than anywhere else in the app — thirty
+            people click it at once and none of them should lose their work. #}
+        <div id="mirror-notes" class="notes-body prose" hidden></div>
       </div>
-      <div id="mirror-wrap" class="editor-wrap"><textarea id="mirror"></textarea></div>
-      {#  A .md file the teacher opens is class notes, not code: it renders
-          here instead, so a link they put up is a link the class can click.
-          notes.js sanitises it and forces every link to open in a new tab,
-          which matters more here than anywhere else in the app — thirty
-          people click it at once and none of them should lose their work. #}
-      <div id="mirror-notes" class="notes-body prose" hidden></div>
+      {#  Its own <pre>, never the student's #output: that one is where
+          input() takes their typing, and nothing from the network may land
+          in it. #}
+      <div id="teacher-output-view" class="live-mirror-out" hidden>
+        <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s output</span></div>
+        <pre id="teacher-output" class="output"></pre>
+      </div>
     </div>
 
     <div class="live-pane live-mine">
@@ -193,30 +209,21 @@
       </div>
     </div>
 
-    {#  Their output and the teacher's share one pane, as two tabs, because
-        the column has no room for a third box. The teacher's tab appears
-        the first time they press Run and gets a dot when it changes, but
-        never comes to the front by itself — the student clicks it. Two
-        separate <pre>s, never one: the student's is where input() types,
-        and nothing from the network may land in it.
-
-        Folded to its head until opened or until the student presses Run;
-        see openConsole in live.js. #}
+    {#  Folded to its head until opened or until the student presses Run;
+        see openConsole in live.js. The teacher's output is not here — it
+        sits beside the teacher's code. #}
     <div id="output-view" class="subpane is-folded">
       <div class="pane-head">
         <span class="out-tabs">
           <button id="out-fold" class="out-fold" type="button"
                   aria-controls="output-view" aria-expanded="false"
                   title="Show the output">▸</button>
-          <button id="out-mine" class="out-tab is-on" type="button">Output</button>
-          <button id="out-teacher" class="out-tab" type="button" hidden
-                  title="What {{ live.host_name or 'your teacher' }}'s program printed">{{ live.host_name or "Teacher" }}'s output</button>
+          <span>Your output</span>
         </span>
         <button id="clear" class="linkbtn">Clear</button>
       </div>
       <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
-      <pre id="teacher-output" class="output" hidden></pre>
     </div>
 
     {#  The project's notes, always in view — not only while the teacher has

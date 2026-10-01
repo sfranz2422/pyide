@@ -170,7 +170,12 @@ check("a student who is not signed in can watch", r.status_code == 200,
 body = r.get_json()
 check("  and gets the whole file, not a diff", body["body"] == "line one, fixed")
 check("  with the version to poll against", body["version"] == 1001)
-check("  and who is teaching", body["host"] == "Mr Franz", body.get("host"))
+check("  and who is teaching, by last name only", body["host"] == "Franz",
+      body.get("host"))
+check("  a one-word name as it is, and no name the email's first half",
+      P._live_host_name(accounts.User(name="Franz", email="a@b.org")) == "Franz"
+      and P._live_host_name(accounts.User(name="", email="sfranz@b.org"))
+      == "sfranz")
 
 r = stranger.get("/api/live/%s?v=%d" % (CODE, body["version"]))
 check("polling with the version they have gets 304, not the file again",
@@ -354,9 +359,15 @@ page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
 check("a late joiner gets both in the page",
       re.search(r'^\s*slide: "3/5"', page, re.M) is not None
       and re.search(r'^\s*output: "hi\\n"', page, re.M) is not None)
-check("  with a slide marker and a tab for the teacher's output",
-      'id="live-slide"' in page and 'id="out-teacher"' in page
-      and 'id="teacher-output"' in page)
+check("  with a slide marker and a pane for the teacher's output",
+      'id="live-slide"' in page and 'id="teacher-output"' in page)
+_mirror_html = page[page.index('class="live-pane live-mirror"'):
+                    page.index('class="live-pane live-mine"')]
+_out_html = page[page.index('id="output-view"'):page.index('id="live-notes-view"')]
+check("  beside the teacher's code, not in the student's output pane",
+      'id="teacher-output"' in _mirror_html
+      and 'teacher-output' not in _out_html,
+      "the class had to flick between two tabs to compare the outputs")
 teacher.post("/api/live/%s/push" % CODE,
              json={"body": base.get("body"), "filename": "main.py",
                    "notes": "", "slide": "", "output": "", "seq": 4500})
@@ -379,7 +390,20 @@ check("  one that is not line:ch is stored as none, not refused",
       r.status_code == 200 and poll_json().get("cursor") == ""
       and poll_json().get("body") == "a = 1", repr(poll_json().get("cursor")))
 teacher.post("/api/live/%s/push" % CODE,
-             json={"body": "a = 1", "cursor": "0:2", "seq": 4603})
+             json={"body": "a = 1\nb = 2", "cursor": "0:1-1:3", "seq": 4604})
+check("a highlighted block reaches the class as anchor-head",
+      poll_json().get("cursor") == "0:1-1:3", repr(poll_json().get("cursor")))
+r = teacher.post("/api/live/%s/push" % CODE,
+                 json={"body": "a = 1", "cursor": "123456:1-1:1", "seq": 4605})
+check("  one too long for the column is stored as none, not refused",
+      r.status_code == 200 and poll_json().get("cursor") == ""
+      and poll_json().get("body") == "a = 1",
+      "Postgres would refuse 25 characters and the push would be lost")
+check("  and the longest one allowed fits the column",
+      len("99999:99999-99999:99999")
+      <= accounts.LiveSession.__table__.c.cursor.type.length)
+teacher.post("/api/live/%s/push" % CODE,
+             json={"body": "a = 1", "cursor": "0:2", "seq": 4606})
 page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
 check("  and a late joiner gets it in the page",
       re.search(r'^\s*cursor: "0:2"', page, re.M) is not None)
@@ -1014,7 +1038,7 @@ check("  every save carries those tabs, never an empty map",
       and len(re.findall(r"files: dataFiles\(\)", live_code)) == 3,
       "an autosave sending {} emptied the project of its data files")
 check("  and Run gives Python the files before running main.py",
-      re.search(r"var source = mainSource\(\);[^\n]*\n[^\n]*\n\s*pushFilesToPython\(\);",
+      re.search(r"var source = mainSource\(\);[^\n]*\n\s*pushFilesToPython\(\);",
                 live_code) is not None)
 check("  with tabs on the page to switch between them",
       'id="mine-tabs"' in page and 'starterFiles:' in page)
@@ -1338,13 +1362,13 @@ check("the teacher's output is written only into its own pane",
       and not re.search(r"outputEl[^;]*data\.output|data\.output[^;]*outputEl|write\(data\.output",
                         live_code),
       "the student's own output pane must never be given it")
-check("  and never comes to the front by itself, only gets a dot",
-      "showOutputTab(" not in _tout
-      and 'teacherTab.classList.add("has-new")' in _tout,
-      "every teacher Run took the class away from their own output")
-check("  and their own Run brings their output back",
-      re.search(r"async function run\(\)[\s\S]{0,200}showOutputTab\(false\)",
-                live_code) is not None)
+check("  appearing with the first output and then staying",
+      "if (!data.output || !teacherView.hidden) return;" in _tout
+      and "teacherView.hidden = true" not in live_code,
+      "an empty push mid-Run would make the code beside it jump sideways")
+check("  and the mirror re-measured when it appears",
+      re.search(r"teacherView\.hidden = false;[\s\S]{0,300}mirror\.refresh\(\)",
+                _tout) is not None)
 check("the editor sends its caret with every push, and moving it counts",
       "cursor: cursor, seq: nextSeq()" in _push_fn
       and re.search(r"var stamp = [^;]*\bcursor\b", _push_fn) is not None,
@@ -1362,11 +1386,27 @@ check("  as a widget, so the mirror still takes no cursor",
       and "mirror.setCursor" not in live_code
       and "mirror.setSelection" not in live_code)
 check("  and follows it, unless the student has just scrolled",
-      "if (Date.now() >= followAfter) mirror.scrollIntoView(at" in _caret_fn
+      "if (Date.now() >= followAfter) mirror.scrollIntoView(show" in _caret_fn
       and re.search(r'\["wheel", "touchmove", "mousedown"\][\s\S]{0,160}'
                     r'followAfter = Date\.now\(\) \+ FOLLOW_PAUSE_MS',
                     live_code) is not None,
       "a student reading line 4 would be yanked to line 40 every keystroke")
+check("the editor sends a highlighted block as anchor-head",
+      re.search(r"somethingSelected\(\)\) \{\s*var from = docs\[name\]"
+                r"\.getCursor\(\"anchor\"\);\s*cursor = from\.line \+ \":\" \+ "
+                r"from\.ch \+ \"-\" \+ cursor;", _push_fn) is not None,
+      "dragging across a block to talk about it would show nobody anything")
+check("  and the mirror paints it yellow as a mark, not a selection",
+      'mirror.markText(from, to, { className: "mirror-pick" })' in _caret_fn
+      and ".live-mirror .mirror-pick" in open(
+          os.path.join(PYIDE, "static", "style.css")).read())
+check("  in order even when dragged upwards",
+      "CodeMirror.cmpPos(other, at) > 0" in _caret_fn,
+      "markText with from after to marks nothing")
+check("  and cleared with the caret",
+      "if (pickMark) { pickMark.clear(); pickMark = null; }"
+      in fn_body(live_code, "clearCaret"),
+      "every highlight would stay yellow forever")
 check("  clearing the old caret before the text is replaced",
       re.search(r"data\.body !== mirror\.getValue\(\)\) \{\s*clearCaret\(\);",
                 _mirror_fn) is not None,
