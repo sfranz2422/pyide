@@ -121,12 +121,13 @@
   mine.on("change", function (cm, change) {
     clearTimeout(nameTimer);
     nameTimer = setTimeout(function () {
-      window.PyIDEComplete.refresh(mine.getValue());
+      window.PyIDEComplete.refresh(mainSource());
     }, 250);
 
-    // only offer suggestions while a word is actually being typed
+    // only offer suggestions while a word is actually being typed, and only
+    // in Python — a word typed into words.txt is not a name to complete
     var typed = change.origin === "+input" && change.text.join("");
-    if (typed && /^[A-Za-z0-9_]$/.test(typed)) {
+    if (typed && /^[A-Za-z0-9_]$/.test(typed) && modeFor(active) === "python") {
       clearTimeout(hintTimer);
       hintTimer = setTimeout(function () {
         if (!cm.state.completionActive) window.PyIDEComplete.show(cm);
@@ -154,19 +155,139 @@
   if (start) mine.setValue(start);
   mine.clearHistory();
 
+  /* ------------------------------------------------------------ their files
+   *
+   * main.py and the rest of their project, each its own CodeMirror document
+   * swapped into `mine`, exactly as the editor keeps them — so switching tabs
+   * keeps the caret and the undo history, and there is still only the one
+   * editor a student types in. The mirror never fills any of these.
+   *
+   * The other files are kept in this browser beside main.py, under their own
+   * key, and the same rule decides where they start: what this browser has
+   * wins, else the project's own files (their draft's, or the assignment's).
+   * main.py's key is unchanged, so a browser that kept a lesson before tabs
+   * existed still gets its typing back — with the project's files beside it.
+   *
+   * A .md file stays out of the strip. It is the project's notes, which the
+   * class already reads in the Notes pane, but it is still part of what is
+   * saved: a save that left it out would delete the assignment's notes. */
+  var MAIN = "main.py";
+  var PROJECT_DIR = "/project";
+  var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
+  var FILES_KEY = DRAFT_KEY + "-files";
+  var docs = {};
+  var active = MAIN;
+  var tabsEl = $("mine-tabs");
+  docs[MAIN] = mine.getDoc();
+
+  var keptFiles = null;
+  try {
+    keptFiles = JSON.parse(window.localStorage.getItem(FILES_KEY) || "null");
+  } catch (e) { /* blocked, or not ours to read: the project's own files */ }
+  var startFiles = (keptFiles && typeof keptFiles === "object")
+    ? keptFiles : (L.starterFiles || {});
+  Object.keys(startFiles).forEach(function (name) {
+    if (name !== MAIN && typeof startFiles[name] === "string") {
+      docs[name] = CodeMirror.Doc(startFiles[name], modeFor(name));
+    }
+  });
+
+  function modeFor(name) {
+    return /\.py$/i.test(name) ? "python" : null;   // .txt and .csv are text
+  }
+
+  /* The program, whichever tab is open. NOT mine.getValue(): with a .txt tab
+     showing, that is the text file, and Run would try to execute words.txt. */
+  function mainSource() { return docs[MAIN].getValue(); }
+
+  function dataFiles() {
+    var out = {};
+    Object.keys(docs).forEach(function (n) {
+      if (n !== MAIN) out[n] = docs[n].getValue();
+    });
+    return out;
+  }
+
+  function isNotes(name) {
+    return window.PyIDENotes && window.PyIDENotes.isMarkdown(name);
+  }
+
+  function renderTabs() {
+    if (!tabsEl) return;
+    tabsEl.textContent = "";
+    var names = [MAIN].concat(Object.keys(docs).filter(function (n) {
+      return n !== MAIN && !isNotes(n);
+    }).sort());
+    names.forEach(function (name) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "tab" + (name === active ? " tab-on" : "");
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(name === active));
+      tab.textContent = name;
+      tab.addEventListener("click", function () { switchTo(name); });
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function switchTo(name) {
+    if (!docs[name] || name === active) return;
+    active = name;
+    mine.swapDoc(docs[name]);
+    mine.setOption("mode", modeFor(name));
+    renderTabs();
+    mine.focus();
+  }
+
+  function keepInBrowser() {
+    try {
+      window.localStorage.setItem(DRAFT_KEY, mainSource());
+      window.localStorage.setItem(FILES_KEY, JSON.stringify(dataFiles()));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* A file of their own, for following a teacher who makes one mid-lesson.
+     Same names the editor allows, and the server checks again. No way to
+     delete one here, on purpose: the server reads an empty map from this
+     page as "leave the files alone" (see live_keep), which is only safe
+     while nothing on this page can empty it. */
+  var newFileBtn = $("mine-new-file");
+  if (newFileBtn) {
+    newFileBtn.addEventListener("click", function () {
+      var name = window.prompt("Name the new file, for example words.txt");
+      if (name === null) return;
+      name = name.trim();
+      if (!NAME_OK.test(name) || name.toLowerCase() === MAIN || isNotes(name)) {
+        window.alert("Use letters, digits, dashes and underscores, and end " +
+                     "with an extension like .txt or .py.");
+        return;
+      }
+      if (docs[name]) { switchTo(name); return; }
+      docs[name] = CodeMirror.Doc("", modeFor(name));
+      switchTo(name);
+      changed();
+    });
+  }
+
+  renderTabs();
+
   var saveTimer = null;
-  mine.on("change", function () {
+  /* Every change in any tab, and a new file, which fires no editor event. */
+  function changed() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try {
-        window.localStorage.setItem(DRAFT_KEY, mine.getValue());
+      if (keepInBrowser()) {
         note("Saved on this computer");
-      } catch (e) {
+      } else {
         note("Could not save here — keep this tab open");
       }
       autosave();
     }, 500);
-  });
+  }
+  mine.on("change", changed);
 
   /* ------------------------------------------------- into their projects
    *
@@ -248,7 +369,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draft: draftSlug,
-          code: mine.getValue(),          // theirs, never the mirror's
+          code: mainSource(),             // theirs, never the mirror's
           files: saved.files || {}
         })
       }).then(function (res) { return res.json(); })
@@ -270,7 +391,7 @@
     return fetch("/api/live/" + encodeURIComponent(L.code) + "/keep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: mine.getValue() })
+      body: JSON.stringify({ code: mainSource(), files: dataFiles() })
     }).then(function (res) { return res.json(); })
       .then(function (data) { return data && !data.error ? data : null; });
   }
@@ -279,7 +400,7 @@
 
   function startDraft() {
     if (!L.signedIn || pendingSave) return;
-    var text = mine.getValue();
+    var text = mainSource();
     if (!text.trim()) { note("Type something first"); return; }
     pendingSave = true;
     /* /api/live/<code>/keep, NOT /api/draft.
@@ -294,7 +415,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: text,                       // theirs, never the mirror's
-        files: {}
+        files: dataFiles()
       })
     }).then(function (res) { return res.json(); })
       .then(function (data) {
@@ -317,8 +438,11 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        code: mine.getValue(),            // theirs, never the mirror's
-        files: {},
+        code: mainSource(),               // theirs, never the mirror's
+        /* Every file, because this route REPLACES them. It was sent `{}`
+           once, when the page had only main.py, and each autosave quietly
+           emptied the project of the data files it shipped with. */
+        files: dataFiles(),
         title: L.title || "Live lesson"
       })
     }).then(function (res) {
@@ -383,8 +507,11 @@
       mirrorNotes.hidden = true;
       var wasHidden = mirrorWrap.hidden;
       mirrorWrap.hidden = false;
-      // The ONLY setValue on the mirror, and there is no setValue on `mine`
-      // anywhere below this line.
+      // A .txt the teacher opens is text, not Python to be coloured as such.
+      var mode = /\.py$/i.test(data.filename || "main.py") ? "python" : null;
+      if (mirror.getOption("mode") !== mode) mirror.setOption("mode", mode);
+      // The ONLY setValue on the mirror. `mine` is never given anything from
+      // the network: its tabs are filled from the page and from their own Run.
       if (typeof data.body === "string" && data.body !== mirror.getValue()) {
         var scroll = mirror.getScrollInfo();
         mirror.setValue(data.body);
@@ -684,7 +811,7 @@
       window.PyIDERuntime.pipeOutput(pyodide, write);
       pyodide.runPython(window.PyIDERuntime.BOOTSTRAP);
       window.PyIDEComplete.attach(pyodide);
-      window.PyIDEComplete.refresh(mine.getValue());
+      window.PyIDEComplete.refresh(mainSource());
       clearOutput();
       write("Python is ready. Type along, then press Run.\n", "dim");
       runBtn.disabled = false;
@@ -695,10 +822,58 @@
     }
   })();
 
+  /* Their files go into Python's folder before a run and come back out
+     after it, the same as in the editor: a program that reads words.txt
+     finds it, and one that writes out.txt gets a tab for it. */
+  function pushFilesToPython() {
+    pyodide.FS.mkdirTree(PROJECT_DIR);
+    var files = dataFiles();
+    Object.keys(files).forEach(function (name) {
+      pyodide.FS.writeFile(PROJECT_DIR + "/" + name,
+                           new TextEncoder().encode(files[name]));
+    });
+  }
+
+  function pullFilesFromPython() {
+    var entries;
+    try { entries = pyodide.FS.readdir(PROJECT_DIR); } catch (e) { return; }
+    var appeared = [], any = false;
+    entries.forEach(function (name) {
+      if (name === "." || name === ".." || name === MAIN) return;
+      if (!NAME_OK.test(name)) return;      // nothing the server would refuse
+      var path = PROJECT_DIR + "/" + name;
+      try {
+        if (pyodide.FS.isDir(pyodide.FS.stat(path).mode)) return;
+      } catch (e) { return; }
+      var text;
+      try {
+        // fatal:true so an image or other binary is skipped, not mangled
+        text = new TextDecoder("utf-8", { fatal: true })
+          .decode(pyodide.FS.readFile(path));
+      } catch (e) { return; }
+      if (!docs[name]) {
+        docs[name] = CodeMirror.Doc(text, modeFor(name));
+        appeared.push(name);
+        any = true;
+      } else if (docs[name].getValue() !== text) {
+        docs[name].setValue(text);
+        any = true;
+      }
+    });
+    if (!any) return;
+    renderTabs();
+    changed();
+    if (appeared.length) {
+      write("\nYour program wrote " + appeared.join(", ") +
+            " — open the tab to see it.\n", "dim");
+    }
+  }
+
   async function run() {
     if (running || !pyodide) return;
-    var source = mine.getValue();          // theirs, never the mirror's
+    var source = mainSource();             // theirs, never the mirror's
     showOutputTab(false);                  // their Run, their output
+    pushFilesToPython();
 
     if (!window.PyIDEGame.looksLikeGame(source)) {
       setBusy(true, "console");
@@ -715,6 +890,7 @@
       } catch (e) {
         write(String(e) + "\n", "err");
       } finally {
+        pullFilesFromPython();
         setBusy(false);
         mine.focus();
       }
@@ -751,6 +927,7 @@
       // Only if this is still the run the toolbar is showing. See runToken.
       if (token === runToken) {
         window.PyIDEGame.stop(pyodide);
+        pullFilesFromPython();
         setBusy(false);
       }
     }

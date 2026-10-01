@@ -1342,11 +1342,32 @@ body:not(.is-authoring) .notes-body a {
  * the notes to nothing and long notes cannot push Output off the screen —
  * each scrolls on its own. */
 .live-right .live-notes {
-  flex: 1 1 45%;
+  flex: 1 1 55%;
   border-top: 1px solid var(--line);
 }
 .live-right .live-notes[hidden] { display: none; }
-.live-right #output-view { flex: 1 1 55%; }
+.live-right #output-view { flex: 1 1 45%; }
+
+/* The student's file tabs share the pane head with "Your turn" and the
+ * saved note, so the tabs are the part that gives: they scroll sideways
+ * rather than pushing the note off the end of the head. */
+.mine-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: 14px;
+}
+.mine-label,
+.mine-head .linkbtn { flex: 0 0 auto; white-space: nowrap; }
+.live-mine .pane-head-tabs > .dim {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Slides, in the head of the teacher's Class sees pane while live:
  * ◀ 3 / 5 ▶ Show all. Sized down to fit a pane head rather than the top bar,

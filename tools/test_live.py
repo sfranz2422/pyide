@@ -577,7 +577,7 @@ check("  and reloading the editor does not drop it",
 
 def starter_of(page):
     """What the page tells live.js to start the student's editor with."""
-    m = re.search(r"^\s*starter: (.*)$", page, re.M)
+    m = re.search(r"^\s*starter: (.*?),?$", page, re.M)
     if not m:
         return None
     try:
@@ -697,6 +697,57 @@ finally:
     db.close()
 check("  and the assignment's attached files came with it",
       "data.csv" in kept, sorted(kept))
+
+# THE REST OF THE PROJECT, AS TABS. The live page was main.py alone, so a
+# student could not see the data file the lesson was about, and their saves
+# could not carry one. The page is handed the same files the handout link
+# would open — their draft's — and a save carries the tabs back.
+def starter_files_of(page):
+    m = re.search(r"^\s*starterFiles: (.*?),?$", page, re.M)
+    try:
+        return json.loads(m.group(1)) if m else None
+    except ValueError:
+        return "<not JSON: %s>" % m.group(1)
+
+
+def kept_files():
+    db = P.SessionLocal()
+    try:
+        return db.query(accounts.Draft).filter_by(slug=KEPT).first().file_map()
+    finally:
+        db.close()
+
+
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "my work", "files": {"data.csv": "a,b\n3,4\n",
+                                                    "words.txt": "cat"}})
+check("a save from the live page keeps what they typed in the other tabs",
+      r.status_code == 200 and kept_files() == {"data.csv": "a,b\n3,4\n",
+                                                "words.txt": "cat"},
+      kept_files())
+check("  and hands back the project as saved, for Turn in",
+      r.get_json().get("files") == kept_files(), r.get_json().get("files"))
+# An empty map is an old editor tab from before the tabs, which sent `{}`
+# on every save. Taken literally it would delete every file in the project.
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "my work", "files": {}})
+check("  while an empty map leaves the files alone",
+      r.status_code == 200 and "words.txt" in kept_files(), kept_files())
+r = student.post("/api/live/%s/keep" % LESSON,
+                 json={"code": "my work", "files": {"../x.txt": "no"}})
+check("  and a file name the editor would refuse is refused here too",
+      r.status_code == 400 and "../x.txt" not in kept_files(), r.status_code)
+
+# Their draft's files — words.txt is in it now and not in the assignment —
+# so this cannot pass on the assignment's alone.
+check("the live page hands the student their project's other files",
+      starter_files_of(student.get("/live/%s" % LESSON).get_data(as_text=True))
+      == kept_files(), starter_files_of(student.get("/live/%s" % LESSON)
+                                .get_data(as_text=True)))
+check("  and a student with no draft gets the assignment's",
+      starter_files_of(stranger.get("/live/%s" % LESSON).get_data(as_text=True))
+      == {"data.csv": "a,b\n1,2\n"})
+
 
 seen_by_teacher = teacher.get("/teacher/" + hw).get_data(as_text=True)
 check("  and it reaches the teacher's dashboard",
@@ -902,10 +953,45 @@ def editors_behind(field):
     return found
 
 
+# `mainSource()` is main.py's document, whichever tab is showing. Resolved
+# to the editor that document belongs to, so a mainSource() that read the
+# mirror would fail here rather than slip past as an unknown function.
+main_ok = (re.search(r"function mainSource\(\) \{ return docs\[MAIN\]\.getValue\(\); \}",
+                     live_code) is not None
+           and re.findall(r"docs\[MAIN\] *= *([^;]+);", live_code) == ["mine.getDoc()"])
+live_code_resolved = live_code.replace("mainSource()",
+                                       "mine.getValue()" if main_ok else "?mainSource()")
+_real_code = live_code
+live_code = live_code_resolved
 saved_from = editors_behind("code")
+live_code = _real_code
 check("  and what is saved to their projects is their editor, not the mirror",
       bool(saved_from) and saved_from == {"mine"},
       "saved from: %s" % sorted(saved_from))
+
+# THE OTHER TABS ARE THEIRS TOO. Every one is a document made here from
+# the page, from their browser, or from what their own Run wrote — and none
+# is ever filled from the mirror or the poll's data.
+doc_fills = re.findall(r"docs\[[^\]]+\] *= *([^;]+);", live_code)
+check("  and every other tab is filled from the page, their browser or their Run",
+      bool(doc_fills) and all("mirror" not in f and "data." not in f
+                              for f in doc_fills),
+      doc_fills)
+doc_sets = re.findall(r"docs\[(\w+)\]\.setValue\(([^)]*)\)", live_code)
+pull = live_code[live_code.index("function pullFilesFromPython"):]
+pull = pull[:pull.index("\n  }\n")]
+check("  and the only write into one is their own program's output",
+      doc_sets == [("name", "text")] and "docs[name].setValue(text)" in pull
+      and "pyodide.FS.readFile" in pull, doc_sets)
+check("  every save carries those tabs, never an empty map",
+      'files: {}' not in live_code
+      and len(re.findall(r"files: dataFiles\(\)", live_code)) == 3,
+      "an autosave sending {} emptied the project of its data files")
+check("  and Run gives Python the files before running main.py",
+      re.search(r"var source = mainSource\(\);[^\n]*\n[^\n]*\n\s*pushFilesToPython\(\);",
+                live_code) is not None)
+check("  with tabs on the page to switch between them",
+      'id="mine-tabs"' in page and 'starterFiles:' in page)
 
 check("  and nothing in the polling path touches it at all",
       "mine.setValue(" not in after_mirror,

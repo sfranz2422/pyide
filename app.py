@@ -1753,6 +1753,16 @@ def live_keep(code):
         if len(source.encode("utf-8")) > MAX_CODE_BYTES:
             return jsonify(error="That program is too large to save."), 413
 
+        # The project's other files, from the tabs on the live page. An EMPTY
+        # map means "leave them alone", never "delete them all": the live page
+        # has no way to remove a file, so an empty map from it can only be an
+        # editor tab still running the code from before it had tabs, and that
+        # code sent `files: {}` on every save. Taking it at its word would wipe
+        # an assignment's data files without a word.
+        files, file_error = validate_files(data.get("files"))
+        if file_error:
+            return jsonify(error=file_error), 400
+
         item = None
         if live.assignment_id:
             item = db.query(accounts.Assignment).filter_by(
@@ -1779,11 +1789,14 @@ def live_keep(code):
                 app=APP_NAME,
                 title=(item.title if item else (live.title or "Live lesson")),
                 code=source,
-                files=(item.files if item is not None else "{}"),
+                files=(json.dumps(files) if files else
+                       item.files if item is not None else "{}"),
             )
             db.add(draft)
         else:
             draft.code = source
+            if files:
+                draft.files = json.dumps(files)
             draft.updated_at = accounts.now()
 
         db.commit()
@@ -1852,14 +1865,22 @@ def live_page(code):
         # Rendered into the page, never sent on the poll: it is the student's
         # starting point, like opening the link, not the teacher reaching into
         # their editor.
+        #
+        # The project's other files come the same way, from the same row, and
+        # show as tabs beside main.py. Without them the live page was main.py
+        # alone: a student could not see the words.txt their program opens,
+        # and Run failed on a file that was sitting in their project.
         starter = ""
+        starter_files = {}
         if item is not None:
             starter = item.code or ""
+            starter_files = item.file_map()
             if user is not None:
                 mine = db.query(accounts.Draft).filter_by(
                     owner_id=user.id, assignment_id=item.id).first()
                 if mine is not None:
                     starter = mine.code or ""
+                    starter_files = mine.file_map()
 
         ctx = user_context(db)
         ctx.update(
@@ -1870,6 +1891,7 @@ def live_page(code):
             assignment=item,
             submitted_at=submitted_at,
             starter=starter,
+            starter_files=starter_files,
             error="",
         )
         return render_template("live.html", **ctx)
