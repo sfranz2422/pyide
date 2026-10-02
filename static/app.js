@@ -1115,12 +1115,6 @@
     rescue.noteEdit();
   });
 
-  $("close-projects").addEventListener("click", function () {
-    $("projects-modal").hidden = true;
-  });
-  $("projects-modal").addEventListener("click", function (e) {
-    if (e.target === $("projects-modal")) $("projects-modal").hidden = true;
-  });
 
   // ----------------------------------------------------------------- share
   var shareBtn = $("share");
@@ -1167,9 +1161,12 @@
       flagAuthor("Put your name in the box at the top before sharing.");
       return;
     }
-    shareBtn.disabled = true;
-    var original = shareBtn.textContent;
-    shareBtn.textContent = "Sharing…";
+    // Pressed from the account menu there is no Share on the bar to show
+    // "Sharing…" on, and a stand-in keeps the lines below from caring.
+    var btn = shareBtn || document.createElement("button");
+    btn.disabled = true;
+    var original = btn.textContent;
+    btn.textContent = "Sharing…";
     try {
       var res = await fetch(window.PYIDE.shareUrl, {
         method: "POST",
@@ -1199,8 +1196,8 @@
     } catch (e) {
       write("\nShare failed: " + e.message + "\n", "err");
     } finally {
-      shareBtn.disabled = false;
-      shareBtn.textContent = original;
+      btn.disabled = false;
+      btn.textContent = original;
     }
   }
 
@@ -1211,6 +1208,11 @@
       shareAsk.hidden = false;
       $("share-go").focus();
     });
+  }
+  // A signed-in student's Share, out of the way in the account menu: they
+  // have Save or Turn in on the bar, and that is the one thing to press.
+  if ($("share-menu")) {
+    $("share-menu").addEventListener("click", function () { doShare(false); });
   }
   if (shareAsk) {
     $("share-go").addEventListener("click", function () {
@@ -1323,7 +1325,7 @@
     window.PyIDEZip.download(base + ".zip", entries);
   }
 
-  ["download", "download-menu"].forEach(function (id) {
+  ["download", "download-menu", "download-share"].forEach(function (id) {
     var el = $(id);
     if (el) el.addEventListener("click", onDownload);
   });
