@@ -82,53 +82,81 @@ class CollisionSystem:
     def __init__(self):
         self._touching = {}  # obj id -> set of other obj ids currently overlapping
 
+    # How much bigger than its box each object counts as when deciding which
+    # pairs are near enough to check. Resolution can push a body a little way
+    # mid-frame, into something that was not quite touching it before.
+    NEAR = 8.0
+
     def step(self, objs):
         area_objs = [o for o in objs if o.has("area") and o.exists()]
         n = len(area_objs)
         rects = {o._id: o.comp("area").get_rect() for o in area_objs}
-        seen_pairs = set()
 
-        for i in range(n):
+        # Which pairs are near each other at all. Checking every object
+        # against every other is n*n/2 pairs -- 120,000 a frame for a level
+        # of 500 tiles, nearly all of them two walls a screen apart. So sort
+        # by left edge and only pair objects whose spans across overlap
+        # (sort-and-sweep). The pairs are then visited in the same order the
+        # full double loop visited them, so resolution happens in the same
+        # order and the physics does not change.
+        order = sorted(range(n), key=lambda k: rects[area_objs[k]._id].left)
+        near = set()
+        for p in range(n):
+            i = order[p]
+            right = rects[area_objs[i]._id].right + self.NEAR
+            for q in range(p + 1, n):
+                j = order[q]
+                if rects[area_objs[j]._id].left - self.NEAR > right:
+                    break
+                near.add((i, j) if i < j else (j, i))
+
+        # A pair that touched last frame is visited too, even if it is now
+        # far apart, so that it gets its collideEnd.
+        index = {o._id: k for k, o in enumerate(area_objs)}
+        for k, a in enumerate(area_objs):
+            for other_id in self._touching.get(a._id, ()):
+                m = index.get(other_id)
+                if m is not None and m != k:
+                    near.add((k, m) if k < m else (m, k))
+
+        for i, j in sorted(near):
             a = area_objs[i]
+            b = area_objs[j]
             ra = rects[a._id]
+            rb = rects[b._id]
             a_touch = self._touching.setdefault(a._id, set())
-            for j in range(i + 1, n):
-                b = area_objs[j]
-                rb = rects[b._id]
-                b_touch = self._touching.setdefault(b._id, set())
-                seen_pairs.add((a._id, b._id))
+            b_touch = self._touching.setdefault(b._id, set())
 
-                if ra.colliderect(rb):
-                    is_new = b._id not in a_touch
-                    if is_new:
-                        # The object-free onCollide(tagA, tagB, fn). Here
-                        # rather than on the objects, because neither object
-                        # in a bullets-and-enemies pair exists when the
-                        # handler is written.
-                        from .engine import _engine
-                        if _engine is not None:
-                            _engine.events.fire_tag_collision(a, b)
+            if ra.colliderect(rb):
+                is_new = b._id not in a_touch
+                if is_new:
+                    # The object-free onCollide(tagA, tagB, fn). Here
+                    # rather than on the objects, because neither object
+                    # in a bullets-and-enemies pair exists when the
+                    # handler is written.
+                    from .engine import _engine
+                    if _engine is not None:
+                        _engine.events.fire_tag_collision(a, b)
+                for t in b.tags:
+                    a._fire("collide" if is_new else "collideUpdate", t, b)
+                for t in a.tags:
+                    b._fire("collide" if is_new else "collideUpdate", t, a)
+                a_touch.add(b._id)
+                b_touch.add(a._id)
+
+                if a.has("body") and b.has("body"):
+                    self._resolve(a, b, ra, rb)
+                    # rects moved; refresh cached copies for later pairs
+                    rects[a._id] = a.comp("area").get_rect()
+                    rects[b._id] = b.comp("area").get_rect()
+            else:
+                if b._id in a_touch:
                     for t in b.tags:
-                        a._fire("collide" if is_new else "collideUpdate", t, b)
+                        a._fire("collideEnd", t, b)
                     for t in a.tags:
-                        b._fire("collide" if is_new else "collideUpdate", t, a)
-                    a_touch.add(b._id)
-                    b_touch.add(a._id)
-
-                    if a.has("body") and b.has("body"):
-                        self._resolve(a, b, ra, rb)
-                        # rects moved; refresh cached copies for later pairs
-                        rects[a._id] = a.comp("area").get_rect()
-                        rects[b._id] = b.comp("area").get_rect()
-                        ra = rects[a._id]
-                else:
-                    if b._id in a_touch:
-                        for t in b.tags:
-                            a._fire("collideEnd", t, b)
-                        for t in a.tags:
-                            b._fire("collideEnd", t, a)
-                        a_touch.discard(b._id)
-                        b_touch.discard(a._id)
+                        b._fire("collideEnd", t, a)
+                    a_touch.discard(b._id)
+                    b_touch.discard(a._id)
 
         # drop bookkeeping for destroyed objects
         live_ids = {o._id for o in area_objs}
