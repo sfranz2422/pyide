@@ -1080,6 +1080,23 @@ body:not(.is-authoring) .notes-body a {
 .gc { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .gc p { margin: 6px 0; }
 .fb-sync { color: var(--muted); }
+
+/* One tab per Classroom class the assignment was posted to. */
+.period-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.period-tabs[hidden] { display: none; }
+.period-tab {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.period-tab:hover { color: var(--text); }
+.period-tab.is-on { border-color: var(--accent); color: var(--text); }
+.listing tr[hidden] { display: none; }
 .badge-new {
   background: var(--accent);
   color: var(--on-accent, #fff);

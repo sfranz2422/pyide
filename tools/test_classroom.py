@@ -120,43 +120,54 @@ def fake_get(url, token, params=None):
     return 404, {}
 
 
-# The Classroom side of the fake: one class, a roster split over two pages
-# (a second page silently dropped would be students silently ungraded), and
-# whatever coursework PyIDE creates.
-room = {"work": None, "gone": False, "patches": [],
-        "roster": [[{"userId": "u-other", "profile": {"emailAddress": "someone@school.org"}}],
-                   [{"userId": "u-kid", "profile": {"emailAddress": "KID1@school.org"}},
-                    {"userId": "u-kid3", "profile": {"emailAddress": "kid3@school.org"}}]]}
+# The Classroom side of the fake: two classes doing the same work — Period 4
+# and Period 7 — each with its own roster and, once posted, its own
+# coursework. Period 4's roster is split over two pages (a second page
+# silently dropped would be students silently ungraded).
+P4, P7 = "123456", "777777"
+room = {
+    P4: {"name": "Programming 1 — Period 4", "work": None, "gone": False,
+         "roster": [[{"userId": "u-other", "profile": {"emailAddress": "someone@school.org"}}],
+                    [{"userId": "u-kid", "profile": {"emailAddress": "KID1@school.org"}},
+                     {"userId": "u-kid3", "profile": {"emailAddress": "kid3@school.org"}}]]},
+    P7: {"name": "Programming 1 — Period 7", "work": None, "gone": False,
+         "roster": [[{"userId": "u-kid2", "profile": {"emailAddress": "kid2@school.org"}}]]},
+}
+patches = []
 
 
 def fake_classroom_get(url, params):
-    base = P.CLASSROOM_API + "/courses/123456"
-    if url == base:
-        return 200, {"id": "123456", "name": "Programming 1"}
-    if url == base + "/students":
-        page = int(params.get("pageToken") or 0)
-        data = {"students": room["roster"][page]}
-        if page + 1 < len(room["roster"]):
-            data["nextPageToken"] = str(page + 1)
-        return 200, data
-    if room["work"] and url == base + "/courseWork/w1/studentSubmissions":
-        if room["gone"]:
-            return 404, {"error": {"message": "Requested entity was not found."}}
-        return 200, {"studentSubmissions": [
-            {"id": "s-other", "userId": "u-other"}, {"id": "s-kid", "userId": "u-kid"},
-            {"id": "s-kid3", "userId": "u-kid3"}]}
+    for cid, c in room.items():
+        base = P.CLASSROOM_API + "/courses/" + cid
+        if url == base:
+            return 200, {"id": cid, "name": c["name"]}
+        if url == base + "/students":
+            page = int(params.get("pageToken") or 0)
+            data = {"students": c["roster"][page]}
+            if page + 1 < len(c["roster"]):
+                data["nextPageToken"] = str(page + 1)
+            return 200, data
+        if c["work"] and url == base + "/courseWork/w-%s/studentSubmissions" % cid:
+            if c["gone"]:
+                return 404, {"error": {"message": "Requested entity was not found."}}
+            return 200, {"studentSubmissions": [
+                {"id": "s-" + st["userId"], "userId": st["userId"]}
+                for page in c["roster"] for st in page]}
     return None
 
 
 def fake_api(method, url, token, body=None, params=None):
     calls.append((method, url, token, body, params))
-    if method == "POST" and url == P.CLASSROOM_API + "/courses/123456/courseWork":
-        room["work"] = body
-        return 200, {"id": "w1", "alternateLink": "https://classroom.google.com/c/123456/a/w1"}
+    for cid, c in room.items():
+        if method == "POST" and url == P.CLASSROOM_API + "/courses/%s/courseWork" % cid:
+            c["work"] = body
+            return 200, {"id": "w-" + cid,
+                         "alternateLink": "https://classroom.google.com/c/%s/a/w" % cid}
     if method == "PATCH" and "/studentSubmissions/" in url:
-        room["patches"].append((url.rsplit("/", 1)[1], body, params))
+        patches.append((url.split("/courses/")[1].split("/")[0],
+                        url.rsplit("/", 1)[1], body, params))
         return 200, {}
-    if method == "PATCH" and url.endswith("/courseWork/w1"):
+    if method == "PATCH" and "/courseWork/w-" in url:
         return 200, {}
     return 404, {}
 
@@ -354,7 +365,8 @@ print("\nPosting to Classroom and sending grades")
 hw = teacher.post("/api/assignment", json={
     "code": "# starter\n", "files": {}, "title": "Loops"}).get_json()["slug"]
 KIDS = {}
-for n, email in enumerate(["kid1@school.org", "kid2@school.org", "kid3@school.org"]):
+for n, email in enumerate(["kid1@school.org", "kid2@school.org", "kid3@school.org",
+                           "kid4@school.org"]):
     uid = add_user("k%d" % n, email, "Kid %d" % (n + 1))
     kid = client(uid)
     kid.get("/a/%s" % hw)
@@ -381,69 +393,107 @@ def assignment():
         db.close()
 
 
+def posts():
+    db = P.SessionLocal()
+    try:
+        return [(p.course_id, p.work_id, p.course_name) for p in
+                db.query(accounts.ClassroomPost).filter_by(
+                    assignment_id=assignment().id).order_by(accounts.ClassroomPost.id)]
+    finally:
+        db.close()
+
+
 POST = "/api/assignment/%s/classroom/post" % hw
 SYNC = "/api/assignment/%s/classroom/sync" % hw
+PERIODS = "/api/assignment/%s/classroom/periods" % hw
+FB = "/api/assignment/%s/feedback" % hw
 
 page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
 check("a connected teacher's assignment page offers Post to Classroom",
       'id="gc-post"' in page)
-r = teacher.post(POST, json={"course": "123456"})
+r = teacher.post(POST, json={"course": P4})
 check("it cannot be posted before it has points",
       r.status_code == 400 and "out of" in r.get_json()["error"], r.status_code)
 teacher.post("/api/assignment/%s/out-of" % hw, json={"out_of": 10})
-check("a student cannot post it", student.post(POST, json={"course": "123456"}).status_code == 403)
+check("a student cannot post it", student.post(POST, json={"course": P4}).status_code == 403)
 r = teacher.post(POST, json={"course": "../evil"})
 check("a class id that is not one is refused", r.status_code == 400)
 
 calls.clear()
-r = teacher.post(POST, json={"course": "123456"})
-check("the teacher posts it to Programming 1", r.status_code == 200
-      and r.get_json().get("course") == "Programming 1", r.get_data(as_text=True)[:90])
-w = room["work"] or {}
+r = teacher.post(POST, json={"course": P4})
+check("the teacher posts it to Period 4", r.status_code == 200
+      and r.get_json().get("course") == "Programming 1 — Period 4",
+      r.get_data(as_text=True)[:90])
+w = room[P4]["work"] or {}
 check("  as a published assignment worth 10 points",
       w.get("state") == "PUBLISHED" and w.get("workType") == "ASSIGNMENT"
       and w.get("maxPoints") == 10, w)
 link = ((w.get("materials") or [{}])[0].get("link") or {}).get("url", "")
 check("  carrying the link students open it from",
       link.endswith("/a/%s" % hw), link)
-a = assignment()
 check("  and it remembers where it went",
-      (a.classroom_course_id, a.classroom_work_id, a.classroom_course_name)
-      == ("123456", "w1", "Programming 1"))
-r = teacher.post(POST, json={"course": "123456"})
-check("posting twice is refused, so the class never sees two",
-      r.status_code == 409 and room["work"] is not None)
+      posts() == [(P4, "w-" + P4, "Programming 1 — Period 4")], posts())
+r = teacher.post(POST, json={"course": P4})
+check("posting to the same class twice is refused, so it never sees two",
+      r.status_code == 409 and len(posts()) == 1)
+
+r = teacher.post(POST, json={"course": P7})
+check("the same assignment can also go to Period 7",
+      r.status_code == 200 and [p[0] for p in posts()] == [P4, P7], posts())
+check("  as its own Classroom assignment",
+      room[P7]["work"] is not None and room[P7]["work"].get("maxPoints") == 10)
 page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
-check("the page then says where it is, and offers Sync",
-      "Programming 1" in page and 'id="gc-sync"' in page)
+check("the page names both classes, and offers Sync",
+      "<strong>Programming 1 — Period 4</strong>" in page
+      and "<strong>Programming 1 — Period 7</strong>" in page and 'id="gc-sync"' in page)
+check("  and the picker leaves out the classes it is already in",
+      '"%s", "%s"' % (P4, P7) in page)
 
 calls.clear()
 teacher.post("/api/assignment/%s/out-of" % hw, json={"out_of": 20})
-patch = [c for c in calls if c[0] == "PATCH" and c[1].endswith("/courseWork/w1")]
-check("changing the points changes them in Classroom too",
-      patch and patch[0][3] == {"maxPoints": 20}
-      and patch[0][4] == {"updateMask": "maxPoints"}, patch)
+patched = sorted(c[1].split("/courses/")[1].split("/")[0] for c in calls
+                 if c[0] == "PATCH" and "/courseWork/w-" in c[1]
+                 and c[3] == {"maxPoints": 20} and c[4] == {"updateMask": "maxPoints"})
+check("changing the points changes them in every class it went to",
+      patched == [P4, P7], patched)
 
-FB = "/api/assignment/%s/feedback" % hw
-teacher.post(FB, json={"submission": sub_of("kid1@school.org").id,
-                       "feedback": "", "score": "17"})
-teacher.post(FB, json={"submission": sub_of("kid2@school.org").id,
-                       "feedback": "", "score": "15"})
-# kid3 is in the Classroom class but not scored, and must not be sent as
-# anything — least of all 0, or a blank that wipes a grade typed there.
+r = teacher.get(PERIODS)
+d = r.get_json() or {}
+names = {c["id"]: c["name"] for c in d.get("classes", [])}
+by = {int(k): names.get(v) for k, v in (d.get("by_student") or {}).items()}
+check("the results page is told who is in which period",
+      by.get(sub_of("kid1@school.org").id) == "Programming 1 — Period 4"
+      and by.get(sub_of("kid2@school.org").id) == "Programming 1 — Period 7", by)
+check("  finding them on the roster's second page",
+      by.get(sub_of("kid3@school.org").id) == "Programming 1 — Period 4")
+check("  and leaving out a student in neither",
+      sub_of("kid4@school.org").id not in by)
+check("a student cannot ask", student.get(PERIODS).status_code == 403)
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+check("each result row can be put in its period",
+      'class="res-row" data-sub="%d"' % sub_of("kid1@school.org").id in page
+      and 'id="period-tabs"' in page)
+
+for email, score in (("kid1@school.org", "17"), ("kid2@school.org", "15"),
+                     ("kid4@school.org", "12")):
+    teacher.post(FB, json={"submission": sub_of(email).id, "feedback": "", "score": score})
+# kid3 is in Period 4 but not scored, and must not be sent as anything —
+# least of all 0, or a blank that wipes a grade typed into Classroom.
 
 r = teacher.post(SYNC)
 out = r.get_json() or {}
-check("Sync sends the scores", r.status_code == 200 and out.get("sent") == 1, out)
-check("  as draft grades, matched by email whatever its case",
-      room["patches"] == [("s-kid", {"draftGrade": 17.0}, {"updateMask": "draftGrade"})],
-      room["patches"])
-check("  finding them on the roster's second page", "s-kid" in str(room["patches"]))
-check("  naming the student who is not in the Classroom class",
-      out.get("unmatched") == ["Kid 2"], out.get("unmatched"))
+check("Sync sends the scores", r.status_code == 200 and out.get("sent") == 2, out)
+check("  each to its own period's assignment, as a draft, matched by email",
+      sorted(patches) == sorted([
+          (P4, "s-u-kid", {"draftGrade": 17.0}, {"updateMask": "draftGrade"}),
+          (P7, "s-u-kid2", {"draftGrade": 15.0}, {"updateMask": "draftGrade"})]),
+      patches)
+check("  naming the student who is in neither class",
+      out.get("unmatched") == ["Kid 4"], out.get("unmatched"))
 check("  and sending nothing for the one with no score",
-      len(room["patches"]) == 1)
-check("  and remembering what went", sub_of("kid1@school.org").score_synced == 17.0)
+      not any(p[1] == "s-u-kid3" for p in patches))
+check("  and remembering what went", sub_of("kid1@school.org").score_synced == 17.0
+      and sub_of("kid2@school.org").score_synced == 15.0)
 page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
 check("the page shows it is in Classroom",
       '<span class="fb-sync small">✓ in Classroom</span>' in page)
@@ -455,13 +505,40 @@ check("  and that a changed score is not, until the next Sync",
 
 check("a student cannot sync", student.post(SYNC).status_code == 403)
 
-room["gone"] = True
+room[P7]["gone"] = True
+patches.clear()
 r = teacher.post(SYNC)
-check("an assignment deleted in Classroom is said so",
-      r.status_code == 409 and "gone from Google Classroom" in r.get_json()["error"])
-check("  and forgotten, so it can be posted again",
-      assignment().classroom_work_id == ""
-      and 'id="gc-post"' in teacher.get("/teacher/%s" % hw).get_data(as_text=True))
+out = r.get_json() or {}
+check("one class's assignment deleted in Classroom: the other still syncs",
+      r.status_code == 200 and [p[0] for p in patches] == [P4], (out, patches))
+check("  the deleted one is named", out.get("gone") == ["Programming 1 — Period 7"],
+      out.get("gone"))
+check("  and forgotten, so it can be posted there again",
+      [p[0] for p in posts()] == [P4])
+room[P4]["gone"] = True
+r = teacher.post(SYNC)
+check("all of them deleted: said so, and every post forgotten",
+      r.status_code == 409 and "gone from Google Classroom" in r.get_json()["error"]
+      and posts() == [])
+check("  so the page offers Post again",
+      'id="gc-post"' in teacher.get("/teacher/%s" % hw).get_data(as_text=True))
+
+# A post the first version made lived in four columns on the assignment.
+# The first look at the assignment moves it into classroom_posts.
+db = P.SessionLocal()
+it = db.query(accounts.Assignment).filter_by(slug=hw).first()
+it.classroom_course_id, it.classroom_course_name = P4, "Programming 1 — Period 4"
+it.classroom_work_id, it.classroom_url = "w-old", "https://classroom.google.com/old"
+db.commit()
+db.close()
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+a = assignment()
+check("a post from the first version is carried over",
+      posts() == [(P4, "w-old", "Programming 1 — Period 4")], posts())
+check("  and the old columns emptied, so it is carried over once",
+      (a.classroom_course_id, a.classroom_work_id) == ("", ""))
+check("  and the page shows it as posted",
+      "Posted to" in page and "<strong>Programming 1 — Period 4</strong>" in page)
 
 
 # ---------------------------------------------------------- the policy page

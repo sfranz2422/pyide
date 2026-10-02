@@ -366,15 +366,14 @@ check("an empty score box takes the score back, and is not 0",
 
 db = P.SessionLocal()
 it = db.query(accounts.Assignment).filter_by(slug=hw).first()
-it.classroom_work_id = "999"
+db.add(accounts.ClassroomPost(assignment_id=it.id, course_id="1", work_id="999"))
 db.commit()
 db.close()
 r = teacher.post(OUT, json={"out_of": ""})
 check("once posted to Classroom, the points cannot be cleared",
       r.status_code == 400, r.status_code)
 db = P.SessionLocal()
-it = db.query(accounts.Assignment).filter_by(slug=hw).first()
-it.classroom_work_id = ""
+db.query(accounts.ClassroomPost).delete()
 db.commit()
 db.close()
 r = teacher.post(OUT, json={"out_of": ""})
