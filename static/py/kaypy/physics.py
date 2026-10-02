@@ -224,7 +224,7 @@ class CollisionSystem:
             return
         from .geometry import get_size, get_topleft, get_world_pos
 
-        height = get_size(obj)[1]
+        height = get_size(obj).y
         anchor_y = obj.comp("anchor").anchor.y if obj.has("anchor") else -1
         # What get_topleft subtracts from the position to find the top edge.
         offset = (anchor_y + 1) / 2 * height

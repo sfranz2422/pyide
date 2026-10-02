@@ -2,6 +2,7 @@
 These hold data only — the RenderSystem does the actual drawing so
 z-ordering, camera transform, anchor and scale stay in one place."""
 from ..gameobj import Comp
+from ..vec2 import Vec2
 
 
 class RectComp(Comp):
@@ -12,8 +13,11 @@ class RectComp(Comp):
         self.height = height
         self.radius = radius
 
+    # Every size() hands back a Vec2, as the API reference says, so that
+    # `obj.size().x` works. It was a tuple, which unpacked and indexed fine
+    # (all kaypy itself ever did with it) and broke on the first `.x`.
     def size(self):
-        return (self.width, self.height)
+        return Vec2(self.width, self.height)
 
 
 def rect(width, height, radius=0):
@@ -28,7 +32,7 @@ class CircleComp(Comp):
 
     def size(self):
         d = self.radius * 2
-        return (d, d)
+        return Vec2(d, d)
 
 
 def circle(radius):
@@ -62,7 +66,8 @@ class TextComp(Comp):
         return surf
 
     def size(self):
-        return self.render_surface().get_size()
+        w, h = self.render_surface().get_size()
+        return Vec2(w, h)
 
 
 def _wrap_text(font, text_str, max_width, color):

@@ -17,6 +17,15 @@ class Vec2:
         yield self.x
         yield self.y
 
+    # Not KAPLAY's -- its vec2 has no [0]. Here because .size() used to be a
+    # (width, height) tuple, and code written against that, size()[1], has
+    # to keep working now that it is a Vec2.
+    def __getitem__(self, index):
+        return (self.x, self.y)[index]
+
+    def __len__(self):
+        return 2
+
     def __eq__(self, other):
         if isinstance(other, Vec2):
             return self.x == other.x and self.y == other.y

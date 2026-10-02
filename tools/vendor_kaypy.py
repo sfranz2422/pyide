@@ -71,7 +71,13 @@ def read_commit(root):
         out = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"],
                              capture_output=True, text=True, timeout=5)
         if out.returncode == 0:
-            dirty = subprocess.run(["git", "-C", root, "status", "--porcelain"],
+            # Only the package that is copied. A stray file elsewhere in the
+            # checkout -- a CLAUDE.md, a scratch script -- is not in the
+            # engine, and calling the engine dirty for it sends whoever reads
+            # the stamp looking for a change that is not there. An untracked
+            # file INSIDE kaypy/ still counts, because that one is copied.
+            dirty = subprocess.run(["git", "-C", root, "status", "--porcelain",
+                                    "--", "kaypy"],
                                    capture_output=True, text=True, timeout=5)
             return out.stdout.strip() + ("+dirty" if dirty.stdout.strip() else "")
     except (OSError, subprocess.SubprocessError):

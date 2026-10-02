@@ -1,5 +1,6 @@
 import pygame
 from ..gameobj import Comp
+from ..vec2 import Vec2
 
 
 class SpriteComp(Comp):
@@ -79,7 +80,8 @@ class SpriteComp(Comp):
         return surf
 
     def size(self):
-        return self._asset.frame_size
+        w, h = self._asset.frame_size
+        return Vec2(w, h)
 
 
 def sprite(name, anim=None, frame=None):

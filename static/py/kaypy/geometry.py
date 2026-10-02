@@ -14,10 +14,10 @@ def get_size(obj):
     elif obj.has("text"):
         base = obj.comp("text").size()
     else:
-        base = (0, 0)
+        base = Vec2(0, 0)
     if obj.has("scale"):
         sc = obj.comp("scale").scale
-        base = (base[0] * sc.x, base[1] * sc.y)
+        base = Vec2(base.x * sc.x, base.y * sc.y)
     return base
 
 
