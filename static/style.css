@@ -1082,6 +1082,11 @@ body:not(.is-authoring) .notes-body a {
 .my-assignments td:first-child,
 .my-projects td:first-child { width: 55%; }
 
+/* The dashboard's Google Classroom box: a panel like the handout link's. */
+.classroom { border: 1px solid var(--line); border-radius: 9px; padding: 4px 18px 14px; margin-top: 30px; }
+.classroom h2 { margin-top: 14px; }
+.classroom-off { margin-top: 8px; }
+
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty h2 { text-transform: none; font-size: 20px; color: var(--text); }
 

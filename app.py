@@ -1184,9 +1184,14 @@ def teacher_home():
             counts[item.id] = db.query(accounts.Submission).filter_by(
                 assignment_id=item.id).count()
 
+        link = _classroom_link(db, user) if classroom_configured() else None
         ctx = user_context(db)
         ctx.update(assignments=live, archived=filed, counts=counts,
-                   show_archived=show_archived, kaypy=kaypy_status())
+                   show_archived=show_archived, kaypy=kaypy_status(),
+                   classroom_on=classroom_configured(),
+                   classroom_email=link.google_email if link else "",
+                   classroom_connected=link is not None,
+                   classroom_just=request.args.get("classroom") == "connected")
         return render_template("teacher.html", **ctx)
     finally:
         db.close()
@@ -1455,6 +1460,331 @@ def teacher_assignment(slug):
                    share_url=url_for("open_assignment", slug=item.slug,
                                      _external=True, _scheme=_scheme()))
         return render_template("teacher_assignment.html", **ctx)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Google Classroom
+#
+# A teacher connects their Classroom once, from the dashboard, so PyIDE can
+# later post an assignment there and send grades back. Teachers only:
+# students never see a Classroom permission, and their sign-in stays the
+# plain openid/email/profile it has always been.
+#
+# THIS IS ITS OWN OAUTH FLOW, NOT AUTHLIB'S. Sign-in asks for three harmless
+# scopes from everyone; this asks for Classroom ones, from one person, with
+# offline access so grades can be sent later without them present. Folding
+# it into /auth/callback would put the Classroom consent screen in front of
+# every student who signed in, or need a flag in the session to tell the two
+# apart — and a stale flag would be a student account wired to Classroom.
+#
+# THE APP IS NOT VERIFIED BY GOOGLE, deliberately: verification needs a
+# domain of our own, and this one is Render's. The teacher sees "Google
+# hasn't verified this app" once, and clicks Advanced → Go to PyIDE. The
+# scopes are "sensitive", not "restricted", so that is all it costs. If a
+# school's admin blocks unverified apps, Google says so on its own page and
+# sends the teacher back here with error=admin_policy_enforced, which
+# /classroom/callback turns into a sentence about whom to ask.
+#
+# Every call to Google goes through _google_post or _google_get, so the tests
+# replace those two and never touch the network.
+# --------------------------------------------------------------------------
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+CLASSROOM_API = "https://classroom.googleapis.com/v1"
+
+#: Asked for all at once, though listing classes needs only the first, so
+#: the teacher sees one consent screen and not another each time a feature
+#: arrives. Posting work and grading it needs coursework.students; matching a
+#: PyIDE student to a Classroom one by email needs rosters and profile.emails.
+#: openid and email are there to learn WHICH Google account granted it.
+CLASSROOM_SCOPES = [
+    "openid",
+    "email",
+    "https://www.googleapis.com/auth/classroom.courses.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.students",
+    "https://www.googleapis.com/auth/classroom.rosters.readonly",
+    "https://www.googleapis.com/auth/classroom.profile.emails",
+]
+
+
+def classroom_configured():
+    """Read at request time, not import, like nothing else here needs to be:
+    the tests switch it on after app.py has loaded without authlib."""
+    return bool(os.environ.get("GOOGLE_CLIENT_ID")
+                and os.environ.get("GOOGLE_CLIENT_SECRET"))
+
+
+def _google_post(url, data):
+    """POST a form to Google. Returns (status, json). Never raises."""
+    import requests
+    try:
+        r = requests.post(url, data=data, timeout=15)
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            return r.status_code, {}
+    except Exception:
+        return 0, {}
+
+
+def _google_get(url, access_token, params=None):
+    """GET from a Google API as the teacher. Returns (status, json)."""
+    import requests
+    try:
+        r = requests.get(url, params=params or {}, timeout=15,
+                         headers={"Authorization": "Bearer " + access_token})
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            return r.status_code, {}
+    except Exception:
+        return 0, {}
+
+
+def _token_box():
+    """Encrypts stored refresh tokens. The key is derived from SECRET_KEY,
+    which is in Render's environment and not the database — see
+    ClassroomLink in accounts.py for what that buys and what it costs."""
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    digest = hashlib.sha256(("classroom-token:" + app.secret_key).encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _classroom_link(db, user):
+    return db.query(accounts.ClassroomLink).filter_by(
+        user_id=user.id, app=APP_NAME).first()
+
+
+def _classroom_token(db, user):
+    """A fresh access token for this teacher, or (None, why).
+
+    A refresh token Google no longer honours — the teacher revoked it in
+    their Google account, or an admin did — is DELETED here, so the dashboard
+    goes back to offering Connect instead of failing the same way forever.
+    One that can no longer be decrypted (SECRET_KEY changed) goes the same
+    way, for the same reason.
+    """
+    link = _classroom_link(db, user)
+    if link is None:
+        return None, "not connected"
+    try:
+        refresh = _token_box().decrypt(link.refresh_token.encode()).decode()
+    except Exception:
+        db.delete(link)
+        db.commit()
+        return None, "Your Classroom connection needs renewing. Connect it again."
+    status, data = _google_post(GOOGLE_TOKEN_URL, {
+        "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+        "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+        "refresh_token": refresh,
+        "grant_type": "refresh_token",
+    })
+    if status == 200 and data.get("access_token"):
+        return data["access_token"], ""
+    if data.get("error") == "invalid_grant":
+        db.delete(link)
+        db.commit()
+        return None, ("Google no longer accepts PyIDE's connection to your "
+                      "Classroom. Connect it again.")
+    return None, "Couldn't reach Google just now. Try again in a moment."
+
+
+def _require_classroom_teacher(db):
+    """(user, None) for a teacher on a site with Google configured, else
+    (None, response)."""
+    if not classroom_configured():
+        abort(404)
+    user = current_user(db)
+    if user is None:
+        return None, redirect(url_for("login", next=url_for("teacher_home")))
+    if not accounts.is_teacher(user.email):
+        abort(404)
+    return user, None
+
+
+@app.get("/classroom/connect")
+def classroom_connect():
+    db = SessionLocal()
+    try:
+        user, bounce = _require_classroom_teacher(db)
+        if bounce:
+            return bounce
+        # Ties Google's reply to this browser's request. Without it, a link
+        # crafted by anyone could finish a connect flow in a teacher's
+        # session with the attacker's own Google account.
+        state = secrets.token_urlsafe(24)
+        session["classroom_state"] = state
+        from urllib.parse import urlencode
+        return redirect(GOOGLE_AUTH_URL + "?" + urlencode({
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "redirect_uri": url_for("classroom_callback", _external=True,
+                                    _scheme=_scheme()),
+            "response_type": "code",
+            "scope": " ".join(CLASSROOM_SCOPES),
+            # offline: a refresh token, so grades can go later. consent: ask
+            # every time, because Google only hands out a refresh token on a
+            # consent screen, and a reconnect without one would store nothing.
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+            # The account picker opens on the school address they signed in
+            # with, not whichever Google account the browser last used.
+            "login_hint": user.email,
+            "state": state,
+        }))
+    finally:
+        db.close()
+
+
+#: What Google's ?error= means, in words a teacher can act on.
+CLASSROOM_ERRORS = {
+    "access_denied": "You didn't allow PyIDE to use your Classroom, so "
+                     "nothing was connected.",
+    "admin_policy_enforced": "Your school's Google admin doesn't allow this "
+                             "app to use Google Classroom. Ask your IT "
+                             "department to allow it.",
+}
+
+
+def _classroom_problem(reason, status=400):
+    return render_template("signin_problem.html", reason=reason,
+                           classroom=True), status
+
+
+@app.get("/classroom/callback")
+def classroom_callback():
+    db = SessionLocal()
+    try:
+        user, bounce = _require_classroom_teacher(db)
+        if bounce:
+            return bounce
+        expected = session.pop("classroom_state", None)
+        if not expected or request.args.get("state") != expected:
+            return _classroom_problem("That Classroom connection didn't come "
+                                      "from this page. Start it again from "
+                                      "your dashboard.")
+        error = request.args.get("error")
+        if error:
+            return _classroom_problem(CLASSROOM_ERRORS.get(
+                error, "Google didn't connect your Classroom (%s)." % error))
+
+        status, data = _google_post(GOOGLE_TOKEN_URL, {
+            "code": request.args.get("code", ""),
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "redirect_uri": url_for("classroom_callback", _external=True,
+                                    _scheme=_scheme()),
+            "grant_type": "authorization_code",
+        })
+        access, refresh = data.get("access_token"), data.get("refresh_token")
+        if status != 200 or not access or not refresh:
+            return _classroom_problem("Google didn't finish connecting your "
+                                      "Classroom. Try again.")
+
+        def give_back():
+            _google_post(GOOGLE_REVOKE_URL, {"token": refresh})
+
+        # Google's consent screen has a tick box per permission, and a
+        # teacher can untick some. Storing a half-granted token would fail
+        # later, at the moment grades are sent, with an error nobody could
+        # trace back to this screen. So it is refused now, and said why.
+        granted = set((data.get("scope") or "").split())
+        missing = [s for s in CLASSROOM_SCOPES if s.startswith("https://")
+                   and s not in granted]
+        if missing:
+            give_back()
+            return _classroom_problem(
+                "PyIDE needs every Classroom permission on that screen to "
+                "post assignments and send grades. Connect again and leave "
+                "all the boxes ticked.")
+
+        # The school account, not a personal one picked by mistake from the
+        # account chooser: grades must go to the classes this teacher signed
+        # in to PyIDE as the teacher of.
+        status, info = _google_get(GOOGLE_USERINFO_URL, access)
+        google_email = (info.get("email") or "").strip()
+        if status != 200 or google_email.lower() != user.email.lower():
+            give_back()
+            return _classroom_problem(
+                "You connected %s, but you're signed in to PyIDE as %s. "
+                "Connect again and choose %s."
+                % (google_email or "a different Google account", user.email,
+                   user.email))
+
+        link = _classroom_link(db, user)
+        if link is None:
+            link = accounts.ClassroomLink(user_id=user.id, app=APP_NAME,
+                                          refresh_token="")
+            db.add(link)
+        link.refresh_token = _token_box().encrypt(refresh.encode()).decode()
+        link.google_email = google_email
+        link.connected_at = accounts.now()
+        db.commit()
+        return redirect(url_for("teacher_home", classroom="connected"))
+    finally:
+        db.close()
+
+
+@app.post("/classroom/disconnect")
+def classroom_disconnect():
+    db = SessionLocal()
+    try:
+        user, bounce = _require_classroom_teacher(db)
+        if bounce:
+            return bounce
+        link = _classroom_link(db, user)
+        if link is not None:
+            # Revoked at Google as well as forgotten here, so disconnecting
+            # really does withdraw the permission rather than just hiding it.
+            try:
+                refresh = _token_box().decrypt(link.refresh_token.encode()).decode()
+                _google_post(GOOGLE_REVOKE_URL, {"token": refresh})
+            except Exception:
+                pass
+            db.delete(link)
+            db.commit()
+        return redirect(url_for("teacher_home"))
+    finally:
+        db.close()
+
+
+@app.get("/api/classroom/courses")
+def classroom_courses():
+    """The teacher's active classes. Fetched by the dashboard after it has
+    loaded, so a slow or unreachable Google never holds the page up."""
+    db = SessionLocal()
+    try:
+        if not classroom_configured():
+            abort(404)
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="Only a teacher can do that."), 403
+        access, why = _classroom_token(db, user)
+        if access is None:
+            return jsonify(error=why, connected=_classroom_link(db, user) is not None), 409
+        status, data = _google_get(CLASSROOM_API + "/courses", access, {
+            "teacherId": "me", "courseStates": "ACTIVE", "pageSize": 100})
+        if status != 200:
+            # Google's own words, shown to the teacher only. The likeliest
+            # one is "Classroom API has not been used in project … or it is
+            # disabled", which is a switch in the Cloud console — and saying
+            # so beats any paraphrase of it.
+            message = ((data.get("error") or {}).get("message")
+                       if isinstance(data.get("error"), dict) else "")
+            return jsonify(error=message or "Google wouldn't list your classes."), 502
+        return jsonify(courses=[{
+            "id": c.get("id", ""),
+            "name": c.get("name", ""),
+            "section": c.get("section", ""),
+            "url": c.get("alternateLink", ""),
+        } for c in data.get("courses", [])])
     finally:
         db.close()
 
