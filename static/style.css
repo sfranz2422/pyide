@@ -183,6 +183,10 @@ html, body {
 .hidecode:hover { color: var(--text); }
 .hidecode[hidden] { display: none; }
 
+/* In the share-ask dialog it is the one question, so it reads as text. */
+.share-hide { font-size: 13.5px; color: var(--text); white-space: normal; }
+.modal-actions { margin-top: 20px; }
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1360,21 +1364,23 @@ body:not(.is-authoring) .notes-body a {
 }
 .live-sent[hidden] { display: none; }
 
-/* The project's notes on the live page, under the output. A fixed share of
- * the column rather than whatever is left, so a long output cannot squeeze
- * the notes to nothing and long notes cannot push Output off the screen —
- * each scrolls on its own. */
+/* The project's notes on the live page, under the output, at a FIXED size:
+ * neither grow nor shrink. They were `flex: 1 1 55%` once, a share of the
+ * column, and that still moved — the folded output handed them the whole
+ * column, opening it took it back, and a game's canvas squeezed them too, so
+ * the notes a class was reading shrank under them every time Run was
+ * pressed. Now the output takes whatever is left, and scrolls in it. */
 .live-right .live-notes {
-  flex: 1 1 55%;
+  flex: 0 0 45%;
   border-top: 1px solid var(--line);
 }
 .live-right .live-notes[hidden] { display: none; }
-.live-right #output-view { flex: 1 1 45%; }
+.live-right #output-view { flex: 1 1 0; }
 
-/* Folded: just the head, and the notes under it get the column. The <pre>s
- * are hidden rather than squeezed to zero so the student's own output keeps
- * its scroll position for when they open it again. */
-.live-right #output-view.is-folded { flex: 0 0 auto; }
+/* Folded: just the head. It keeps its space rather than giving it to the
+ * notes, which is the point of the notes being a fixed size. The <pre> is
+ * hidden rather than squeezed to zero so the student's own output keeps its
+ * scroll position for when they open it again. */
 .live-right #output-view.is-folded .output { display: none; }
 .out-fold {
   background: none;
@@ -1464,10 +1470,12 @@ body:not(.is-authoring) .notes-body a {
 .out-tabs { display: inline-flex; gap: 8px; }
 
 /* The teacher's copy of the class's Notes pane, under their output while
- * live. A fixed share of the column, as on the student's page, so neither
- * one can squeeze the other to nothing. */
+ * live, at the same fixed size as on the student's page. It was `1 1 45%`
+ * beside an output of `1 1 auto` — and an auto basis is the output's own
+ * content, so every line printed took height from the notes. */
 .pane-right .class-view {
-  flex: 1 1 45%;
+  flex: 0 0 45%;
   border-top: 1px solid var(--line);
 }
+.pane-right #output-view { flex: 1 1 0; }
 .pane-right .class-view[hidden] { display: none; }

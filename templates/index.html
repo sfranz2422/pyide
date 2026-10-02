@@ -72,7 +72,8 @@
         else is clutter to them, and clutter in a toolbar is a question a
         student has to stop and answer instead of writing code.
 
-          Hide code, Publish  teachers only — both exist to hand work OUT
+          Publish             teachers only — it exists to hand work OUT
+                              (Hide code is too, in the dialog Share opens)
           Turn in             only where there is an assignment to hand to
           Share               hidden on an assignment; Turn in is the way in
           Save                a signed-in student keeping their own project
@@ -101,18 +102,14 @@
       {% if is_teacher %}
         <button id="go-live" class="btn"
                 title="Put this file on your class's screens while you teach.">Go live</button>
-        <span id="live-code" class="chip live-code" hidden></span>
+        {#  The join code, and a button: clicking copies the whole address
+            (…/live/<code>) to paste into the class's chat, so nobody has to
+            find /live and type the code by hand. #}
+        <button id="live-code" class="chip live-code" type="button" hidden></button>
         {#  Shows while a snippet is out on the class's screens. Clicking it
             takes the snippet back, which removes their Insert button. #}
         <button id="live-sent" class="chip live-sent" hidden
                 title="Your class can insert what you sent. Click to take it back.">Sent ✕</button>
-      {% endif %}
-
-      {% if is_teacher %}
-        <label class="hidecode"
-               title="Share a link that runs the program and shows the output, with no code on the page and no way to copy it.">
-          <input type="checkbox" id="hide-code"> Hide code
-        </label>
       {% endif %}
 
       {#  Share goes away only when Turn in is actually there to replace it.
@@ -283,6 +280,29 @@
     <p class="sprite-foot">Click a sprite to load it. Adding it to the screen is up to you.</p>
   </aside>
 </main>
+
+{#  A teacher's Share asks first, because it can make two kinds of link.
+    Hide code used to sit on the toolbar beside Share, where a tick left on
+    from last week's demo was invisible until a student opened the link and
+    found no code. Here it is asked about at the moment it matters, and
+    starts unticked every time. Students never see this — their Share has
+    only one kind of link to make. #}
+{% if is_teacher and not readonly %}
+<div id="share-ask" class="modal" hidden>
+  <div class="modal-card">
+    <h2>Share this project</h2>
+    <p class="modal-sub">Makes a link to a snapshot of your code as it is right now.</p>
+    <label class="hidecode share-hide"
+           title="Share a link that runs the program and shows the output, with no code on the page and no way to copy it.">
+      <input type="checkbox" id="hide-code"> Hide code — the link runs the program and shows only the output
+    </label>
+    <div class="actions modal-actions">
+      <button id="share-go" class="btn btn-primary">Create link</button>
+      <button id="share-cancel" class="btn">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div id="modal" class="modal" hidden>
   <div class="modal-card">
