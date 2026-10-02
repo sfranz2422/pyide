@@ -120,8 +120,61 @@ def fake_get(url, token, params=None):
     return 404, {}
 
 
+# The Classroom side of the fake: one class, a roster split over two pages
+# (a second page silently dropped would be students silently ungraded), and
+# whatever coursework PyIDE creates.
+room = {"work": None, "gone": False, "patches": [],
+        "roster": [[{"userId": "u-other", "profile": {"emailAddress": "someone@school.org"}}],
+                   [{"userId": "u-kid", "profile": {"emailAddress": "KID1@school.org"}},
+                    {"userId": "u-kid3", "profile": {"emailAddress": "kid3@school.org"}}]]}
+
+
+def fake_classroom_get(url, params):
+    base = P.CLASSROOM_API + "/courses/123456"
+    if url == base:
+        return 200, {"id": "123456", "name": "Programming 1"}
+    if url == base + "/students":
+        page = int(params.get("pageToken") or 0)
+        data = {"students": room["roster"][page]}
+        if page + 1 < len(room["roster"]):
+            data["nextPageToken"] = str(page + 1)
+        return 200, data
+    if room["work"] and url == base + "/courseWork/w1/studentSubmissions":
+        if room["gone"]:
+            return 404, {"error": {"message": "Requested entity was not found."}}
+        return 200, {"studentSubmissions": [
+            {"id": "s-other", "userId": "u-other"}, {"id": "s-kid", "userId": "u-kid"},
+            {"id": "s-kid3", "userId": "u-kid3"}]}
+    return None
+
+
+def fake_api(method, url, token, body=None, params=None):
+    calls.append((method, url, token, body, params))
+    if method == "POST" and url == P.CLASSROOM_API + "/courses/123456/courseWork":
+        room["work"] = body
+        return 200, {"id": "w1", "alternateLink": "https://classroom.google.com/c/123456/a/w1"}
+    if method == "PATCH" and "/studentSubmissions/" in url:
+        room["patches"].append((url.rsplit("/", 1)[1], body, params))
+        return 200, {}
+    if method == "PATCH" and url.endswith("/courseWork/w1"):
+        return 200, {}
+    return 404, {}
+
+
+_plain_get = fake_get
+
+
+def fake_get_all(url, token, params=None):
+    hit = fake_classroom_get(url, params or {})
+    if hit is not None:
+        calls.append(("GET", url, token))
+        return hit
+    return _plain_get(url, token, params)
+
+
 P._google_post = fake_post
-P._google_get = fake_get
+P._google_get = fake_get_all
+P._google_api = fake_api
 
 
 def revoked():
@@ -294,6 +347,122 @@ callback(teacher, code="abc")
 check("a student's Disconnect touches nothing",
       student.post("/classroom/disconnect").status_code == 404
       and link_row() is not None)
+
+# -------------------------------------------------- posting and sending grades
+print("\nPosting to Classroom and sending grades")
+
+hw = teacher.post("/api/assignment", json={
+    "code": "# starter\n", "files": {}, "title": "Loops"}).get_json()["slug"]
+KIDS = {}
+for n, email in enumerate(["kid1@school.org", "kid2@school.org", "kid3@school.org"]):
+    uid = add_user("k%d" % n, email, "Kid %d" % (n + 1))
+    kid = client(uid)
+    kid.get("/a/%s" % hw)
+    db = P.SessionLocal()
+    d = db.query(accounts.Draft).filter_by(owner_id=uid).first()
+    db.close()
+    kid.post("/api/submit", json={"draft": d.slug, "code": "print(%d)\n" % n, "files": {}})
+    KIDS[email] = uid
+
+
+def sub_of(email):
+    db = P.SessionLocal()
+    try:
+        return db.query(accounts.Submission).filter_by(student_id=KIDS[email]).first()
+    finally:
+        db.close()
+
+
+def assignment():
+    db = P.SessionLocal()
+    try:
+        return db.query(accounts.Assignment).filter_by(slug=hw).first()
+    finally:
+        db.close()
+
+
+POST = "/api/assignment/%s/classroom/post" % hw
+SYNC = "/api/assignment/%s/classroom/sync" % hw
+
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+check("a connected teacher's assignment page offers Post to Classroom",
+      'id="gc-post"' in page)
+r = teacher.post(POST, json={"course": "123456"})
+check("it cannot be posted before it has points",
+      r.status_code == 400 and "out of" in r.get_json()["error"], r.status_code)
+teacher.post("/api/assignment/%s/out-of" % hw, json={"out_of": 10})
+check("a student cannot post it", student.post(POST, json={"course": "123456"}).status_code == 403)
+r = teacher.post(POST, json={"course": "../evil"})
+check("a class id that is not one is refused", r.status_code == 400)
+
+calls.clear()
+r = teacher.post(POST, json={"course": "123456"})
+check("the teacher posts it to Programming 1", r.status_code == 200
+      and r.get_json().get("course") == "Programming 1", r.get_data(as_text=True)[:90])
+w = room["work"] or {}
+check("  as a published assignment worth 10 points",
+      w.get("state") == "PUBLISHED" and w.get("workType") == "ASSIGNMENT"
+      and w.get("maxPoints") == 10, w)
+link = ((w.get("materials") or [{}])[0].get("link") or {}).get("url", "")
+check("  carrying the link students open it from",
+      link.endswith("/a/%s" % hw), link)
+a = assignment()
+check("  and it remembers where it went",
+      (a.classroom_course_id, a.classroom_work_id, a.classroom_course_name)
+      == ("123456", "w1", "Programming 1"))
+r = teacher.post(POST, json={"course": "123456"})
+check("posting twice is refused, so the class never sees two",
+      r.status_code == 409 and room["work"] is not None)
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+check("the page then says where it is, and offers Sync",
+      "Programming 1" in page and 'id="gc-sync"' in page)
+
+calls.clear()
+teacher.post("/api/assignment/%s/out-of" % hw, json={"out_of": 20})
+patch = [c for c in calls if c[0] == "PATCH" and c[1].endswith("/courseWork/w1")]
+check("changing the points changes them in Classroom too",
+      patch and patch[0][3] == {"maxPoints": 20}
+      and patch[0][4] == {"updateMask": "maxPoints"}, patch)
+
+FB = "/api/assignment/%s/feedback" % hw
+teacher.post(FB, json={"submission": sub_of("kid1@school.org").id,
+                       "feedback": "", "score": "17"})
+teacher.post(FB, json={"submission": sub_of("kid2@school.org").id,
+                       "feedback": "", "score": "15"})
+# kid3 is in the Classroom class but not scored, and must not be sent as
+# anything — least of all 0, or a blank that wipes a grade typed there.
+
+r = teacher.post(SYNC)
+out = r.get_json() or {}
+check("Sync sends the scores", r.status_code == 200 and out.get("sent") == 1, out)
+check("  as draft grades, matched by email whatever its case",
+      room["patches"] == [("s-kid", {"draftGrade": 17.0}, {"updateMask": "draftGrade"})],
+      room["patches"])
+check("  finding them on the roster's second page", "s-kid" in str(room["patches"]))
+check("  naming the student who is not in the Classroom class",
+      out.get("unmatched") == ["Kid 2"], out.get("unmatched"))
+check("  and sending nothing for the one with no score",
+      len(room["patches"]) == 1)
+check("  and remembering what went", sub_of("kid1@school.org").score_synced == 17.0)
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+check("the page shows it is in Classroom",
+      '<span class="fb-sync small">✓ in Classroom</span>' in page)
+teacher.post(FB, json={"submission": sub_of("kid1@school.org").id,
+                       "feedback": "", "score": "18"})
+page = teacher.get("/teacher/%s" % hw).get_data(as_text=True)
+check("  and that a changed score is not, until the next Sync",
+      '<span class="fb-sync small">not in Classroom yet</span>' in page)
+
+check("a student cannot sync", student.post(SYNC).status_code == 403)
+
+room["gone"] = True
+r = teacher.post(SYNC)
+check("an assignment deleted in Classroom is said so",
+      r.status_code == 409 and "gone from Google Classroom" in r.get_json()["error"])
+check("  and forgotten, so it can be posted again",
+      assignment().classroom_work_id == ""
+      and 'id="gc-post"' in teacher.get("/teacher/%s" % hw).get_data(as_text=True))
+
 
 # ---------------------------------------------------------- the policy page
 print("\nThe privacy policy")

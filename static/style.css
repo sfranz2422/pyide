@@ -1071,6 +1071,15 @@ body:not(.is-authoring) .notes-body a {
 }
 .feedback-head { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
 .feedback-body { white-space: pre-wrap; word-break: break-word; }
+.feedback-score { margin-bottom: 4px; }
+
+/* Grading on the teacher's assignment page: points, Classroom, and a score
+ * box beside each feedback box. */
+.grade-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.out-of, .fb-score { width: 76px; }
+.gc { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.gc p { margin: 6px 0; }
+.fb-sync { color: var(--muted); }
 .badge-new {
   background: var(--accent);
   color: var(--on-accent, #fff);

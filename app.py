@@ -845,7 +845,8 @@ def my_work():
 
         # Seen, now that it is on their screen. After the rows are built, so
         # this visit still shows New and the next one does not.
-        fresh = [s for s in subs.values() if s.feedback and not s.feedback_seen]
+        fresh = [s for s in subs.values()
+                 if (s.feedback or s.score is not None) and not s.feedback_seen]
         for s in fresh:
             s.feedback_seen = 1
         if fresh:
@@ -874,7 +875,10 @@ def _my_assignment(item, draft, sub, when):
         "feedback": (sub.feedback or "") if sub else "",
         "feedback_when": (sub.feedback_at.strftime("%b %d at %I:%M %p")
                           if sub and sub.feedback_at else ""),
-        "feedback_new": bool(sub and sub.feedback and not sub.feedback_seen),
+        "score": _score_text(sub.score) if sub else "",
+        "out_of": item.out_of or "",
+        "feedback_new": bool(sub and (sub.feedback or sub.score is not None)
+                             and not sub.feedback_seen),
         # Turned in again after the comment was written: it may be about
         # something they have since fixed, and they should know which.
         "feedback_older": bool(sub and sub.feedback_at
@@ -1361,6 +1365,97 @@ def delete_assignment(slug):
 MAX_FEEDBACK = 5000
 
 
+def _parse_score(raw):
+    """(score or None, error or ""). Empty is "not scored", never 0."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, ""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, "A score has to be a number."
+    if value != value or value < 0 or value > 1000:     # NaN, or silly
+        return None, "A score has to be between 0 and 1000."
+    return round(value, 2), ""
+
+
+def _score_text(score):
+    """8.0 → "8", 7.5 → "7.5", None → "". For pages and the score box."""
+    if score is None:
+        return ""
+    return ("%g" % score)
+
+
+def _is_synced(sub):
+    return sub.score is not None and sub.score_synced == sub.score
+
+
+@app.post("/api/assignment/<slug>/out-of")
+def set_out_of(slug):
+    """What the assignment is marked out of. Empty means not graded.
+
+    Once posted to Classroom the points there are changed to match, so the
+    grades that go across mean the same thing on both sides. Clearing it is
+    refused then: Classroom cannot take grades on work with no points, and
+    the next Sync would fail in a way that never mentions why.
+    """
+    db = SessionLocal()
+    try:
+        user, item, bounce = _own_assignment(db, slug)
+        if bounce:
+            return bounce
+        raw = (request.get_json(silent=True) or {}).get("out_of")
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            if item.classroom_work_id:
+                return jsonify(error="It's posted to Google Classroom, so it "
+                                     "needs points."), 400
+            item.out_of = None
+            db.commit()
+            return jsonify(ok=True, out_of="")
+        try:
+            value = int(str(raw).strip())
+        except ValueError:
+            return jsonify(error="Points have to be a whole number."), 400
+        if value < 1 or value > 1000:
+            return jsonify(error="Points have to be between 1 and 1000."), 400
+
+        note = ""
+        if item.classroom_work_id and value != item.out_of:
+            access, why = _classroom_token(db, user)
+            status = 0
+            if access:
+                status, _ = _google_api(
+                    "PATCH", "%s/courses/%s/courseWork/%s" % (
+                        CLASSROOM_API, item.classroom_course_id,
+                        item.classroom_work_id),
+                    access, body={"maxPoints": value},
+                    params={"updateMask": "maxPoints"})
+            if status != 200:
+                # Saved here anyway: the teacher's number is the truth, and
+                # saying plainly that Classroom still has the old one is more
+                # use than refusing to save it.
+                note = ("Saved here, but Google Classroom still says %s points. "
+                        "Change it there too." % item.out_of)
+        item.out_of = value
+        db.commit()
+        return jsonify(ok=True, out_of=value, note=note)
+    finally:
+        db.close()
+
+
+def _own_assignment(db, slug):
+    """(user, assignment, None) for the teacher who set it, else a JSON
+    error as the third item. Everything that changes an assignment's grading
+    goes through here, so none of it can be reached by another teacher."""
+    user = current_user(db)
+    if user is None or not accounts.is_teacher(user.email):
+        return None, None, (jsonify(error="Only the teacher can do that."), 403)
+    item = db.query(accounts.Assignment).filter_by(
+        slug=slug, app=APP_NAME).first()
+    if item is None or item.teacher_id != user.id:
+        return None, None, (jsonify(error="No such assignment."), 404)
+    return user, item, None
+
+
 @app.post("/api/assignment/<slug>/feedback")
 def give_feedback(slug):
     """The teacher's comment on one student's turned-in work.
@@ -1401,11 +1496,26 @@ def give_feedback(slug):
             return jsonify(error="That's too long — keep it under %d characters."
                            % MAX_FEEDBACK), 413
 
+        # The score rides along with the comment. Absent means leave it
+        # alone, so a page from before scores cannot wipe one; empty means
+        # take it back. NOT capped at out_of: extra credit is a thing, and
+        # Classroom takes a grade above the points too.
+        if "score" in data:
+            score, why = _parse_score(data.get("score"))
+            if why:
+                return jsonify(error=why), 400
+            sub.score = score
+
         sub.feedback = text
-        sub.feedback_at = accounts.now() if text else None
+        # Stamped when there is anything for the student to read, a comment or
+        # a score — it is what "turned in again since your feedback" compares
+        # against, and a score alone is feedback too.
+        has_any = bool(text) or sub.score is not None
+        sub.feedback_at = accounts.now() if has_any else None
         sub.feedback_seen = 0
         db.commit()
-        return jsonify(ok=True, feedback=text,
+        return jsonify(ok=True, feedback=text, score=_score_text(sub.score),
+                       synced=_is_synced(sub),
                        when=(sub.feedback_at.strftime("%b %d at %I:%M %p")
                              if sub.feedback_at else ""))
     finally:
@@ -1444,6 +1554,8 @@ def teacher_assignment(slug):
             # what they commented on is no longer what is there.
             "again_since": bool(sub.feedback_at
                                 and sub.submitted_at > sub.feedback_at),
+            "score": _score_text(sub.score),
+            "synced": _is_synced(sub),
         } for sub, student in rows]
 
         # Anyone who opened the assignment but never pressed Turn in.
@@ -1456,6 +1568,9 @@ def teacher_assignment(slug):
                           if u.email not in done}.values())
 
         ctx = user_context(db)
+        ctx.update(classroom_on=classroom_configured(),
+                   classroom_connected=(classroom_configured()
+                                        and _classroom_link(db, user) is not None))
         ctx.update(assignment=item, handed_in=handed_in, not_yet=not_yet,
                    share_url=url_for("open_assignment", slug=item.slug,
                                      _external=True, _scheme=_scheme()))
@@ -1544,6 +1659,49 @@ def _google_get(url, access_token, params=None):
             return r.status_code, {}
     except Exception:
         return 0, {}
+
+
+def _google_api(method, url, access_token, body=None, params=None):
+    """Any other call to a Google API as the teacher: JSON in, (status, json)
+    out. Never raises. The third and last door to Google, replaced in tests
+    with the other two."""
+    import requests
+    try:
+        r = requests.request(method, url, json=body, params=params or {},
+                             timeout=20,
+                             headers={"Authorization": "Bearer " + access_token})
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            return r.status_code, {}
+    except Exception:
+        return 0, {}
+
+
+def _google_message(data, fallback):
+    """Google's own explanation from an error reply, for the teacher only."""
+    err = data.get("error") if isinstance(data, dict) else None
+    if isinstance(err, dict) and err.get("message"):
+        return err["message"]
+    return fallback
+
+
+def _google_list(url, access_token, key, params=None):
+    """Every page of a Classroom list. (items, status): status is that of the
+    first page that failed, or 200. A class is rarely over a hundred, but a
+    second page silently dropped would be students silently left ungraded."""
+    items, token, params = [], None, dict(params or {}, pageSize=100)
+    for _ in range(50):
+        if token:
+            params["pageToken"] = token
+        status, data = _google_get(url, access_token, params)
+        if status != 200:
+            return items, status
+        items.extend(data.get(key, []))
+        token = data.get("nextPageToken")
+        if not token:
+            break
+    return items, 200
 
 
 def _token_box():
@@ -1785,6 +1943,148 @@ def classroom_courses():
             "section": c.get("section", ""),
             "url": c.get("alternateLink", ""),
         } for c in data.get("courses", [])])
+    finally:
+        db.close()
+
+
+@app.post("/api/assignment/<slug>/classroom/post")
+def classroom_post(slug):
+    """Create this assignment in one of the teacher's Classroom classes.
+
+    Google only lets an app grade coursework the app created, so this is not
+    a convenience: without it, Sync has nothing it is allowed to write to.
+    The Classroom assignment carries the /a/<slug> link, so a student opens
+    it from Classroom and lands in their own copy, as from any handout link.
+
+    Once only. A second press would make a second Classroom assignment, and
+    the class would see two of everything.
+    """
+    db = SessionLocal()
+    try:
+        user, item, bounce = _own_assignment(db, slug)
+        if bounce:
+            return bounce
+        if item.classroom_work_id:
+            return jsonify(error="It's already posted to %s."
+                           % (item.classroom_course_name or "Google Classroom")), 409
+        if not item.out_of:
+            return jsonify(error="Set what it's out of first — Classroom only "
+                                 "takes grades on work with points."), 400
+        course_id = str((request.get_json(silent=True) or {}).get("course") or "")
+        if not re.fullmatch(r"[0-9]{1,30}", course_id):
+            return jsonify(error="Choose a class."), 400
+        access, why = _classroom_token(db, user)
+        if access is None:
+            return jsonify(error=why), 409
+
+        # Asked of Google rather than trusted from the page: the class's name
+        # for the dashboard, and proof that this teacher teaches it.
+        status, course = _google_get("%s/courses/%s" % (CLASSROOM_API, course_id),
+                                     access)
+        if status != 200:
+            return jsonify(error=_google_message(course, "Google couldn't find "
+                                                 "that class.")), 502
+
+        link = url_for("open_assignment", slug=item.slug, _external=True,
+                       _scheme=_scheme())
+        status, work = _google_api(
+            "POST", "%s/courses/%s/courseWork" % (CLASSROOM_API, course_id), access,
+            body={
+                "title": item.title,
+                "description": "Open it in PyIDE and sign in with your school "
+                               "account. Press Turn in there when you're done.",
+                "materials": [{"link": {"url": link}}],
+                "workType": "ASSIGNMENT",
+                "state": "PUBLISHED",
+                "maxPoints": item.out_of,
+            })
+        if status != 200 or not work.get("id"):
+            return jsonify(error=_google_message(work, "Google wouldn't create "
+                                                 "the assignment.")), 502
+
+        item.classroom_course_id = course_id
+        item.classroom_course_name = (course.get("name") or "")[:200]
+        item.classroom_work_id = str(work["id"])[:32]
+        item.classroom_url = (work.get("alternateLink") or "")[:300]
+        db.commit()
+        return jsonify(ok=True, course=item.classroom_course_name,
+                       url=item.classroom_url)
+    finally:
+        db.close()
+
+
+@app.post("/api/assignment/<slug>/classroom/sync")
+def classroom_sync(slug):
+    """Send every score to Classroom as a DRAFT grade.
+
+    Draft, not assigned: the teacher still sees them in Classroom before the
+    class does, and returns them there. A PyIDE student is matched to a
+    Classroom one by email, which is why the school account matters — a
+    student who did the work signed in as someone else cannot be matched,
+    and is named in the reply rather than skipped in silence.
+    """
+    db = SessionLocal()
+    try:
+        user, item, bounce = _own_assignment(db, slug)
+        if bounce:
+            return bounce
+        if not item.classroom_work_id:
+            return jsonify(error="Post it to Google Classroom first."), 400
+        access, why = _classroom_token(db, user)
+        if access is None:
+            return jsonify(error=why), 409
+
+        base = "%s/courses/%s" % (CLASSROOM_API, item.classroom_course_id)
+        roster, status = _google_list(base + "/students", access, "students")
+        if status != 200:
+            return jsonify(error="Google wouldn't list the class's students."), 502
+        by_email = {}
+        for st in roster:
+            email = ((st.get("profile") or {}).get("emailAddress") or "").lower()
+            if email:
+                by_email[email] = st.get("userId")
+
+        work_url = base + "/courseWork/" + item.classroom_work_id
+        subs, status = _google_list(work_url + "/studentSubmissions", access,
+                                    "studentSubmissions")
+        if status == 404:
+            # Deleted in Classroom. Forgotten here, so the page offers Post
+            # again instead of failing this way on every press.
+            item.classroom_course_id = item.classroom_course_name = ""
+            item.classroom_work_id = item.classroom_url = ""
+            db.commit()
+            return jsonify(error="That assignment is gone from Google Classroom. "
+                                 "Post it again.", gone=True), 409
+        if status != 200:
+            return jsonify(error="Google wouldn't list the assignment's "
+                                 "submissions."), 502
+        by_user = {s.get("userId"): s.get("id") for s in subs}
+
+        rows = (db.query(accounts.Submission, accounts.User)
+                  .join(accounts.User, accounts.Submission.student_id == accounts.User.id)
+                  .filter(accounts.Submission.assignment_id == item.id).all())
+        sent, unmatched, failed = 0, [], []
+        for sub, student in rows:
+            if sub.score is None:
+                continue
+            uid = by_email.get(student.email.lower())
+            cid = by_user.get(uid) if uid else None
+            if cid is None:
+                unmatched.append(student.display_name() or student.email)
+                continue
+            status, data = _google_api(
+                "PATCH", "%s/studentSubmissions/%s" % (work_url, cid), access,
+                body={"draftGrade": sub.score},
+                params={"updateMask": "draftGrade"})
+            if status == 200:
+                sub.score_synced = sub.score
+                sent += 1
+            else:
+                failed.append("%s (%s)" % (student.display_name() or student.email,
+                                           _google_message(data, "refused")))
+        db.commit()
+        return jsonify(ok=True, sent=sent, unmatched=unmatched, failed=failed,
+                       synced=[s.id for s, _ in rows if _is_synced(s)])
     finally:
         db.close()
 
