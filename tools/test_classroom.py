@@ -295,6 +295,19 @@ check("a student's Disconnect touches nothing",
       student.post("/classroom/disconnect").status_code == 404
       and link_row() is not None)
 
+# ---------------------------------------------------------- the policy page
+print("\nThe privacy policy")
+
+# Google's consent screen links here and will not publish the app without it,
+# so a broken /privacy is a Classroom connection nobody can make.
+r = stranger.get("/privacy")
+text = r.get_data(as_text=True)
+check("/privacy is public", r.status_code == 200, r.status_code)
+check("  names all three editors", all(h in text for h in (
+    "pyide-mdfd.onrender.com", "webide-4kiy.onrender.com", "flaskide.onrender.com")))
+check("  and makes Google's Limited Use statement",
+      "Limited Use" in text and "api-services-user-data-policy" in text)
+
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"
       % ("SOME FAILED" if bad else "ALL PASSED", len(results), bad))

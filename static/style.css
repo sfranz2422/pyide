@@ -1087,6 +1087,13 @@ body:not(.is-authoring) .notes-body a {
 .classroom h2 { margin-top: 14px; }
 .classroom-off { margin-top: 8px; }
 
+/* The privacy page: a readable column, and headings as headings rather
+ * than the dashboard's small uppercase section labels. */
+.policy { max-width: 720px; line-height: 1.6; }
+.policy h1 { font-size: 24px; margin: 8px 0 4px; }
+.policy h2 { text-transform: none; letter-spacing: 0; color: var(--text); font-size: 17px; }
+.policy a { color: var(--accent); }
+
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty h2 { text-transform: none; font-size: 20px; color: var(--text); }
 

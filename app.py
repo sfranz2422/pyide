@@ -2416,6 +2416,13 @@ def live_page(code):
         db.close()
 
 
+@app.get("/privacy")
+def privacy():
+    """The policy Google's consent screen links to, for all three editors —
+    they share one OAuth client, so one consent screen and one policy."""
+    return render_template("privacy.html")
+
+
 @app.errorhandler(404)
 def not_found(_):
     return render_template("404.html"), 404
