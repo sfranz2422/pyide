@@ -31,7 +31,12 @@ class OffscreenComp(Comp):
     id = "offscreen"
 
     def __init__(self, destroy=False, distance=64):
-        self.destroy = destroy
+        # NOT self.destroy. Every component has a destroy(obj) hook, which
+        # GameObj.destroy() calls on each of them, and an attribute of that
+        # name hides it: destroying the object then called True and stopped
+        # the game with "'bool' object is not callable" -- the first time
+        # offscreen() did its job. See tests/test_offscreen.py.
+        self.should_destroy = destroy
         self.distance = distance
 
     def add(self, obj):
@@ -45,7 +50,7 @@ class OffscreenComp(Comp):
         d = self.distance
         if (p.x < -d or p.x > engine.width() + d or
                 p.y < -d or p.y > engine.height() + d):
-            if self.destroy:
+            if self.should_destroy:
                 obj.destroy()
 
 
