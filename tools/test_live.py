@@ -232,10 +232,11 @@ check("a student who joins late is handed it in the page",
 check("a student's lesson page has the Sprites button and its panel",
       'id="sprites-toggle"' in page and 'id="sprites"' in page
       and "sprites.js" in page
-      and "attachPanel(" in open(os.path.join(PYIDE, "static", "live.js")).read())
+      and re.search(r"^\s*var spritePanel = window\.PyIDESprites\.attachPanel\(",
+                   open(os.path.join(PYIDE, "static", "live.js")).read(), re.M))
 check("  and the light/dark button",
       'id="theme"' in page
-      and "themeSwitch();" in open(os.path.join(PYIDE, "static", "live.js")).read())
+      and re.search(r"^\s*themeSwitch\(\);", open(os.path.join(PYIDE, "static", "live.js")).read(), re.M))
 
 r = other.post("/api/live/%s/send" % CODE, json={"snippet": "x", "seq": 9999})
 check("another teacher cannot send to this class", r.status_code == 403,
