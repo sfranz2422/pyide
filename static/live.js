@@ -297,12 +297,40 @@
     }
   });
 
-  /* The button follows THEIR code, not the teacher's: it is their editor the
-     panel writes into, so it is their program that has to be a game. */
-  function paintSpritesButton() {
-    if (spritePanel) {
-      spritePanel.showFor(window.PyIDEGame.looksLikeGame(mainSource()));
+  /* ------------------------------------------------- their game in a new tab
+   *
+   * The editor's New tab, unchanged: their project goes to /play through
+   * this browser's storage under the key demo.js reads, and one named tab is
+   * reused. It reads their editor and never writes to it. The teacher's code
+   * is not what it sends — a student who wants the teacher's game in a tab
+   * has to have typed it, which is the exercise. */
+  var runTabBtn = $("run-tab");
+
+  function runInNewTab() {
+    if (running) stopRun();
+    try {
+      localStorage.setItem("pyide-play", JSON.stringify({
+        code: mainSource(),
+        files: dataFiles(),
+        title: L.title || "Game"
+      }));
+    } catch (e) {
+      window.alert("This browser is blocking site storage, so the game "
+                   + "cannot be handed to a new tab. Run it here instead.");
+      return;
     }
+    window.open("/play", "pyide-play");
+  }
+
+  if (runTabBtn) runTabBtn.addEventListener("click", runInNewTab);
+
+  /* Both buttons follow THEIR code, not the teacher's: it is their editor the
+     panel writes into and their program New tab sends, so it is their
+     program that has to be a game. */
+  function paintSpritesButton() {
+    var isGame = window.PyIDEGame.looksLikeGame(mainSource());
+    if (spritePanel) spritePanel.showFor(isGame);
+    if (runTabBtn) runTabBtn.hidden = !isGame;
   }
   mine.on("change", function () { if (active === MAIN) paintSpritesButton(); });
   paintSpritesButton();

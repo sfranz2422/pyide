@@ -88,6 +88,11 @@
         <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
       </button>
       <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+      {#  The editor's New tab button: THEIR game, in a tab of its own, on
+          /play exactly as the editor sends it. Shown once their code is a
+          game. #}
+      <button id="run-tab" class="btn" type="button" hidden
+              title="Play your game in its own tab">↗ New tab</button>
       {#  The editor's Sprites button, shown once their own code imports
           kaypy. It writes the load line into THEIR editor only, on their
           click — the same as in the editor, and no exception to the rule

@@ -234,6 +234,18 @@ check("a student's lesson page has the Sprites button and its panel",
       and "sprites.js" in page
       and re.search(r"^\s*var spritePanel = window\.PyIDESprites\.attachPanel\(",
                    open(os.path.join(PYIDE, "static", "live.js")).read(), re.M))
+_live_js = open(os.path.join(PYIDE, "static", "live.js")).read()
+_demo_js = open(os.path.join(PYIDE, "static", "demo.js")).read()
+check("  and the New tab button, hidden until their code is a game",
+      'id="run-tab" class="btn" type="button" hidden' in page
+      and re.search(r"^\s*if \(runTabBtn\) runTabBtn\.hidden = !isGame;", _live_js, re.M))
+check("  which hands their own code to /play under the key /play reads",
+      re.search(r'localStorage\.setItem\("pyide-play", JSON\.stringify\(\{\s*code: mainSource\(\),',
+                _live_js)
+      and 'localStorage.getItem("pyide-play")' in _demo_js
+      and re.search(r'^\s*window\.open\("/play", "pyide-play"\);', _live_js, re.M)
+      and re.search(r'^\s*if \(runTabBtn\) runTabBtn\.addEventListener\("click", runInNewTab\);',
+                    _live_js, re.M))
 check("  and the light/dark button",
       'id="theme"' in page
       and re.search(r"^\s*themeSwitch\(\);", open(os.path.join(PYIDE, "static", "live.js")).read(), re.M))
@@ -1173,9 +1185,11 @@ pull = pull[:pull.index("\n  }\n")]
 check("  and the only write into one is their own program's output",
       doc_sets == [("name", "text")] and "docs[name].setValue(text)" in pull
       and "pyodide.FS.readFile" in pull, doc_sets)
+# Three saves, and the fourth is New tab's handover to /play, which carries
+# the same tabs for the same reason: a game missing its data files breaks.
 check("  every save carries those tabs, never an empty map",
       'files: {}' not in live_code
-      and len(re.findall(r"files: dataFiles\(\)", live_code)) == 3,
+      and len(re.findall(r"files: dataFiles\(\)", live_code)) == 4,
       "an autosave sending {} emptied the project of its data files")
 check("  and Run gives Python the files before running main.py",
       re.search(r"var source = mainSource\(\);[^\n]*\n\s*pushFilesToPython\(\);",
