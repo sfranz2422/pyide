@@ -88,7 +88,18 @@
         <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
       </button>
       <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+      {#  The editor's Sprites button, shown once their own code imports
+          kaypy. It writes the load line into THEIR editor only, on their
+          click — the same as in the editor, and no exception to the rule
+          that nothing from the network writes there. #}
+      <button id="sprites-toggle" class="btn" aria-expanded="false" hidden>Sprites</button>
     {% endif %}
+    {#  On every live page, the join card included: the room may be projecting
+        in light while a student's laptop is in a dark corridor. The choice is
+        the same localStorage key the editor uses, so it carries both ways. #}
+    <button id="theme" class="btn btn-icon-only" title="Switch between light and dark">
+      <span id="theme-glyph">☾</span>
+    </button>
     {#  The same Sign in the editor has. Without it a student who wanted to
         Save or Turn in had no way to get there from the lesson — those
         buttons only appear once signed in, so the page simply showed less
@@ -262,6 +273,37 @@
       <div id="live-notes" class="notes-body prose"></div>
     </div>
   </section>
+
+  {#  The same panel as the editor's, ids and all — sprites.js fills it. #}
+  <aside id="sprites" class="pane pane-sprites" hidden>
+    <div class="pane-head">
+      <span>Sprites</span>
+      <button id="sprites-close" class="linkbtn">Close</button>
+    </div>
+    <div class="sprite-tools">
+      <input id="sprite-search" class="field" type="search" placeholder="Search sprites">
+    </div>
+    <div class="sprite-scroll">
+      <div id="images-section" class="sprite-section">
+        <div class="sprite-subhead">Kaplay pack</div>
+        <div id="sprite-grid" class="sprite-grid"><span class="dim">Loading…</span></div>
+      </div>
+      <div id="dungeon-section" class="sprite-section" hidden>
+        <div class="sprite-subhead">Dungeon pack</div>
+        <div id="dungeon-grid" class="sprite-grid"></div>
+      </div>
+      <div id="atlas-section" class="sprite-section" hidden>
+        <div class="sprite-subhead">Sprite atlas</div>
+        <div id="atlas-list"></div>
+      </div>
+      <p id="sprite-empty" class="dim sprite-empty" hidden>No sprite by that name.</p>
+      <div id="sound-section" class="sprite-section">
+        <div class="sprite-subhead">Sounds</div>
+        <div id="sound-list" class="chips"></div>
+      </div>
+    </div>
+    <p class="sprite-foot">Click a sprite to load it. Adding it to the screen is up to you.</p>
+  </aside>
 </main>
 {% endif %}
 
@@ -307,6 +349,7 @@
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js"></script>
 <script src="{{ url_for('static', filename='runtime.js') }}"></script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='sprites.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>

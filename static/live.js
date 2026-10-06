@@ -29,6 +29,13 @@
   "use strict";
 
   var L = window.PYIDE_LIVE || {};
+
+  // The two editors, once there are any. Declared here so the theme switch
+  // below can repaint them; on the join card and the host's page they stay
+  // undefined and the switch only changes the page around them.
+  var mirror, mine;
+  themeSwitch();
+
   if (!L.joined || L.isHost) {
     hostControls();
     return;
@@ -62,7 +69,7 @@
      cursor the mirror can be focused and looks typeable, and a student who
      clicks in and starts typing finds nothing happens and assumes the page
      is broken. */
-  var mirror = CodeMirror.fromTextArea($("mirror"), {
+  mirror = CodeMirror.fromTextArea($("mirror"), {
     mode: "python",
     theme: cmTheme(),
     lineNumbers: true,
@@ -89,7 +96,7 @@
     });
   });
 
-  var mine = CodeMirror.fromTextArea($("mine"), {
+  mine = CodeMirror.fromTextArea($("mine"), {
     mode: "python",
     theme: cmTheme(),
     lineNumbers: true,
@@ -270,6 +277,35 @@
     renderTabs();
     mine.focus();
   }
+
+  /* The editor's Sprites panel (sprites.js). The second and last thing that
+     writes into the student's editor, beside insertSnippet — and unlike that
+     one, nothing in it comes from the network: the text is sprites.js's own
+     load line for a picture the student clicked. test_live.py pins it to
+     the panel and nowhere else. Into main.py, as in the editor: a load line
+     typed into words.txt is a game that silently has no sprite. */
+  function insertSprite(text) {
+    if (active !== MAIN) switchTo(MAIN);
+    mine.replaceSelection(text, "end");
+    mine.focus();
+  }
+
+  var spritePanel = window.PyIDESprites.attachPanel({
+    insert: insertSprite,
+    relayout: function () {
+      setTimeout(function () { mirror.refresh(); mine.refresh(); }, 0);
+    }
+  });
+
+  /* The button follows THEIR code, not the teacher's: it is their editor the
+     panel writes into, so it is their program that has to be a game. */
+  function paintSpritesButton() {
+    if (spritePanel) {
+      spritePanel.showFor(window.PyIDEGame.looksLikeGame(mainSource()));
+    }
+  }
+  mine.on("change", function () { if (active === MAIN) paintSpritesButton(); });
+  paintSpritesButton();
 
   function keepInBrowser() {
     try {
@@ -1152,6 +1188,56 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
+
+  // ----------------------------------------------------------------- theme
+  /* The editor's light/dark button, on the same localStorage key, so a choice
+     made in either place holds in both. The <head> script has already set
+     data-theme before the first paint; this only keeps the glyph, the two
+     CodeMirrors and the computer's own setting in step with it. */
+  function themeSwitch() {
+    var THEME_KEY = "pyide-theme";
+    var btn = document.getElementById("theme");
+    var glyph = document.getElementById("theme-glyph");
+    if (!btn) return;
+
+    function current() { return isDark() ? "dark" : "light"; }
+
+    function apply(name, remember) {
+      document.documentElement.setAttribute("data-theme", name);
+      // CodeMirror carries its own colours, so it needs telling separately
+      var cm = name === "light" ? "default" : "material-darker";
+      [mirror, mine].forEach(function (ed) {
+        if (ed) { ed.setOption("theme", cm); ed.refresh(); }
+      });
+      glyph.textContent = name === "light" ? "☾" : "☀";
+      btn.title = name === "light"
+        ? "Switch to dark (easier on the eyes up close)"
+        : "Switch to light (easier to read on a projector)";
+      btn.setAttribute("aria-label", btn.title);
+      if (remember) {
+        try { localStorage.setItem(THEME_KEY, name); } catch (e) { /* blocked */ }
+      }
+    }
+
+    apply(current(), false);
+    btn.addEventListener("click", function () {
+      apply(current() === "light" ? "dark" : "light", true);
+    });
+
+    // Follow the computer's setting as it changes, until a choice is made.
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: light)");
+      var onSystemChange = function () {
+        var saved = null;
+        try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* blocked */ }
+        if (saved !== "light" && saved !== "dark") {
+          apply(mq.matches ? "light" : "dark", false);
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener("change", onSystemChange);
+      else if (mq.addListener) mq.addListener(onSystemChange);
+    }
+  }
 
   // ----------------------------------------------------------- host's page
 

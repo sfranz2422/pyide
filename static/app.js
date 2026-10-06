@@ -13,13 +13,7 @@
   var modeTag = $("mode");
   var stage = $("stage");
   var canvas = $("canvas");
-  var spritesToggle = $("sprites-toggle");
   var authorField = $("author");
-  var panel = $("sprites");
-  var spriteGrid = $("sprite-grid");
-  var dungeonGrid = $("dungeon-grid");
-  var atlasList = $("atlas-list");
-  var soundList = $("sound-list");
 
   // ------------------------------------------------------------- tab stops
   // Shared with the live-lesson editor, so it lives in tabstops.js.
@@ -486,6 +480,12 @@
     return window.PyIDEGame.looksLikeGame(source) ? "game" : "console";
   }
 
+  // Before paintMode, which runs straight away and shows or hides its button.
+  var spritePanel = window.PyIDESprites.attachPanel({
+    insert: insertAtCursor,
+    relayout: relayout
+  });
+
   function paintMode(mode) {
     modeTag.textContent = mode === "game" ? "Game" : "Console";
     modeTag.className = "mode mode-" + mode;
@@ -498,11 +498,10 @@
     // So is the engine's documentation: in console mode it would be a link
     // to the wrong manual.
     var isGame = mode === "game";
-    spritesToggle.hidden = !isGame;
+    spritePanel.showFor(isGame);
     if (runTabBtn) runTabBtn.hidden = !isGame;
     var docs = $("kaypy-docs");
     if (docs) docs.hidden = !isGame;
-    if (!isGame) closeSprites();
     relayout();
   }
 
@@ -915,8 +914,8 @@
   bindCanvas(canvas);
 
   // --------------------------------------------------------- sprite panel
-  var spritesFetched = false;
-
+  // The panel itself is shared with the live-lesson page, so it lives in
+  // sprites.js and is attached above paintMode, which shows its button.
   function insertAtCursor(text) {
     if (window.PYIDE.readonly) return;
     /* Sprites belong in the program, not in a data file. Same distinction as
@@ -927,173 +926,6 @@
     editor.focus();
   }
 
-  /* How tall a thumbnail may be, and how wide before it is shrunk to fit a
-     third of a 268px panel. */
-  var THUMB_H = 44, THUMB_W = 60;
-
-  /* A cell showing one sprite. `frames` is how many frames sit side by side in
-     the file, so the cell can show just the first one. */
-  function spriteCell(name, dir, w, h, frames, note) {
-    var cell = document.createElement("button");
-    cell.className = "sprite";
-    cell.type = "button";
-    cell.dataset.name = name;
-    cell.title = name + " — " + w + "×" + h +
-      (note ? " — " + note : "") + " — click to insert";
-
-    var scale = Math.min(THUMB_H / h, THUMB_W / w, 3);
-    var box = document.createElement("span");
-    box.className = "sprite-img";
-
-    var window_ = document.createElement("span");
-    window_.className = "sprite-frame";
-    window_.style.width = Math.round(w * scale) + "px";
-    window_.style.height = Math.round(h * scale) + "px";
-
-    var img = document.createElement("img");
-    img.src = "/static/assets/" + dir + "/" + name + ".png";
-    img.alt = "";
-    img.loading = "lazy";
-    img.style.width = Math.round(w * scale) * frames + "px";
-
-    window_.appendChild(img);
-    box.appendChild(window_);
-    cell.appendChild(box);
-
-    if (frames > 1) {
-      var mark = document.createElement("span");
-      mark.className = "sprite-anim";
-      mark.textContent = "▶";
-      cell.appendChild(mark);
-    }
-
-    var label = document.createElement("span");
-    label.className = "sprite-name";
-    label.textContent = name;
-    cell.appendChild(label);
-    return cell;
-  }
-
-  async function fillSpritePanel() {
-    if (spritesFetched) return;
-    spritesFetched = true;
-    var manifest;
-    try {
-      manifest = await fetch("/static/assets/manifest.json").then(function (r) { return r.json(); });
-    } catch (e) {
-      spriteGrid.textContent = "Could not load the sprite list.";
-      return;
-    }
-
-    /* Both packs are drawn the same way. The only difference is the folder the
-       pictures live in, and that the dungeon pack has animated entries. */
-    function addPack(entries, dir, grid) {
-      entries.forEach(function (entry) {
-        var frames = entry.frames || 1;
-        var names = entry.anims ? Object.keys(entry.anims) : [];
-        var cell = spriteCell(entry.name, dir, entry.w, entry.h, frames,
-                              names.join(", "));
-        cell.addEventListener("click", function () {
-          insertAtCursor(window.PyIDESprites.insertFor(entry, dir));
-        });
-        grid.appendChild(cell);
-      });
-    }
-
-    spriteGrid.textContent = "";
-    addPack(manifest.images || [], "images", spriteGrid);
-    addPack(manifest.dungeon || [], "dungeon", dungeonGrid);
-    $("dungeon-section").hidden = !dungeonGrid.children.length;
-
-    /* The atlas: one image holding many sprites, cut out by coordinates. The
-       dungeon pack above is this same artwork already cut up — quicker to use,
-       but it hides where sprites come from, which is the thing the atlas
-       lesson is for. So both are here. */
-    (manifest.atlases || []).forEach(function (atlas) {
-      var card = document.createElement("button");
-      card.className = "atlas-card";
-      card.type = "button";
-      card.dataset.name = atlas.name + " atlas spritesheet";
-      var regions = Object.keys(atlas.regions);
-      card.title = atlas.file + " — " + atlas.w + "×" + atlas.h + " — " +
-                   regions.join(", ") + " — click to insert";
-      card.innerHTML =
-        '<img src="/static/assets/' + atlas.file + '" alt="" loading="lazy">' +
-        '<span class="sprite-name">' + atlas.file + "</span>" +
-        '<p class="atlas-note">' + regions.length +
-        " regions cut out by coordinates: " + regions.join(", ") + "</p>";
-      card.addEventListener("click", function () {
-        insertAtCursor(window.PyIDESprites.insertAtlas(atlas));
-      });
-      atlasList.appendChild(card);
-    });
-    $("atlas-section").hidden = !atlasList.children.length;
-
-    var sounds = manifest.sounds || [];
-    if (!sounds.length) {
-      $("sound-section").hidden = true;
-    } else {
-      soundList.textContent = "";
-      sounds.forEach(function (file) {
-        var name = file.replace(/\.[^.]+$/, "");
-        var b = document.createElement("button");
-        b.className = "chip";
-        b.type = "button";
-        b.textContent = name;
-        b.title = 'Insert loadSound("' + name + '", ...) and play("' + name + '")';
-        b.addEventListener("click", function () {
-          insertAtCursor(
-            'loadSound("' + name + '", "sounds/' + file + '")\n' +
-            'play("' + name + '")');
-        });
-        soundList.appendChild(b);
-      });
-    }
-  }
-
-  function closeSprites() {
-    panel.setAttribute("hidden", "");
-    spritesToggle.setAttribute("aria-expanded", "false");
-    relayout();
-  }
-
-  function openSprites() {
-    panel.removeAttribute("hidden");
-    spritesToggle.setAttribute("aria-expanded", "true");
-    fillSpritePanel();
-    relayout();
-  }
-
-  spritesToggle.addEventListener("click", function () {
-    if (panel.hasAttribute("hidden")) openSprites();
-    else closeSprites();
-  });
-
-  $("sprite-search").addEventListener("input", function (e) {
-    var q = e.target.value.trim().toLowerCase();
-    var total = 0;
-
-    /* Each pack is filtered on its own so an empty one can take its heading
-       with it: searching "elf" should not leave a "Kaplay pack" label sitting
-       above nothing. */
-    [[spriteGrid, "images-section"], [dungeonGrid, "dungeon-section"],
-     [atlasList, "atlas-section"]]
-      .forEach(function (pair) {
-        var shown = 0;
-        Array.prototype.forEach.call(pair[0].children, function (cell) {
-          if (!cell.dataset.name) return;      // the "Loading…" placeholder
-          var hit = !q || cell.dataset.name.indexOf(q) >= 0;
-          cell.hidden = !hit;
-          if (hit) shown++;
-        });
-        $(pair[1]).hidden = pair[0].children.length > 0 && shown === 0;
-        total += shown;
-      });
-
-    $("sprite-empty").hidden = total > 0;
-  });
-
-  $("sprites-close").addEventListener("click", closeSprites);
 
   // ----------------------------------------------------- saving and turn-in
   /* Dormant unless somebody is signed in and this is a saved project. */

@@ -226,6 +226,17 @@ page = stranger.get("/live/%s" % CODE).get_data(as_text=True)
 check("a student who joins late is handed it in the page",
       '"scores = [3, 1, 4]"' in page and "snippetSeq: 4000" in page)
 
+# The editor's Sprites and light/dark buttons, on the student's page too. A
+# kaypy lesson without Sprites left the class typing file names by hand, and
+# a room projecting in light had no way to put a laptop in it.
+check("a student's lesson page has the Sprites button and its panel",
+      'id="sprites-toggle"' in page and 'id="sprites"' in page
+      and "sprites.js" in page
+      and "attachPanel(" in open(os.path.join(PYIDE, "static", "live.js")).read())
+check("  and the light/dark button",
+      'id="theme"' in page
+      and "themeSwitch();" in open(os.path.join(PYIDE, "static", "live.js")).read())
+
 r = other.post("/api/live/%s/send" % CODE, json={"snippet": "x", "seq": 9999})
 check("another teacher cannot send to this class", r.status_code == 403,
       r.status_code)
@@ -1357,11 +1368,27 @@ def fn_body(src, name):
     return ""
 
 insert_fn = fn_body(live_code, "insertSnippet")
-outside = live_code.replace(insert_fn, "") if insert_fn else live_code
+# The Sprites panel is the one other writer, and it carries nothing from the
+# network — the text is sprites.js's load line for a picture the student
+# clicked. It is allowed by name, and pinned below to the panel alone, so it
+# cannot become a second road for the teacher's code.
+sprite_fn = fn_body(live_code, "insertSprite")
+outside = live_code
+for f in (insert_fn, sprite_fn):
+    if f:
+        outside = outside.replace(f, "")
 writes = re.findall(r"mine\.(replaceRange|replaceSelection)\(", outside)
 check("the snippet is written into their editor only by insertSnippet",
       bool(insert_fn) and not writes,
       "other writes: %s" % writes)
+sprite_uses = [m.start() for m in re.finditer(r"\binsertSprite\b", live_code)
+               if not live_code[:m.start()].endswith("function ")]
+check("  and the sprite insert is handed to the Sprites panel and nothing else",
+      bool(sprite_fn) and len(sprite_uses) == 1
+      and re.search(r"attachPanel\(\{\s*insert: insertSprite,", live_code)
+      and "replaceSelection(text" in sprite_fn
+      and "L." not in sprite_fn,
+      "%d use(s)" % len(sprite_uses))
 callers = [m.start() for m in re.finditer(r"insertSnippet\(", live_code)]
 calls = [c for c in callers if not live_code[:c].endswith("function ")]
 click = live_code.find('$("snippet-insert").addEventListener("click"')
