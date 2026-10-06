@@ -1105,7 +1105,7 @@
       return;
     }
     clearOutput();
-    write("Game running. Click the picture first so the keys reach it.\n", "dim");
+    write("Game running. Click the picture to play, and the editor to type.\n", "dim");
     stage.hidden = false;
     /* The same class the editor sets. It is what turns the output pane into
        a log strip under the picture instead of letting it fight the canvas

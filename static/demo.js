@@ -166,6 +166,8 @@
       status("Ready. Press Run to see what this program does.");
       runBtn.disabled = false;
       runLabel.textContent = "Run";
+      // Opened from the editor's New tab button to play, so play.
+      if (PLAYING) run();
     } catch (e) {
       status("Python failed to load. Check your connection and refresh.");
       write(String(e) + "\n", "err");
@@ -178,7 +180,26 @@
     });
   }
 
+  /* /play: a game handed over by the editor's "New tab" button, through
+     this browser's storage (see runInNewTab in app.js). Read afresh on every
+     Run rather than kept, so pressing New tab again after an edit — which
+     reloads this tab — and pressing Run here both play the latest code. */
+  var PLAYING = !!(window.PYIDE_DEMO && window.PYIDE_DEMO.play);
+
+  function handedOver() {
+    var raw = null;
+    try { raw = localStorage.getItem("pyide-play"); } catch (e) { /* blocked */ }
+    var data = null;
+    try { data = JSON.parse(raw || "null"); } catch (e) { /* not ours */ }
+    if (!data || typeof data.code !== "string") {
+      throw new Error("Nothing to play here. Press \u2197 New tab in the editor.");
+    }
+    if (data.title) document.title = data.title + " \u2014 PyIDE";
+    return { code: data.code, files: data.files || {} };
+  }
+
   async function loadProject() {
+    if (PLAYING) return handedOver();
     if (project) return project;
     var res = await fetch(window.PYIDE_DEMO.sourceUrl, { cache: "no-store" });
     if (!res.ok) throw new Error("This demo link is no longer available.");
@@ -281,11 +302,13 @@
     await repaint();
 
     try {
-      /* A new canvas each time: Kaplay loses the WebGL context when it quits,
-         and a canvas that has lost one can never render again. */
+      /* A new canvas each time, handed to SDL by ensureReady. The source
+         goes along, as in the editor: it is how game.js knows
+         which sprites and sounds this program names, and so which to fetch.
+         Left out, a demo's pictures and sounds were simply never there. */
       canvas = await window.PyIDEGame.ensureReady(pyodide, function (msg) {
         status(msg);
-      });
+      }, loaded.code);
       bindCanvas(canvas);
     } catch (e) {
       status("");
@@ -300,21 +323,38 @@
     canvas.focus();
 
     pushFilesToPython(loaded.files);
-    /* Kaplay owns the frame loop, so the program returns almost at once and
-       the game carries on without it — the running flag therefore stays set
-       until Stop, exactly as in the editor. quote_source=False keeps a demo
-       link's promise: an error says where it happened and never shows the
-       line it happened on. */
+    /* TWO STEPS, AS IN THE EDITOR (see runGame in app.js). The first runs
+       the program top to bottom, which sets the game up; the second awaits
+       kaypy's frame loop, which is what makes anything move.
+
+       This page only ever did the first. It was written in the Kaplay days,
+       when JavaScript owned the loop and the game carried on by itself; on
+       kaypy that left a demo that drew one frame and stopped — and the
+       symptom was "the keys do nothing", because nothing was running to
+       read them. quote_source=False keeps a demo link's promise: an error
+       says where it happened and never shows the line it happened on. */
+    var token = ++runToken;
     try {
-      await pyodide.runPythonAsync(
+      var started = await pyodide.runPythonAsync(
         "_pyide_run_game(" + JSON.stringify(loaded.code) + ", quote_source=False)"
       );
+      if (started === "ok") {
+        await pyodide.runPythonAsync("await _pyide_drive_game()");
+      }
     } catch (e) {
       write(String(e) + "\n", "err");
-      window.PyIDEGame.stop(pyodide);
-      setBusy(false, "game");
+    } finally {
+      // Only if this is still the run on screen: Stop puts the buttons back
+      // itself, and a later Run must not be undone by this one finishing.
+      if (token === runToken && running) {
+        window.PyIDEGame.stop(pyodide);
+        setBusy(false, "game");
+      }
     }
   }
+
+  /* Bumped by every game Run; see runGame's finally. */
+  var runToken = 0;
 
   function stopRun() {
     if (!running) return;

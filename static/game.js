@@ -114,11 +114,53 @@ window.PyIDEGame = (function () {
     nativeAdd = document.addEventListener.bind(document);
     nativeRemove = document.removeEventListener.bind(document);
     document.addEventListener = function (type, fn, opts) {
-      if (gameWindowOpen && /^key(down|up|press)$/.test(type)) {
-        sdlKeyListeners.push([type, fn, opts]);
+      if (gameWindowOpen && /^key(down|up|press)$/.test(type)
+          && typeof fn === "function") {
+        var mine = notWhileTyping(type, fn);
+        sdlKeyListeners.push([type, mine, opts]);
+        return nativeAdd(type, mine, opts);
       }
       return nativeAdd(type, fn, opts);
     };
+    // So a listener SDL takes off by the function it put on comes off.
+    document.removeEventListener = function (type, fn, opts) {
+      return nativeRemove(type, (guarded && guarded.get(fn)) || fn, opts);
+    };
+  }
+
+  /* TYPING WHILE A GAME RUNS.
+   *
+   * SDL listens on the whole document, so while a game was running every key
+   * went to it — including the ones a student typed into the editor, which
+   * SDL swallowed. Fixing a typo meant pressing Stop first, and then Run
+   * again to see whether it worked.
+   *
+   * So SDL's keydown and keypress are not given a key aimed at somewhere you
+   * type: the editor, the console's input line, any text box. Click the
+   * picture to play, click the editor to type; nothing needs stopping. keyup
+   * always goes through, so a key held in the game and let go after clicking
+   * away is not left held down in it for ever.
+   *
+   * One guard per listener, kept in a WeakMap: SDL registering the same
+   * function twice must get the same guard back, or the DOM would no longer
+   * see a duplicate and every key would reach the game twice. */
+  var guarded = typeof WeakMap === "function" ? new WeakMap() : null;
+
+  function typingInto(e) {
+    var t = e && e.target;
+    if (!t || typeof t.closest !== "function") return false;
+    return !!t.closest("textarea, input, select, .CodeMirror, [contenteditable='true'], [contenteditable='']");
+  }
+
+  function notWhileTyping(type, fn) {
+    if (type === "keyup") return fn;
+    if (guarded && guarded.has(fn)) return guarded.get(fn);
+    var guard = function (e) {
+      if (typingInto(e)) return undefined;
+      return fn.apply(this, arguments);
+    };
+    if (guarded) guarded.set(fn, guard);
+    return guard;
   }
 
   /* Hand the keyboard to the game, or back to the editor.

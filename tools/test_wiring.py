@@ -234,4 +234,59 @@ check("  and the addons load before %s builds the editor" % EDITOR_SCRIPT,
 check("  and the search bar is given a usable width",
       ".CodeMirror-dialog input" in style_text)
 
+
+# ------------------------------------------------- every page that runs a game
+# A kaypy game runs in two steps: _pyide_run_game sets it up, and awaiting
+# _pyide_drive_game is the frame loop. The demo page did only the first —
+# written for Kaplay, where JavaScript owned the loop — so a demo link drew one
+# frame and then nothing moved, which read as "the keys do nothing". And its
+# ensureReady was not given the program, so the sprites it named never came.
+print("\nEvery page that runs a game")
+for name in ("app.js", "live.js", "demo.js"):
+    src = (ROOT / "static" / name).read_text()
+    if "_pyide_run_game(" not in src:
+        continue
+    check("%s drives the frame loop, not only the setup" % name,
+          "await _pyide_drive_game()" in src)
+    calls = re.findall(r"ensureReady\(pyodide,[\s\S]*?\}(\s*,\s*[\w.]+)?\s*\)", src)
+    check("  and hands ensureReady the program, for its sprites",
+          bool(calls) and all(c.strip() for c in calls), "%d call(s)" % len(calls))
+
+# --------------------------------------------------------- a game in a new tab
+print("\nA game in a new tab")
+index_html = (ROOT / "templates" / "index.html").read_text()
+demo_html = (ROOT / "templates" / "demo.html").read_text()
+app_js = (ROOT / "static" / "app.js").read_text()
+demo_js = (ROOT / "static" / "demo.js").read_text()
+app_py = (ROOT / "app.py").read_text()
+check("the editor has the New tab button", 'id="run-tab"' in index_html)
+check("  shown only in game mode",
+      "runTabBtn.hidden = !isGame" in app_js and 'id="run-tab" class="btn" type="button" hidden' in index_html)
+check("  which opens /play in one named tab",
+      'window.open("/play", "pyide-play")' in app_js)
+_key = re.search(r'var PLAY_KEY = "([^"]+)"', app_js)
+check("  and hands over the project under the key /play reads",
+      _key is not None and 'localStorage.getItem("%s")' % _key.group(1) in demo_js,
+      _key.group(1) if _key else "no PLAY_KEY")
+check("/play is the demo page's player, with nothing on the server",
+      re.search(r'@app\.get\("/play"\)\s*def play\(\):[\s\S]{0,600}?render_template\("demo\.html",[^)]*play=True\)',
+                app_py) is not None)
+check("  and the page knows it is playing",
+      "{% if play %}" in demo_html and "play: true" in demo_html)
+check("  and starts the game itself once Python is ready",
+      re.search(r'runLabel\.textContent = "Run";\s*//[^\n]*\n\s*if \(PLAYING\) run\(\);', demo_js) is not None)
+check("  reading the handover afresh each Run, never the cached demo",
+      re.search(r"async function loadProject\(\) \{\s*if \(PLAYING\) return handedOver\(\);", demo_js)
+      is not None)
+
+# Both pages rendered for real: a url_for with no slug is a 500, not a typo.
+import os, tempfile                                           # noqa: E402
+os.environ.setdefault("DATABASE_URL", "sqlite:///" + os.path.join(tempfile.mkdtemp(), "w.db"))
+os.environ.setdefault("SECRET_KEY", "k" * 32)
+sys.path.insert(0, str(ROOT))
+import app as _P                                              # noqa: E402
+_c = _P.app.test_client()
+_r = _c.get("/play")
+check("/play renders", _r.status_code == 200 and b"play: true" in _r.data, _r.status_code)
+
 done()

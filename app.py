@@ -526,6 +526,18 @@ def view_demo(slug):
         db.close()
 
 
+@app.get("/play")
+def play():
+    """A kaypy game from the editor, in a tab of its own.
+
+    The demo page's player, with nothing behind it on the server: the editor
+    puts the project in this browser's storage and opens this page, which
+    reads it from there (see runInNewTab in app.js). So there is no slug, no
+    row, and nothing here for anyone else to open.
+    """
+    return render_template("demo.html", title="Game", slug=None, play=True)
+
+
 @app.get("/d/<slug>/source")
 def demo_source(slug):
     """What the demo page fetches when Run is pressed."""

@@ -228,6 +228,23 @@ if ke._engine is not None:
 
 shutil.rmtree(work, ignore_errors=True)
 
+# ------------------------------------------- Run, Stop, and the keyboard
+# tools/test_run_stop_cycle.mjs runs the real game.js against a stand-in
+# document: Stop gives the keyboard back, and while a game runs the editor
+# can still be typed in. It was a file nothing ran — the test loop only runs
+# test_*.py — so it is run from here, and its failures are this suite's.
+import subprocess                                             # noqa: E402
+if shutil.which("node"):
+    cyc = subprocess.run(["node", str(STATIC.parent / "tools" / "test_run_stop_cycle.mjs")],
+                         capture_output=True, text=True)
+    failed_lines = [l.strip() for l in cyc.stdout.splitlines() if "FAIL" in l]
+    check("game.js's Run/Stop and keyboard checks pass (test_run_stop_cycle.mjs)",
+          cyc.returncode == 0,
+          "; ".join(failed_lines)[:300] or cyc.stderr[-300:])
+else:
+    check("node is available to run test_run_stop_cycle.mjs", False,
+          "brew install node")
+
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"
       % ("SOME FAILED" if bad else "ALL PASSED", len(results), bad))

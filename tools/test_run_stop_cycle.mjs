@@ -222,6 +222,49 @@ G.stop(pyodide);
 check("a shortcut added after a Run is not eaten by Stop",
       docListeners.some((l) => l.fn === lateShortcut));
 
+// --------------------------------------------- typing while a game runs
+// SDL listens on the whole document, so every key went to the game while it
+// ran — the editor could not be typed in without pressing Stop first. Keys
+// aimed at somewhere you type are now kept from SDL's keydown and keypress;
+// keyup always goes through, so a key let go after clicking away is not left
+// held down in the game.
+const typedAt = (sel) => ({ closest: (q) => (q.split(/,\s*/).includes(sel) ? {} : null) });
+const onCanvas = { closest: () => null };
+await G.ensureReady(pyodide, null, SOURCE);
+const heard = [];
+const sdlFns = ["keydown", "keyup", "keypress"].map((type) => {
+  const fn = (e) => heard.push(type + "@" + e.where);
+  document.addEventListener(type, fn);
+  return fn;
+});
+const fire = (type, target, where) => keyListeners()
+  .filter((l) => l.type === type && !(l.fn === ctrlEnter || l.fn === escape || l.fn === lateShortcut))
+  .forEach((l) => l.fn({ type, target, where }));
+for (const type of ["keydown", "keypress", "keyup"]) {
+  fire(type, typedAt(".CodeMirror"), "editor");
+  fire(type, typedAt("input"), "box");
+  fire(type, onCanvas, "canvas");
+}
+check("keys typed into the editor do not reach the game",
+      !heard.includes("keydown@editor") && !heard.includes("keypress@editor"),
+      heard.join(" "));
+check("  nor keys typed into a text box",
+      !heard.includes("keydown@box") && !heard.includes("keypress@box"));
+check("  but keys on the picture do", heard.includes("keydown@canvas")
+      && heard.includes("keypress@canvas"));
+check("  and letting go of a key always reaches it",
+      heard.includes("keyup@editor") && heard.includes("keyup@canvas"));
+// SDL putting the same function on twice must still be one listener, as the
+// DOM would have it — or every key would reach the game twice.
+const before = keyListeners().length;
+document.addEventListener("keydown", sdlFns[0]);
+check("  and the same listener added twice is still one",
+      keyListeners().length === before, keyListeners().length + " vs " + before);
+document.removeEventListener("keydown", sdlFns[0]);
+check("  and comes off by the function SDL put on",
+      keyListeners().length === before - 1);
+G.stop(pyodide);
+
 console.log();
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `${failed} of ${results.length} FAILED`

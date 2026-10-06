@@ -450,6 +450,38 @@
    * Now an import of kaypy means a game and anything else means console, so
    * what Run will do is always a fact about the code on screen.
    */
+  /* ------------------------------------------------- the game in a new tab
+   *
+   * The project goes to /play through this browser's storage, not the
+   * server: nothing is saved or shared by it, and a signed-out student can
+   * use it as freely as Run. /play is the demo page's player (demo.js),
+   * which reads it from there and starts at once.
+   *
+   * One named tab, reused: pressing it again after an edit reloads that tab
+   * with the new code instead of opening another one per press. A game
+   * already running here is stopped first — two copies of one game running
+   * at once is two soundtracks and a page that is twice as slow. */
+  var PLAY_KEY = "pyide-play";
+  var runTabBtn = $("run-tab");
+
+  function runInNewTab() {
+    if (running) stopRun();
+    try {
+      localStorage.setItem(PLAY_KEY, JSON.stringify({
+        code: mainSource(),
+        files: dataFiles(),
+        title: ($("title") && $("title").value) || "Game"
+      }));
+    } catch (e) {
+      window.alert("This browser is blocking site storage, so the game "
+                   + "cannot be handed to a new tab. Run it here instead.");
+      return;
+    }
+    window.open("/play", "pyide-play");
+  }
+
+  if (runTabBtn) runTabBtn.addEventListener("click", runInNewTab);
+
   function currentMode(source) {
     return window.PyIDEGame.looksLikeGame(source) ? "game" : "console";
   }
@@ -467,6 +499,7 @@
     // to the wrong manual.
     var isGame = mode === "game";
     spritesToggle.hidden = !isGame;
+    if (runTabBtn) runTabBtn.hidden = !isGame;
     var docs = $("kaypy-docs");
     if (docs) docs.hidden = !isGame;
     if (!isGame) closeSprites();
@@ -777,7 +810,7 @@
     }
 
     clearOutput();
-    write("Game running. Click the picture first so the keys reach it.\n", "dim");
+    write("Game running. Click the picture to play, and the editor to type.\n", "dim");
     stage.hidden = false;
     relayout();
     canvas.focus();
