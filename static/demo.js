@@ -257,6 +257,7 @@
 
     var isGame = window.PyIDEGame.looksLikeGame(loaded.code);
     document.body.classList.toggle("is-game", isGame);
+    if (fullBtn) fullBtn.hidden = !isGame || !stage.requestFullscreen;
     return isGame ? runGame(loaded) : runConsole(loaded);
   }
 
@@ -320,6 +321,7 @@
     clearOutput();
     write("Game running. Click the picture first so the keys reach it.\n", "dim");
     stage.hidden = false;
+    fitCanvas();
     canvas.focus();
 
     pushFilesToPython(loaded.files);
@@ -372,9 +374,55 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
 
+  /* ------------------------------------------------- the game fills the page
+   *
+   * The canvas is drawn at the largest size that fits the stage, keeping the
+   * game's own shape — scaled up on a big screen, not only down, which CSS's
+   * max-width cannot do on its own. The element's box is set, not the picture
+   * inside it, so the box is always exactly the drawn game: SDL maps the mouse
+   * through that box, and letterboxing inside it (object-fit) would put every
+   * click in the wrong place.
+   *
+   * Refitted when the window changes, when full screen comes or goes, and
+   * when the game sets its size — kaypy(width=, height=) arrives after the
+   * canvas exists, as new width and height attributes. */
+  var fullBtn = $("fullscreen");
+  var sizeWatch = null;
+
+  function fitCanvas() {
+    if (!canvas || stage.hidden || !document.body.classList.contains("is-game")) return;
+    var frame = canvas.parentNode;
+    if (!frame) return;
+    var cs = getComputedStyle(frame);
+    var w = frame.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var h = frame.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var ratio = canvas.width / canvas.height;
+    if (!(w > 0 && h > 0 && ratio > 0)) return;
+    var cw = Math.floor(Math.min(w, h * ratio));
+    canvas.style.width = cw + "px";
+    canvas.style.height = Math.floor(cw / ratio) + "px";
+  }
+
+  window.addEventListener("resize", fitCanvas);
+  document.addEventListener("fullscreenchange", function () {
+    fitCanvas();
+    if (canvas) canvas.focus();     // the keys go to the game, full screen or not
+  });
+  if (fullBtn) {
+    fullBtn.addEventListener("click", function () {
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      stage.requestFullscreen().catch(function () { /* refused: stays in the tab */ });
+    });
+  }
+
   /* Re-bound after every canvas swap — the listeners belong to the element,
      and the element is replaced for each new game. */
   function bindCanvas(el) {
+    if (sizeWatch) sizeWatch.disconnect();
+    if (typeof MutationObserver === "function") {
+      sizeWatch = new MutationObserver(fitCanvas);
+      sizeWatch.observe(el, { attributes: true, attributeFilter: ["width", "height"] });
+    }
     el.addEventListener("keydown", function (e) {
       if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) >= 0) {
         e.preventDefault();

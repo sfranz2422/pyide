@@ -279,6 +279,57 @@ check("  reading the handover afresh each Run, never the cached demo",
       re.search(r"async function loadProject\(\) \{\s*if \(PLAYING\) return handedOver\(\);", demo_js)
       is not None)
 
+# ------------------------------------------- the game fills a demo or /play
+# The editor's game-mode cap (the canvas at 40vh, the output sharing the rest)
+# reached the demo page too, so /play and every demo link gave the game the
+# top half of the tab and an empty output the bottom half.
+print("\nThe game fills the demo page")
+style_now = (ROOT / "static" / "style.css").read_text()
+def _rule(sel):
+    m = re.search(r"(?m)^%s\s*\{([^}]*)\}" % re.escape(sel), style_now)
+    return m.group(1) if m else ""
+check("on a demo page the editor's height cap is lifted",
+      "max-height: none" in _rule("body.is-demo.is-game .pane-right #canvas"))
+check("  the stage takes the column and the output is a strip",
+      re.search(r"flex:\s*1 1 0", _rule("body.is-demo.is-game .stage")) is not None
+      and re.search(r"flex:\s*0 0 \d+px", _rule("body.is-demo.is-game .pane-right #output-view")) is not None)
+check("there is a Full screen button, for games only",
+      'id="fullscreen" class="btn" type="button" hidden' in demo_html
+      and "fullBtn.hidden = !isGame" in demo_js)
+check("  and it puts the stage, not the page, full screen",
+      "stage.requestFullscreen()" in demo_js)
+check("the canvas is refitted on resize, full screen, and a new game size",
+      'window.addEventListener("resize", fitCanvas)' in demo_js
+      and re.search(r'addEventListener\("fullscreenchange", function \(\) \{\s*fitCanvas\(\);', demo_js)
+      and 'attributeFilter: ["width", "height"]' in demo_js
+      and re.search(r"stage\.hidden = false;\s*fitCanvas\(\);", demo_js) is not None)
+
+import shutil, subprocess, json                               # noqa: E402
+_fit = re.search(r"  function fitCanvas\(\) \{[\s\S]*?\n  \}\n", demo_js)
+if shutil.which("node") and _fit:
+    harness = """
+var stage = {hidden: false}, document = {body: {classList: {contains: function () { return true; }}}};
+function getComputedStyle() { return {paddingLeft: "10", paddingRight: "10", paddingTop: "10", paddingBottom: "10"}; }
+var out = [];
+[[1020, 520, 600, 400], [620, 1020, 600, 400], [1940, 1100, 800, 600]].forEach(function (c) {
+  var canvas = {width: c[2], height: c[3], style: {}, parentNode: {clientWidth: c[0], clientHeight: c[1]}};
+  this.canvas = canvas;
+  (function () { %s; fitCanvas(); }).call(this);
+  out.push([canvas.style.width, canvas.style.height]);
+});
+console.log(JSON.stringify(out));
+""".replace("this.canvas = canvas;", "").replace("(function () { %s; fitCanvas(); }).call(this);", "%s; fitCanvas();")
+    res = subprocess.run(["node", "-e", harness % _fit.group(0)], capture_output=True, text=True)
+    got = json.loads(res.stdout) if res.returncode == 0 else res.stderr[-300:]
+    check("fitCanvas fills a wide space by height, keeping the game's shape",
+          isinstance(got, list) and got[0] == ["750px", "500px"], got)
+    check("  a tall space by width", isinstance(got, list) and got[1] == ["600px", "400px"], got)
+    check("  and scales UP on a big screen, not only down",
+          isinstance(got, list) and got[2] == ["1440px", "1080px"], got)
+else:
+    check("node is available to run fitCanvas", bool(_fit) and False,
+          "brew install node" if _fit else "fitCanvas moved")
+
 # Both pages rendered for real: a url_for with no slug is a 500, not a typo.
 import os, tempfile                                           # noqa: E402
 os.environ.setdefault("DATABASE_URL", "sqlite:///" + os.path.join(tempfile.mkdtemp(), "w.db"))

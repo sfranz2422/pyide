@@ -540,6 +540,25 @@ body.is-game .pane-right .output { flex: 1 1 auto; min-height: 90px; }
 }
 .demo-main .pane-right { flex: 1 1 100%; }
 
+/* A GAME IS THE PAGE. On a demo link, and on /play (the editor's New tab),
+ * there is no code and no notes to share the column with, so the game takes
+ * all of it and the output is a strip underneath. demo.js's fitCanvas sizes
+ * the canvas to the largest that fits — up as well as down, which CSS's
+ * max-width alone cannot do — keeping the game's own shape. These rules are
+ * also what keeps the editor's 40vh cap (below) off this page: with it, the
+ * game had the top half of the tab and an empty output the bottom half. */
+body.is-demo.is-game .stage { flex: 1 1 0; min-height: 0; }
+body.is-demo.is-game .stage-frame { flex: 1 1 0; min-height: 0; overflow: hidden; }
+body.is-demo.is-game .pane-right #canvas { max-height: none; }
+body.is-demo.is-game .pane-right #output-view { flex: 0 0 110px; min-height: 0; }
+
+/* Full screen is the stage alone: no heading, no checkerboard, black round
+ * the game. */
+.stage:fullscreen { background: #000; border: 0; }
+.stage:fullscreen .pane-head { display: none; }
+.stage:fullscreen .stage-frame { padding: 0; background: #000; }
+.stage:fullscreen #canvas { border-radius: 0; box-shadow: none; outline: none; }
+
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a
    glaring rectangle in dark mode. Repaint it from the tokens. */

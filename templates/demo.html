@@ -39,6 +39,11 @@
       <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
     </button>
     <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    {#  Only for a game. The browser lets a page go full screen only from a
+        click on that page, so this cannot happen by itself when the editor's
+        New tab opens /play — it has to be a button here. Esc leaves. #}
+    <button id="fullscreen" class="btn" type="button" hidden
+            title="Fill the screen with the game. Esc to leave.">⛶ Full screen</button>
     <div class="stepper" role="group" aria-label="Output text size">
       <button id="font-down" class="step" title="Smaller text">−</button>
       <span id="font-size" class="step-value" aria-live="polite">14</span>
