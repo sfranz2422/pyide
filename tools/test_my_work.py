@@ -160,11 +160,15 @@ check("work turned in stays listed after the copy is deleted",
 home = stranger.get("/")
 check("the bare site is the class page, not the editor",
       home.status_code == 200
-      and "Course Topics" in home.get_data(as_text=True)
+      and "Mohawk Programming" in home.get_data(as_text=True)
       and not has_id(home.get_data(as_text=True), "save-project")
       and not has_id(home.get_data(as_text=True), "share"))
 check("  and it links to the editor at /new",
       'href="/new"' in home.get_data(as_text=True))
+check("  with a tab for each class it holds",
+      all('<label for="tab-%s">' % t in home.get_data(as_text=True)
+          and 'id="%s-topics"' % t in home.get_data(as_text=True)
+          for t in ("intro", "programming-1")))
 home.close()
 
 editor = student.get("/new").get_data(as_text=True)

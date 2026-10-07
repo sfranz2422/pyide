@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Intro to Programming</title>
+<title>Mohawk Programming</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Oswald:400,600,700|Open+Sans:400,600,700&display=swap">
 <style>
@@ -29,7 +29,7 @@
     overflow: hidden;
     background: #1f1f1f;
     color: #fff;
-    padding: 48px 16px 40px;
+    padding: 48px 16px 0;
   }
   /* the mascot from the calendar banner, faded into the dark on its left */
   header::before {
@@ -62,6 +62,36 @@
     margin-top: 14px;
   }
   header p { margin: 12px 0 0; font-size: 18px; opacity: 0.9; }
+
+  /* TABS. One radio button per class, at the top of the page; clicking a
+     tab's label checks its radio, and the CSS below shows that class's
+     topics. No script needed - the little one at the bottom only lets a
+     link like /#programming-1 open on that tab. A new class needs a radio,
+     a label, a section, and its id added to the two rules marked ADD. */
+  .tab-radio { position: absolute; opacity: 0; pointer-events: none; }
+  .tabs { display: flex; gap: 6px; margin-top: 28px; flex-wrap: wrap; }
+  .tabs label {
+    font-family: Oswald, sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    padding: 8px 20px;
+    border-radius: 6px 6px 0 0;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+  }
+  .tabs label:hover { background: rgba(255, 255, 255, 0.22); }
+  .class-topics { display: none; }
+  /* ADD: the selected tab looks like part of the page below it */
+  #tab-intro:checked ~ header label[for="tab-intro"],
+  #tab-programming-1:checked ~ header label[for="tab-programming-1"] {
+    background: var(--page);
+    color: var(--ink);
+  }
+  /* ADD: and its topics are the ones shown */
+  #tab-intro:checked ~ main #intro-topics,
+  #tab-programming-1:checked ~ main #programming-1-topics { display: block; }
+  .tab-radio:focus-visible ~ header .tabs { outline: 2px solid var(--red); outline-offset: 4px; }
 
   main.wrap {
     display: grid;
@@ -120,21 +150,30 @@
 </head>
 <body>
 
+<!-- one radio per tab; "checked" is the tab shown when the page opens -->
+<input class="tab-radio" type="radio" name="tab" id="tab-intro" checked>
+<input class="tab-radio" type="radio" name="tab" id="tab-programming-1">
+
 <header>
   <div class="wrap">
-    <h1>Intro to Programming</h1>
-    <p>Mr. Franz &bull; Mohawk</p>
+    <h1>Mohawk Programming</h1>
+    <p>Mr. Franz</p>
+    <nav class="tabs">
+      <label for="tab-intro">Intro to Programming</label>
+      <label for="tab-programming-1">Programming 1</label>
+    </nav>
   </div>
 </header>
 
 <main class="wrap">
 
-  <section class="card">
-    <h2>Course Topics</h2>
+  <div>
 
     <!--
       HOW TO ADD THINGS
       ─────────────────
+      Each class is its own <section> below. Find the right one, then:
+
       A link inside a topic is one line. The class picks the icon:
 
         <li class="notes"><a href="LINK">Notes: ...</a></li>             📄
@@ -156,17 +195,37 @@
       tab if you add  target="_blank"  inside the <a ...>.
     -->
 
-    <ul class="topics">
+    <!-- ════════════════════ INTRO TO PROGRAMMING ════════════════════ -->
+    <section class="card class-topics" id="intro-topics">
+      <h2>Intro to Programming</h2>
+      <ul class="topics">
 
-      <li>
-        <b>Topic 1: Getting Started</b>
-        <ul>
-          <li><a href="/new">Open PyIDE (the code editor)</a></li>
-        </ul>
-      </li>
+        <li>
+          <b>Topic 1: Getting Started</b>
+          <ul>
+            <li><a href="/new">Open PyIDE (the code editor)</a></li>
+          </ul>
+        </li>
 
-    </ul>
-  </section>
+      </ul>
+    </section>
+
+    <!-- ════════════════════ PROGRAMMING 1 ════════════════════ -->
+    <section class="card class-topics" id="programming-1-topics">
+      <h2>Programming 1</h2>
+      <ul class="topics">
+
+        <li>
+          <b>Topic 1: Getting Started</b>
+          <ul>
+            <li><a href="/new">Open PyIDE (the code editor)</a></li>
+          </ul>
+        </li>
+
+      </ul>
+    </section>
+
+  </div>
 
   <aside>
     <section class="card">
@@ -182,6 +241,24 @@
 </main>
 
 <footer>Mohawk Area School District</footer>
+
+<script>
+  // Only so a link can open on a tab (/#programming-1), and the address
+  // follows the tab you pick. The page works the same without it.
+  (function () {
+    function show() {
+      var r = document.getElementById("tab-" + location.hash.slice(1));
+      if (r) r.checked = true;
+    }
+    show();
+    window.addEventListener("hashchange", show);
+    document.querySelectorAll(".tab-radio").forEach(function (r) {
+      r.addEventListener("change", function () {
+        history.replaceState(null, "", "#" + r.id.slice(4));
+      });
+    });
+  })();
+</script>
 
 </body>
 </html>

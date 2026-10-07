@@ -426,7 +426,7 @@ def class_home():
     which still names the editor, so only bookmarks of the bare site moved.
     """
     return send_from_directory(
-        os.path.join(app.static_folder, "classes"), "intro-to-programming.html")
+        os.path.join(app.static_folder, "classes"), "programming.html")
 
 
 @app.get("/new")
