@@ -1,0 +1,1140 @@
+{
+ "functions": {
+  "Vec2": {
+   "doc": "",
+   "forms": [
+    [
+     "x=0.0",
+     "y=0.0"
+    ]
+   ]
+  },
+  "add": {
+   "doc": "",
+   "forms": [
+    [
+     "components"
+    ]
+   ]
+  },
+  "addKaboom": {
+   "doc": "",
+   "forms": [
+    [
+     "position",
+     "scale=1.0"
+    ]
+   ]
+  },
+  "addLevel": {
+   "doc": "",
+   "forms": [
+    [
+     "layout",
+     "config"
+    ]
+   ]
+  },
+  "anchor": {
+   "doc": "",
+   "forms": [
+    [
+     "value"
+    ]
+   ]
+  },
+  "area": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "ask": {
+   "doc": "Pause the game and ask something.",
+   "forms": [
+    [
+     "question",
+     "choices=None",
+     "answer=None",
+     "placeholder=None",
+     "then=None"
+    ]
+   ]
+  },
+  "body": {
+   "doc": "",
+   "forms": [
+    [
+     "isStatic=False",
+     "mass=1",
+     "jumpForce=800"
+    ]
+   ]
+  },
+  "center": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "chance": {
+   "doc": "True that often.",
+   "forms": [
+    [
+     "probability"
+    ]
+   ]
+  },
+  "choose": {
+   "doc": "",
+   "forms": [
+    [
+     "seq"
+    ]
+   ]
+  },
+  "circle": {
+   "doc": "",
+   "forms": [
+    [
+     "radius"
+    ]
+   ]
+  },
+  "clamp": {
+   "doc": "Keep a number inside a range.",
+   "forms": [
+    [
+     "value",
+     "low",
+     "high"
+    ]
+   ]
+  },
+  "close": {
+   "doc": "Take the panel away and start the game again.",
+   "forms": [
+    []
+   ]
+  },
+  "color": {
+   "doc": "A colour, in any of the spellings rgb() accepts.",
+   "forms": [
+    [
+     "r=255",
+     "g=None",
+     "b=None"
+    ]
+   ]
+  },
+  "deg2rad": {
+   "doc": "",
+   "forms": [
+    [
+     "degrees"
+    ]
+   ]
+  },
+  "destroy": {
+   "doc": "Remove one object.",
+   "forms": [
+    [
+     "obj"
+    ]
+   ]
+  },
+  "destroyAll": {
+   "doc": "Remove every object carrying a tag.",
+   "forms": [
+    [
+     "tag"
+    ]
+   ]
+  },
+  "drawCircle": {
+   "doc": "A circle, centred on pos.",
+   "forms": [
+    [
+     "pos=None",
+     "radius=0",
+     "color=None",
+     "opacity=1.0",
+     "outline=0",
+     "fixed=False"
+    ]
+   ]
+  },
+  "drawLine": {
+   "doc": "A line from one point to another.",
+   "forms": [
+    [
+     "p1=None",
+     "p2=None",
+     "width=1",
+     "color=None",
+     "opacity=1.0",
+     "fixed=False"
+    ]
+   ]
+  },
+  "drawLines": {
+   "doc": "A run of connected lines.",
+   "forms": [
+    [
+     "points=None",
+     "width=1",
+     "color=None",
+     "opacity=1.0",
+     "close=False",
+     "fixed=False"
+    ]
+   ]
+  },
+  "drawRect": {
+   "doc": "A rectangle.",
+   "forms": [
+    [
+     "pos=None",
+     "width=0",
+     "height=0",
+     "color=None",
+     "opacity=1.0",
+     "anchor='topleft'",
+     "radius=0",
+     "outline=0",
+     "fixed=False"
+    ]
+   ]
+  },
+  "drawSprite": {
+   "doc": "One frame of a loaded sprite, without making an object for it.",
+   "forms": [
+    [
+     "sprite=''",
+     "pos=None",
+     "frame=0",
+     "width=None",
+     "height=None",
+     "opacity=1.0",
+     "anchor='topleft'",
+     "angle=0",
+     "fixed=False"
+    ]
+   ]
+  },
+  "drawText": {
+   "doc": "Some words.",
+   "forms": [
+    [
+     "text=''",
+     "pos=None",
+     "size=22",
+     "color=None",
+     "opacity=1.0",
+     "anchor='topleft'",
+     "fixed=False"
+    ]
+   ]
+  },
+  "dt": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "fixed": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "follow": {
+   "doc": "",
+   "forms": [
+    [
+     "obj",
+     "offset=None",
+     "speed=None"
+    ]
+   ]
+  },
+  "get": {
+   "doc": "",
+   "forms": [
+    [
+     "tag"
+    ]
+   ]
+  },
+  "getData": {
+   "doc": "What was remembered under that name, or default if nothing was.",
+   "forms": [
+    [
+     "key",
+     "default=None"
+    ]
+   ]
+  },
+  "go": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "*args"
+    ]
+   ]
+  },
+  "health": {
+   "doc": "",
+   "forms": [
+    [
+     "hp",
+     "maxHP=None"
+    ]
+   ]
+  },
+  "height": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "isKeyDown": {
+   "doc": "Is this key held right now?",
+   "forms": [
+    [
+     "key"
+    ]
+   ]
+  },
+  "isMouseDown": {
+   "doc": "Is that mouse button held down right now?",
+   "forms": [
+    [
+     "button=None"
+    ]
+   ]
+  },
+  "isMouseMoved": {
+   "doc": "Did the mouse move this frame?",
+   "forms": [
+    []
+   ]
+  },
+  "isMousePressed": {
+   "doc": "Did it go down this frame?",
+   "forms": [
+    [
+     "button=None"
+    ]
+   ]
+  },
+  "isMouseReleased": {
+   "doc": "Did it come up this frame?",
+   "forms": [
+    [
+     "button=None"
+    ]
+   ]
+  },
+  "isPaused": {
+   "doc": "Is the game frozen right now?",
+   "forms": [
+    []
+   ]
+  },
+  "isShowing": {
+   "doc": "Is a panel up right now?",
+   "forms": [
+    []
+   ]
+  },
+  "kaypy": {
+   "doc": "Starts the engine.",
+   "forms": [
+    [
+     "width=800",
+     "height=600",
+     "background=(0, 0, 0)",
+     "joystick=False"
+    ]
+   ]
+  },
+  "lerp": {
+   "doc": "Blend from a to b.",
+   "forms": [
+    [
+     "a",
+     "b",
+     "t"
+    ]
+   ]
+  },
+  "lifespan": {
+   "doc": "",
+   "forms": [
+    [
+     "seconds",
+     "fade=0"
+    ]
+   ]
+  },
+  "loadSound": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "path"
+    ]
+   ]
+  },
+  "loadSprite": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "path",
+     "sliceX=1",
+     "sliceY=1",
+     "anims=None"
+    ]
+   ]
+  },
+  "loadSpriteAtlas": {
+   "doc": "",
+   "forms": [
+    [
+     "path",
+     "atlas"
+    ]
+   ]
+  },
+  "loop": {
+   "doc": "",
+   "forms": [
+    [
+     "seconds",
+     "fn=None"
+    ]
+   ]
+  },
+  "mouseDeltaPos": {
+   "doc": "How far the mouse moved this frame, as a vec2.",
+   "forms": [
+    []
+   ]
+  },
+  "mousePos": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "move": {
+   "doc": "",
+   "forms": [
+    [
+     "direction",
+     "speed"
+    ]
+   ]
+  },
+  "offscreen": {
+   "doc": "",
+   "forms": [
+    [
+     "destroy=False",
+     "distance=64"
+    ]
+   ]
+  },
+  "onClick": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onCollide": {
+   "doc": "Every time anything tagged tag_a touches anything tagged tag_b.",
+   "forms": [
+    [
+     "tag_a",
+     "tag_b",
+     "fn=None"
+    ]
+   ]
+  },
+  "onDraw": {
+   "doc": "Draw straight to the screen, after the game objects.",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onKeyDown": {
+   "doc": "",
+   "forms": [
+    [
+     "key",
+     "fn=None"
+    ]
+   ]
+  },
+  "onKeyPress": {
+   "doc": "",
+   "forms": [
+    [
+     "key",
+     "fn=None"
+    ]
+   ]
+  },
+  "onKeyRelease": {
+   "doc": "",
+   "forms": [
+    [
+     "key",
+     "fn=None"
+    ]
+   ]
+  },
+  "onMouseDown": {
+   "doc": "Every frame a mouse button is held.",
+   "forms": [
+    [
+     "button=None",
+     "fn=None"
+    ]
+   ]
+  },
+  "onMouseMove": {
+   "doc": "Whenever the mouse moves.",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onMousePress": {
+   "doc": "Once, when a mouse button goes down.",
+   "forms": [
+    [
+     "button=None",
+     "fn=None"
+    ]
+   ]
+  },
+  "onMouseRelease": {
+   "doc": "Once, when a mouse button comes back up.",
+   "forms": [
+    [
+     "button=None",
+     "fn=None"
+    ]
+   ]
+  },
+  "onUpdate": {
+   "doc": "",
+   "forms": [
+    [
+     "fn"
+    ],
+    [
+     "tag",
+     "fn"
+    ]
+   ]
+  },
+  "opacity": {
+   "doc": "",
+   "forms": [
+    [
+     "n=1.0"
+    ]
+   ]
+  },
+  "outline": {
+   "doc": "An outline, in any spelling rgb() accepts.",
+   "forms": [
+    [
+     "width=1",
+     "color=(0, 0, 0)"
+    ]
+   ]
+  },
+  "pause": {
+   "doc": "Freeze the game, leaving the picture up.",
+   "forms": [
+    []
+   ]
+  },
+  "play": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "loop=False",
+     "paused=False",
+     "volume=1.0"
+    ]
+   ]
+  },
+  "pos": {
+   "doc": "",
+   "forms": [
+    [
+     "x=0",
+     "y=0"
+    ]
+   ]
+  },
+  "rad2deg": {
+   "doc": "",
+   "forms": [
+    [
+     "radians"
+    ]
+   ]
+  },
+  "rand": {
+   "doc": "",
+   "forms": [
+    [
+     "a=1.0",
+     "b=None"
+    ]
+   ]
+  },
+  "randi": {
+   "doc": "",
+   "forms": [
+    [
+     "a=1",
+     "b=None"
+    ]
+   ]
+  },
+  "raycast": {
+   "doc": "The first area() the ray hits, as a Hit, or None.",
+   "forms": [
+    [
+     "origin",
+     "direction",
+     "exclude=None",
+     "max_distance=None",
+     "ignore=None"
+    ]
+   ]
+  },
+  "rect": {
+   "doc": "",
+   "forms": [
+    [
+     "width",
+     "height",
+     "radius=0"
+    ]
+   ]
+  },
+  "resume": {
+   "doc": "Start the game moving again.",
+   "forms": [
+    []
+   ]
+  },
+  "rgb": {
+   "doc": "A colour, as a plain (r, g, b) tuple.",
+   "forms": [
+    [
+     "r=255",
+     "g=None",
+     "b=None"
+    ]
+   ]
+  },
+  "rotate": {
+   "doc": "",
+   "forms": [
+    [
+     "angle=0"
+    ]
+   ]
+  },
+  "run": {
+   "doc": "Not part of the Kaplay API — the loop starts on its own once your script finishes.",
+   "forms": [
+    []
+   ]
+  },
+  "say": {
+   "doc": "Pause the game and show a message.",
+   "forms": [
+    [
+     "text",
+     "link=None",
+     "button='OK'",
+     "then=None"
+    ]
+   ]
+  },
+  "scale": {
+   "doc": "",
+   "forms": [
+    [
+     "x=1",
+     "y=None"
+    ]
+   ]
+  },
+  "scene": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "fn"
+    ]
+   ]
+  },
+  "sentry": {
+   "doc": "",
+   "forms": [
+    [
+     "candidates",
+     "direction=None",
+     "fieldOfView=None",
+     "range=None",
+     "lineOfSight=False",
+     "raycastExclude=None",
+     "checkFrequency=10"
+    ]
+   ]
+  },
+  "setBackground": {
+   "doc": "The background colour, in any spelling rgb() accepts.",
+   "forms": [
+    [
+     "r=0",
+     "g=None",
+     "b=None"
+    ]
+   ]
+  },
+  "setCamPos": {
+   "doc": "",
+   "forms": [
+    [
+     "pos"
+    ]
+   ]
+  },
+  "setCamScale": {
+   "doc": "",
+   "forms": [
+    [
+     "n"
+    ]
+   ]
+  },
+  "setData": {
+   "doc": "Remember something under a name.",
+   "forms": [
+    [
+     "key",
+     "value"
+    ]
+   ]
+  },
+  "setGravity": {
+   "doc": "",
+   "forms": [
+    [
+     "n"
+    ]
+   ]
+  },
+  "shake": {
+   "doc": "",
+   "forms": [
+    [
+     "n=8"
+    ]
+   ]
+  },
+  "sprite": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "anim=None",
+     "frame=None"
+    ]
+   ]
+  },
+  "state": {
+   "doc": "",
+   "forms": [
+    [
+     "start",
+     "states"
+    ]
+   ]
+  },
+  "text": {
+   "doc": "",
+   "forms": [
+    [
+     "text=''",
+     "size=22",
+     "width=None"
+    ]
+   ]
+  },
+  "tile": {
+   "doc": "",
+   "forms": [
+    [
+     "isObstacle=False"
+    ]
+   ]
+  },
+  "time": {
+   "doc": "Seconds since kaypy() started.",
+   "forms": [
+    []
+   ]
+  },
+  "toWorld": {
+   "doc": "",
+   "forms": [
+    [
+     "pos"
+    ]
+   ]
+  },
+  "tween": {
+   "doc": "Change a value smoothly over time.",
+   "forms": [
+    [
+     "start",
+     "end",
+     "duration",
+     "setter",
+     "ease=None"
+    ]
+   ]
+  },
+  "vec2": {
+   "doc": "",
+   "forms": [
+    [
+     "x",
+     "y"
+    ]
+   ]
+  },
+  "wait": {
+   "doc": "",
+   "forms": [
+    [
+     "seconds",
+     "fn=None"
+    ]
+   ]
+  },
+  "wave": {
+   "doc": "A value swinging between low and high, forever.",
+   "forms": [
+    [
+     "low",
+     "high",
+     "t",
+     "func=math.sin"
+    ]
+   ]
+  },
+  "width": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "z": {
+   "doc": "",
+   "forms": [
+    [
+     "value=0"
+    ]
+   ]
+  }
+ },
+ "methods": {
+  "curAnim": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "destroy": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "directionAngle": {
+   "doc": "Where it is looking, in degrees.",
+   "forms": [
+    []
+   ]
+  },
+  "enterState": {
+   "doc": "",
+   "forms": [
+    [
+     "name"
+    ]
+   ]
+  },
+  "exists": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "has": {
+   "doc": "",
+   "forms": [
+    [
+     "comp_id"
+    ]
+   ]
+  },
+  "hasLineOfSight": {
+   "doc": "Is there nothing solid between us?",
+   "forms": [
+    [
+     "obj"
+    ]
+   ]
+  },
+  "heal": {
+   "doc": "Get hit points back, never above maxHP.",
+   "forms": [
+    [
+     "amount=1"
+    ]
+   ]
+  },
+  "hurt": {
+   "doc": "Take damage.",
+   "forms": [
+    [
+     "amount=1"
+    ]
+   ]
+  },
+  "isAlive": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "isGrounded": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "isHovering": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "isWithinFieldOfView": {
+   "doc": "Is obj inside the cone?",
+   "forms": [
+    [
+     "obj",
+     "direction=None",
+     "fieldOfView=None"
+    ]
+   ]
+  },
+  "jump": {
+   "doc": "",
+   "forms": [
+    [
+     "force=None"
+    ]
+   ]
+  },
+  "move": {
+   "doc": "Move by a velocity in pixels PER SECOND (scaled by dt each frame).",
+   "forms": [
+    [
+     "dx",
+     "dy=None"
+    ]
+   ]
+  },
+  "moveTo": {
+   "doc": "Move toward target.",
+   "forms": [
+    [
+     "target",
+     "speed=None"
+    ]
+   ]
+  },
+  "onClick": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onCollide": {
+   "doc": "",
+   "forms": [
+    [
+     "tag",
+     "fn=None"
+    ]
+   ]
+  },
+  "onCollideEnd": {
+   "doc": "",
+   "forms": [
+    [
+     "tag",
+     "fn=None"
+    ]
+   ]
+  },
+  "onCollideUpdate": {
+   "doc": "",
+   "forms": [
+    [
+     "tag",
+     "fn=None"
+    ]
+   ]
+  },
+  "onDeath": {
+   "doc": "When hit points reach zero.",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onGround": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onHeal": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onHurt": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onObjectsSpotted": {
+   "doc": "Run something when it starts seeing what it is looking for.",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "onStateEnter": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "fn=None"
+    ]
+   ]
+  },
+  "onStateUpdate": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "fn=None"
+    ]
+   ]
+  },
+  "onUpdate": {
+   "doc": "",
+   "forms": [
+    [
+     "fn=None"
+    ]
+   ]
+  },
+  "play": {
+   "doc": "Restarts the animation from its first frame — calling it every frame while a key is held…",
+   "forms": [
+    [
+     "name"
+    ]
+   ]
+  },
+  "rotateBy": {
+   "doc": "Turn by this much more.",
+   "forms": [
+    [
+     "degrees"
+    ]
+   ]
+  },
+  "rotateTo": {
+   "doc": "Face exactly this way.",
+   "forms": [
+    [
+     "degrees"
+    ]
+   ]
+  },
+  "setHP": {
+   "doc": "Set hit points directly.",
+   "forms": [
+    [
+     "value"
+    ]
+   ]
+  },
+  "size": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "use": {
+   "doc": "Attach a single component, tag string, or dict of your own values.",
+   "forms": [
+    [
+     "comp"
+    ]
+   ]
+  }
+ }
+}

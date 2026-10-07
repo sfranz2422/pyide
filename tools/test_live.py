@@ -1191,9 +1191,12 @@ check("  every save carries those tabs, never an empty map",
       'files: {}' not in live_code
       and len(re.findall(r"files: dataFiles\(\)", live_code)) == 4,
       "an autosave sending {} emptied the project of its data files")
+_run_fn = live_code[live_code.index("async function run()"):]
+_run_fn = _run_fn[:_run_fn.index("\n  }\n")]
 check("  and Run gives Python the files before running main.py",
-      re.search(r"var source = mainSource\(\);[^\n]*\n\s*pushFilesToPython\(\);",
-                live_code) is not None)
+      -1 < _run_fn.find("pushFilesToPython();") < _run_fn.find("_pyide_run(")
+      and _run_fn.find("pushFilesToPython();") < _run_fn.find("_pyide_run_game("),
+      "main.py would open a data file that is not there yet")
 check("  with tabs on the page to switch between them",
       'id="mine-tabs"' in page and 'starterFiles:' in page)
 

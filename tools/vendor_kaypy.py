@@ -157,6 +157,16 @@ def main():
           % (os.path.getsize(BUNDLE) / 1024))
     print("  starter assets left behind on purpose; PyIDE serves its own")
 
+    # The editor's hints for what goes in the brackets of a kaypy call come
+    # from this copy of the source. Rebuilt with every vendoring, so a
+    # renamed parameter is never hinted under its old name (test_sighint.py
+    # fails if they drift).
+    sys.path.insert(0, HERE)
+    import kaypy_signatures
+    sigs = kaypy_signatures.write()
+    print("  editor hints: static/py/kaypy_sigs.json (%d functions, %d methods)"
+          % (len(sigs["functions"]), len(sigs["methods"])))
+
     missing = [n for n in ("__init__.py", "engine.py") if n not in files]
     if missing:
         print("\nWARNING: expected %s and did not copy it"

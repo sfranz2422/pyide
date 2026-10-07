@@ -126,6 +126,18 @@
     }
   });
 
+  /* What goes in the brackets (sighint.js), as in the editor. Their own
+     defs come from THEIR tabs only, never the teacher's pane — the same
+     rule as completion below, for the same reason. */
+  window.PyIDESigHint.attach(mine, {
+    sources: function () {
+      return Object.keys(docs).filter(function (n) { return /\.py$/i.test(n); })
+        .map(function (n) { return docs[n].getValue(); });
+    },
+    isPython: function () { return modeFor(active) === "python"; },
+    kaypyUrl: "/static/py/kaypy_sigs.json"
+  });
+
   /* Completion of the student's own names, exactly as in the editor. Names
      come from what the student has typed, never from the teacher's pane —
      suggesting the lesson's variables would be the copy button by another
@@ -1070,6 +1082,18 @@
 
   // ------------------------------------------------------------- their Run
 
+  /* The syntax card, over their own editor — never the mirror: it is about
+     their code. `reveal` opens the tab the error is in. */
+  var syntaxCard = window.PyIDESyntax.attach({
+    host: mine.getWrapperElement().parentNode,
+    editor: mine,
+    reveal: function (file) {
+      if (!docs[file]) return null;
+      switchTo(file);
+      return docs[file];
+    }
+  });
+
   function write(text, cls) {
     var span = document.createElement("span");
     if (cls) span.className = cls;
@@ -1175,6 +1199,22 @@
   async function run() {
     if (running || !pyodide) return;
     var source = mainSource();             // theirs, never the mirror's
+
+    /* Can Python read it at all? Asked before anything runs or loads, so a
+       missing bracket gets a plain-words card over the editor (syntax.js)
+       instead of a game engine loading only to fail. Python's own message
+       still goes in the output, where it always was. */
+    syntaxCard.clear();
+    var bad = window.PyIDESyntax.check(pyodide, source, dataFiles());
+    if (bad) {
+      openConsole(true);
+      clearOutput();
+      write("SyntaxError" + (bad.file !== "main.py" ? " in " + bad.file : "")
+            + " on line " + bad.line + ": " + bad.msg + "\n"
+            + (bad.text.trim() ? "    " + bad.text.trim() + "\n" : ""), "err");
+      syntaxCard.show(bad);
+      return;
+    }
     pushFilesToPython();
     openConsole(true);
 

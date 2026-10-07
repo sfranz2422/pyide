@@ -1,9 +1,10 @@
 /* PyIDE — completion for names the student has defined.
  *
  * Only their own names: variables, loop targets, unpacked tuples, with-as
- * targets, functions and their parameters, classes, imports. No builtins and
- * no signature help — the point is to stop NameError typos, not to write the
- * program for them.
+ * targets, functions and their parameters, classes, imports. No builtins —
+ * the point is to stop NameError typos, not to write the program for them.
+ * What goes in a call's brackets is sighint.js's, which shows it without
+ * ever inserting anything.
  *
  * Names come from Python's own ast module rather than a regular expression,
  * so tuple unpacking and comprehensions are picked up correctly. Nothing is

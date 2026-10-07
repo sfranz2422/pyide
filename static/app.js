@@ -415,6 +415,18 @@
   })();
 
   // ---------------------------------------------------------------- output
+  /* The syntax card, over the editor. `reveal` opens the file the error is
+     in, so an error in helper.py is shown in helper.py. */
+  var syntaxCard = window.PyIDESyntax.attach({
+    host: editor.getWrapperElement().parentNode,
+    editor: editor,
+    reveal: function (file) {
+      if (!docs[file]) return null;
+      if (file !== editingFile()) switchTo(file);
+      return docs[file];
+    }
+  });
+
   function write(text, cls) {
     var node = document.createElement("span");
     if (cls) node.className = cls;
@@ -519,6 +531,18 @@
   function refreshMode() { paintMode(currentMode(mainSource())); }
 
   editor.on("change", function () { if (!running) refreshMode(); });
+
+  /* What goes in the brackets, above the line while a call is typed
+     (sighint.js). Their own defs come from every .py tab; kaypy's only in a
+     program that imports it. */
+  window.PyIDESigHint.attach(editor, {
+    sources: function () {
+      return Object.keys(docs).filter(function (n) { return /\.py$/i.test(n); })
+        .map(function (n) { return docs[n].getValue(); });
+    },
+    isPython: function () { return /\.py$/i.test(editingFile()); },
+    kaypyUrl: "/static/py/kaypy_sigs.json"
+  });
 
   /* Name completion, for main.py only. A .txt or .md tab is not Python, and a
      read-only snapshot can't be typed into anyway. */
@@ -731,6 +755,24 @@
     var source = mainSource();
     var mode = currentMode(source);
     paintMode(mode);
+
+    /* Can Python read it at all? Asked before anything runs or loads, so a
+       missing bracket gets a plain-words card over the editor (syntax.js)
+       instead of a game engine loading only to fail. Python's own message
+       still goes in the output, where it always was. */
+    syntaxCard.clear();
+    var bad = window.PyIDESyntax.check(pyodide, source, dataFiles());
+    if (bad) {
+      stage.hidden = true;
+      showOutput();
+      relayout();
+      clearOutput();
+      write("SyntaxError" + (bad.file !== "main.py" ? " in " + bad.file : "")
+            + " on line " + bad.line + ": " + bad.msg + "\n"
+            + (bad.text.trim() ? "    " + bad.text.trim() + "\n" : ""), "err");
+      syntaxCard.show(bad);
+      return;
+    }
     return mode === "game" ? runGame(source) : runConsole(source);
   }
 
