@@ -340,4 +340,15 @@ _c = _P.app.test_client()
 _r = _c.get("/play")
 check("/play renders", _r.status_code == 200 and b"play: true" in _r.data, _r.status_code)
 
+# Every page in the app's own style follows the editor's light/dark choice.
+# The teacher pages once did not, and a teacher in light mode in the editor
+# got every assignment page in dark.
+import glob as _glob
+_tpl_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+_missing = [os.path.basename(t) for t in sorted(_glob.glob(os.path.join(_tpl_dir, "*.html")))
+            if "filename='style.css'" in open(t).read()
+            and 'localStorage.getItem("pyide-theme")' not in open(t).read()]
+check("every page with the app's stylesheet follows the editor's theme",
+      not _missing, ", ".join(_missing))
+
 done()
