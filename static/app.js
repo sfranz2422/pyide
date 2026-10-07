@@ -1329,6 +1329,32 @@
 
   if (liveBtn) {
     var liveCode = null;
+
+    /* WHICH TAB IS ON THE AIR. A reload of the tab teaching must carry on
+       broadcasting, so the lesson is remembered — but per TAB
+       (sessionStorage), with the page it was on. It was remembered for the
+       whole browser, so ANY editor the teacher opened while live — a new
+       tab, the logo, New project, Student view — rejoined the lesson and
+       sent the class its own file: the class watched an untitled default
+       template while the teacher typed in another tab, and a Go live there
+       then ended the real lesson under them. Now only that tab, on that
+       page, picks the lesson back up. */
+    var HOST_KEY = "pyide-live-host";
+    try { localStorage.removeItem(HOST_KEY); } catch (e) { /* the old, shared marker */ }
+    var rememberLive = function (code) {
+      try {
+        sessionStorage.setItem(HOST_KEY, JSON.stringify({ code: code, path: location.pathname }));
+      } catch (e) { /* storage blocked: a reload will need Go live again */ }
+    };
+    var forgetLive = function () {
+      try { sessionStorage.removeItem(HOST_KEY); } catch (e) {}
+    };
+    var liveToResume = function () {
+      try {
+        var saved = JSON.parse(sessionStorage.getItem(HOST_KEY) || "null");
+        return saved && saved.path === location.pathname ? saved.code : null;
+      } catch (e) { return null; }
+    };
     var liveTimer = null;
     var lastSent = null;
     var lastVersion = 0;
@@ -1660,7 +1686,7 @@
       if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
       lastSent = null;
       paintLive();
-      try { localStorage.removeItem("pyide-live-host"); } catch (e) {}
+      forgetLive();
       if (code && !quietly) {
         fetch("/api/live/" + encodeURIComponent(code) + "/stop", { method: "POST" });
       }
@@ -1764,7 +1790,7 @@
           if (data.error) { window.alert(data.error); return; }
           if (data.resumed === false) {
             // That lesson is over. Forget it, and stay off the air.
-            try { localStorage.removeItem("pyide-live-host"); } catch (e) {}
+            forgetLive();
             return;
           }
           liveCode = data.code;
@@ -1775,7 +1801,7 @@
           var at = /^(\d+)\//.exec(data.slide || "");
           slideAt = at ? Math.max(0, parseInt(at[1], 10) - 1) : 0;
           lastSent = null;
-          try { localStorage.setItem("pyide-live-host", liveCode); } catch (e) {}
+          rememberLive(liveCode);
           paintLive();
           paintSent(!!data.snippet_out);
           pushNow();
@@ -1867,7 +1893,7 @@
         // server keeps whatever the session already had. The code is sent so
         // the server can refuse anything but that same lesson — see
         // live_start.
-        var resumeCode = localStorage.getItem("pyide-live-host");
+        var resumeCode = liveToResume();
         if (resumeCode) startLive(undefined, resumeCode);
       } catch (e) { /* storage blocked: press Go live again */ }
     }
@@ -1875,6 +1901,9 @@
     /* No Go live button: signed out, or not a teacher. Whatever lesson this
        browser remembers is not one this person can resume, so forget it
        here rather than let it wait for the next teacher to sign in. */
-    try { localStorage.removeItem("pyide-live-host"); } catch (e) {}
+    try {
+      sessionStorage.removeItem("pyide-live-host");
+      localStorage.removeItem("pyide-live-host");      // the old, shared marker
+    } catch (e) {}
   }
 })();
