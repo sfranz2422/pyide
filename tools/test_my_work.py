@@ -165,10 +165,14 @@ check("the bare site is the class page, not the editor",
       and not has_id(home.get_data(as_text=True), "share"))
 check("  and it links to the editor at /new",
       'href="/new"' in home.get_data(as_text=True))
-check("  with a tab for each class it holds",
-      all('<label for="tab-%s">' % t in home.get_data(as_text=True)
-          and 'id="%s-topics"' % t in home.get_data(as_text=True)
-          for t in ("intro", "programming-1")))
+# A menu button whose target matches no section is a class that silently
+# never shows - the button is there, the page under it stays on another class.
+_home = home.get_data(as_text=True)
+_targets = re.findall(r'data-bs-toggle="tab" data-bs-target="#([\w-]+)"', _home)
+check("  with a menu button for each class it holds",
+      len(_targets) > 1 and all(
+          re.search(r'<section class="tab-pane[^"]*" id="%s"' % t, _home)
+          for t in _targets), repr(_targets))
 home.close()
 
 editor = student.get("/new").get_data(as_text=True)

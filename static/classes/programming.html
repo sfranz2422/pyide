@@ -5,31 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mohawk Programming</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Oswald:400,600,700|Open+Sans:400,600,700&display=swap">
 <style>
-  /* Colours and fonts come from the class calendar site (Google Sites). */
+  /* Colours and fonts come from the class calendar site (Google Sites).
+     Bootstrap is only here for the menu: a bar of classes on a wide screen,
+     a hamburger on a phone, and switching which class's topics show. */
   :root {
     --red: #f34f4c;
     --red-dark: #d3413f;
     --ink: #1f1f1f;
     --page: #f4f4f4;
-    --card: #ffffff;
     --line: rgba(31, 31, 31, 0.12);
   }
-  * { box-sizing: border-box; }
   body {
-    margin: 0;
     background: var(--page);
     color: var(--ink);
     font: 16px/1.6 "Open Sans", sans-serif;
   }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 16px; }
 
   header {
     position: relative;
     overflow: hidden;
-    background: #1f1f1f;
+    background: var(--ink);
     color: #fff;
-    padding: 48px 16px 0;
+    padding: 48px 0 36px;
   }
   /* the mascot from the calendar banner, faded into the dark on its left */
   header::before {
@@ -43,7 +44,6 @@
             mask-image: linear-gradient(90deg, transparent, #000 50%);
   }
   header .wrap { position: relative; }
-  .wrap { max-width: 1000px; margin: 0 auto; }
   header h1 {
     font-family: Oswald, sans-serif;
     font-weight: 700;
@@ -63,51 +63,48 @@
   }
   header p { margin: 12px 0 0; font-size: 18px; opacity: 0.9; }
 
-  /* TABS. One radio button per class, at the top of the page; clicking a
-     tab's label checks its radio, and the CSS below shows that class's
-     topics. No script needed - the little one at the bottom only lets a
-     link like /#programming-1 open on that tab. A new class needs a radio,
-     a label, a section, and its id added to the two rules marked ADD. */
-  .tab-radio { position: absolute; opacity: 0; pointer-events: none; }
-  .tabs { display: flex; gap: 6px; margin-top: 28px; flex-wrap: wrap; }
-  .tabs label {
+  /* the class menu */
+  .classbar { background: #2b2b2b; border-bottom: 4px solid var(--red); padding: 0; }
+  /* width: Bootstrap's navbar is a flex row, which would shrink this to its
+     contents and centre it instead of lining it up with the page */
+  .classbar .wrap { display: flex; flex-wrap: wrap; align-items: center; width: 100%; }
+  .classbar .current {          /* phones: which class is showing, by the hamburger */
     font-family: Oswald, sans-serif;
     font-size: 18px;
-    letter-spacing: 0.5px;
-    padding: 8px 20px;
-    border-radius: 6px 6px 0 0;
-    background: rgba(255, 255, 255, 0.12);
     color: #fff;
-    cursor: pointer;
   }
-  .tabs label:hover { background: rgba(255, 255, 255, 0.22); }
-  .class-topics { display: none; }
-  /* ADD: the selected tab looks like part of the page below it */
-  #tab-intro:checked ~ header label[for="tab-intro"],
-  #tab-programming-1:checked ~ header label[for="tab-programming-1"] {
-    background: var(--page);
-    color: var(--ink);
+  .classbar .navbar-toggler { border-color: rgba(255,255,255,0.4); margin: 8px 0 8px auto; }
+  .classbar .navbar-toggler:focus { box-shadow: 0 0 0 2px var(--red); }
+  .classbar .nav-link {
+    font-family: Oswald, sans-serif;
+    font-size: 17px;
+    letter-spacing: 0.3px;
+    color: rgba(255,255,255,0.85);
+    background: none;
+    border: 0;
+    padding: 12px 14px;
+    text-align: left;
   }
-  /* ADD: and its topics are the ones shown */
-  #tab-intro:checked ~ main #intro-topics,
-  #tab-programming-1:checked ~ main #programming-1-topics { display: block; }
-  .tab-radio:focus-visible ~ header .tabs { outline: 2px solid var(--red); outline-offset: 4px; }
+  .classbar .nav-link:hover { color: #fff; }
+  .classbar .nav-link.active { color: #fff; background: var(--red); }
+  @media (min-width: 992px) { .classbar .current { display: none; } }
 
   main.wrap {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 260px;
     gap: 24px;
     align-items: start;
-    padding: 28px 16px 48px;
+    padding-top: 28px;
+    padding-bottom: 48px;
   }
-  .card {
-    background: var(--card);
+  .panel {
+    background: #fff;
     border: 1px solid var(--line);
     border-top: 4px solid var(--red);
     border-radius: 6px;
     padding: 20px 24px;
   }
-  .card h2 {
+  .panel h2 {
     font-family: Oswald, sans-serif;
     font-weight: 600;
     font-size: 28px;
@@ -115,7 +112,8 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--line);
   }
-  aside .card h2 { font-size: 20px; }
+  aside .panel h2 { font-size: 20px; }
+  .panel .empty { color: #777; margin: 0; }
 
   a { color: var(--ink); text-decoration-color: var(--red); text-underline-offset: 3px; }
   a:hover { color: var(--red-dark); }
@@ -136,11 +134,6 @@
   .topics ul li.quiz::before { content: "✅"; }
   .topics ul li.video::before { content: "🎬"; }
 
-  .resources { list-style: none; margin: 0; padding: 0; }
-  .resources li { margin: 6px 0; }
-
-  footer { text-align: center; color: #777; font-size: 14px; padding: 0 16px 32px; }
-
   /* a lesson: its name, then a Live and an Assignment button */
   .topics ul li.lesson::before { content: "📘"; }
   .topics a.live, .topics a.assign {
@@ -158,8 +151,14 @@
   .topics a.assign { border: 1.5px solid var(--ink); color: var(--ink); }
   .topics a.assign:hover { background: var(--ink); color: #fff; }
 
+  .resources { list-style: none; margin: 0; padding: 0; }
+  .resources li { margin: 6px 0; }
+
+  footer { text-align: center; color: #777; font-size: 14px; padding: 0 16px 32px; }
+
   @media (max-width: 760px) {
     main.wrap { grid-template-columns: 1fr; }
+    header { padding: 36px 0 28px; }
     header h1 { font-size: 36px; }
     header::before { width: 100%; max-width: none; opacity: 0.35; }
   }
@@ -167,24 +166,43 @@
 </head>
 <body>
 
-<!-- one radio per tab; "checked" is the tab shown when the page opens -->
-<input class="tab-radio" type="radio" name="tab" id="tab-intro" checked>
-<input class="tab-radio" type="radio" name="tab" id="tab-programming-1">
-
 <header>
   <div class="wrap">
     <h1>Mohawk Programming</h1>
     <p>Mr. Franz</p>
-    <nav class="tabs">
-      <label for="tab-intro">Intro to Programming</label>
-      <label for="tab-programming-1">Programming 1</label>
-    </nav>
   </div>
 </header>
 
+<!--
+  THE CLASS MENU. One button per class. Its data-bs-target is the id of that
+  class's <section> further down, with a # in front. The one marked "active"
+  is the class shown when the page opens.
+-->
+<nav class="navbar navbar-expand-lg classbar" data-bs-theme="dark">
+  <div class="wrap">
+    <span class="current" id="current-class"></span>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#class-menu" aria-controls="class-menu"
+            aria-expanded="false" aria-label="Choose a class">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="class-menu">
+      <ul class="navbar-nav" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#intro-topics">Intro to Programming</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#programming-1-topics">Programming 1</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#web-design-1-topics">Web Design 1</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#web-design-2-topics">Web Design 2</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#info-systems-topics">Intro to Information Systems</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#hardware-topics">Computer Hardware</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#java-topics">Java</button></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
 <main class="wrap">
 
-  <div>
+  <div class="tab-content">
 
     <!--
       HOW TO ADD THINGS
@@ -207,6 +225,12 @@
           <a class="assign" href="/a/CODE">Assignment</a>
         </li>
 
+      WEB DESIGN LINKS NEED THE WHOLE ADDRESS. This page lives on PyIDE, so
+      "/live/CODE" opens PyIDE. A WebIDE or FlaskIDE link must start with
+      its site, the way the assignment page shows it:
+          https://webide-4kiy.onrender.com/live/CODE
+          https://flaskide.onrender.com/a/CODE
+
       A new topic is a whole block — copy one from below, newest at the bottom:
 
         <li>
@@ -216,12 +240,18 @@
           </ul>
         </li>
 
+      A class with nothing posted yet shows a <p class="empty"> line instead
+      of a list; replace it with <ul class="topics"> ... </ul> when you start.
+
       A link that leaves this site (Classroom, Docs, YouTube) opens in a new
       tab if you add  target="_blank"  inside the <a ...>.
+
+      A NEW CLASS is a button in the menu above and a <section> here, with
+      the button's data-bs-target matching the section's id.
     -->
 
     <!-- ════════════════════ INTRO TO PROGRAMMING ════════════════════ -->
-    <section class="card class-topics" id="intro-topics">
+    <section class="tab-pane fade show active panel" id="intro-topics">
       <h2>Intro to Programming</h2>
       <ul class="topics">
 
@@ -236,7 +266,7 @@
     </section>
 
     <!-- ════════════════════ PROGRAMMING 1 ════════════════════ -->
-    <section class="card class-topics" id="programming-1-topics">
+    <section class="tab-pane fade panel" id="programming-1-topics">
       <h2>Programming 1</h2>
       <ul class="topics">
 
@@ -250,14 +280,63 @@
       </ul>
     </section>
 
+    <!-- ════════════════════ WEB DESIGN 1 ════════════════════ -->
+    <section class="tab-pane fade panel" id="web-design-1-topics">
+      <h2>Web Design 1</h2>
+      <ul class="topics">
+
+        <li>
+          <b>Topic 1: Getting Started</b>
+          <ul>
+            <li><a href="https://webide-4kiy.onrender.com/">Open WebIDE (the code editor)</a></li>
+          </ul>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ════════════════════ WEB DESIGN 2 ════════════════════ -->
+    <section class="tab-pane fade panel" id="web-design-2-topics">
+      <h2>Web Design 2</h2>
+      <ul class="topics">
+
+        <li>
+          <b>Topic 1: Getting Started</b>
+          <ul>
+            <li><a href="https://flaskide.onrender.com/">Open FlaskIDE (the code editor)</a></li>
+          </ul>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ════════════════════ INTRO TO INFORMATION SYSTEMS ════════════════════ -->
+    <section class="tab-pane fade panel" id="info-systems-topics">
+      <h2>Intro to Information Systems</h2>
+      <p class="empty">Nothing posted yet.</p>
+    </section>
+
+    <!-- ════════════════════ COMPUTER HARDWARE ════════════════════ -->
+    <section class="tab-pane fade panel" id="hardware-topics">
+      <h2>Computer Hardware</h2>
+      <p class="empty">Nothing posted yet.</p>
+    </section>
+
+    <!-- ════════════════════ JAVA ════════════════════ -->
+    <section class="tab-pane fade panel" id="java-topics">
+      <h2>Java</h2>
+      <p class="empty">Nothing posted yet.</p>
+    </section>
+
   </div>
 
   <aside>
-    <section class="card">
+    <section class="panel">
       <h2>Resources</h2>
       <ul class="resources">
-        <li><a href="/new">PyIDE editor</a></li>
-        <li><a href="/my">My saved work</a></li>
+        <li><a href="/new">PyIDE (Python)</a></li>
+        <li><a href="https://webide-4kiy.onrender.com/">WebIDE (HTML, CSS, JavaScript)</a></li>
+        <li><a href="https://flaskide.onrender.com/">FlaskIDE (Flask)</a></li>
         <li><a href="https://sites.google.com/mohawk.k12.pa.us/franz-class-calendar/home" target="_blank">Class calendar</a></li>
       </ul>
     </section>
@@ -267,21 +346,37 @@
 
 <footer>Mohawk Area School District</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Only so a link can open on a tab (/#programming-1), and the address
-  // follows the tab you pick. The page works the same without it.
+  // Nothing here needs editing. It lets a link open on a class
+  // (/#web-design-1 opens the section "web-design-1-topics"), keeps the
+  // address in step with the class picked, shows that class's name by the
+  // hamburger on a phone, and closes the menu after a pick.
   (function () {
-    function show() {
-      var r = document.getElementById("tab-" + location.hash.slice(1));
-      if (r) r.checked = true;
-    }
-    show();
-    window.addEventListener("hashchange", show);
-    document.querySelectorAll(".tab-radio").forEach(function (r) {
-      r.addEventListener("change", function () {
-        history.replaceState(null, "", "#" + r.id.slice(4));
+    var buttons = document.querySelectorAll('#class-menu [data-bs-toggle="tab"]');
+    var label = document.getElementById("current-class");
+    var menu = document.getElementById("class-menu");
+
+    function nameOf(b) { return b.getAttribute("data-bs-target").slice(1).replace(/-topics$/, ""); }
+
+    function fromHash() {
+      var want = location.hash.slice(1);
+      buttons.forEach(function (b) {
+        if (want && nameOf(b) === want) bootstrap.Tab.getOrCreateInstance(b).show();
       });
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener("shown.bs.tab", function () {
+        label.textContent = b.textContent;
+        history.replaceState(null, "", "#" + nameOf(b));
+        bootstrap.Collapse.getOrCreateInstance(menu, { toggle: false }).hide();
+      });
+      if (b.classList.contains("active")) label.textContent = b.textContent;
     });
+
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
   })();
 </script>
 
