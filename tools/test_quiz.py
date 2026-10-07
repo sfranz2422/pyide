@@ -269,7 +269,10 @@ check("  and signed out", not leaks(page), leaks(page))
 
 kid3.post("/api/live/%s/keep" % CODE, json={"code": "print(1)", "files": {}})
 check("saving from the live page with no copy yet",
-      not leaks(draft_of(KID3)) and draft_of(KID3), leaks(draft_of(KID3)))
+      not leaks(draft_of(KID3)), leaks(draft_of(KID3)))
+check("  and that copy really has the notes, questions and all",
+      ("id: " + mc["qid"]) in draft_of(KID3),
+      "without them the check above passes on an empty copy")
 
 # ---------------------------------------------------------------- answering
 print("\nAnswering")
