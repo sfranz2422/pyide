@@ -727,6 +727,16 @@ body:not(.is-authoring) .notes-body .quiz-text,
   background: var(--bg-head);
 }
 
+/* ◀ 3 / 5 ▶ under slides (notes.js, slideView). Outside the part that
+   scrolls, so the arrows stay in one place however long the slide is. */
+.slide-nav { display: flex; align-items: center; justify-content: center; gap: 12px;
+             padding: 6px 10px; border-top: 1px solid var(--line);
+             background: var(--bg-head); flex: 0 0 auto; }
+.slide-nav[hidden] { display: none; }
+.slide-btn { min-width: 40px; }
+.slide-pos { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
+             min-width: 52px; text-align: center; }
+
 /* A question in the notes (notes.js, buildQuiz). A card, so it reads as
    something to do rather than more to read. Right and wrong are a coloured
    edge plus the words, never the colour alone. */
@@ -1511,7 +1521,7 @@ body:not(.is-authoring) .notes-body .quiz-text,
  * the notes a class was reading shrank under them every time Run was
  * pressed. Now the output takes whatever is left, and scrolls in it. */
 .live-right .live-notes {
-  flex: 0 0 45%;
+  flex: 0 0 55%;
   border-top: 1px solid var(--line);
 }
 .live-right .live-notes[hidden] { display: none; }
