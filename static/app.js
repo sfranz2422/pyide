@@ -415,10 +415,10 @@
   })();
 
   // ---------------------------------------------------------------- output
-  /* The syntax card, over the editor. `reveal` opens the file the error is
-     in, so an error in helper.py is shown in helper.py. */
+  /* The syntax card, covering the output pane. `reveal` opens the file the
+     error is in, so an error in helper.py is shown in helper.py. */
   var syntaxCard = window.PyIDESyntax.attach({
-    host: editor.getWrapperElement().parentNode,
+    host: $("output-view"),
     editor: editor,
     reveal: function (file) {
       if (!docs[file]) return null;

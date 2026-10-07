@@ -190,6 +190,23 @@ check("the card is built as text, never innerHTML",
       "the message quotes the student's own characters")
 check("a broken check never stops a Run",
       re.search(r"catch \(e\) \{\s*return null;", syntax_js) is not None)
+# Over the output pane, where Run's result would have gone — not the editor,
+# and not under Python's raw message: one message to read.
+for js, host in {'app.js': 'host: $("output-view"),', 'live.js': 'host: $("output-view"),'}.items():
+    src = open(os.path.join(ROOT, "static", js)).read()
+    at = src.find("window.PyIDESyntax.attach({")
+    check("the card covers the output pane (%s)" % js,
+          at > -1 and src[at:at + 200].find(host) > -1,
+          "it sat over the editor, under the friendly message's raw twin")
+live_src = open(os.path.join(ROOT, "static", "live.js")).read()
+live_run = live_src[live_src.index("async function run()"):]
+live_run = live_run[:live_run.index("\n  }\n")]
+check("  the live page opens its folded console before showing it",
+      re.search(r"if \(bad\) \{[^}]*?openConsole\(true\);[^}]*?syntaxCard\.show\(bad\)",
+                live_run) is not None,
+      "the card would be put inside a pane that is folded shut")
+check("  and fills it", re.search(r"\.syntax-card \{[^}]*inset: 8px",
+                                  open(os.path.join(ROOT, "static", "style.css")).read()) is not None)
 check("the card goes away as soon as they type",
       'ed.on("change", onChange)' in syntax_js)
 

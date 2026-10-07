@@ -1082,10 +1082,10 @@
 
   // ------------------------------------------------------------- their Run
 
-  /* The syntax card, over their own editor — never the mirror: it is about
-     their code. `reveal` opens the tab the error is in. */
+  /* The syntax card, covering their own output pane (opened first, in run)
+     — never the teacher's. `reveal` opens the tab the error is in. */
   var syntaxCard = window.PyIDESyntax.attach({
-    host: mine.getWrapperElement().parentNode,
+    host: $("output-view"),
     editor: mine,
     reveal: function (file) {
       if (!docs[file]) return null;
