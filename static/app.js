@@ -180,6 +180,12 @@
   var notesName = $("notes-name");
   var notesEditBtn = $("notes-edit");   // present only while authoring
 
+  /* Questions in the notes answer into this assignment. On a project that
+     is not one, or the teacher's own copy, there is nowhere to record an
+     answer, and notes.js says so on the question rather than taking one. */
+  window.PyIDENotes.setQuizContext({ assignment: window.PYIDE.assignmentSlug,
+                                     signedIn: window.PYIDE.signedIn });
+
   function showOutput() {
     notesView.hidden = true;
     outputView.hidden = false;
