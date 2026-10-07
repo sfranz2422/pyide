@@ -382,4 +382,10 @@ check("  and taken out of the tab strip for them",
 check("  a second press goes back to the output",
       "if (active === name) switchTo(lastCodeFile);" in _app_js)
 
+
+check("  and whatever shows the output closes the notes properly",
+      re.search(r"function showOutput\(\) \{[^}]*?if \(window\.PyIDENotes\.isMarkdown\(active\) && !mdSourceOpen\) \{\s*"
+                r"active = lastCodeFile;\s*renderTabs\(\);", _app_js) is not None,
+      "after a Run the button stayed lit and took two presses to show the notes")
+
 done()

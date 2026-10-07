@@ -189,6 +189,16 @@
   function showOutput() {
     notesView.hidden = true;
     outputView.hidden = false;
+    /* Whatever put the output up — Run, the syntax card, a game — the notes
+       are no longer on show, so the editor must stop saying they are.
+       Otherwise their button stayed lit after a Run, and the first press
+       "closed" notes that were already hidden: it took two presses to see
+       them again. While the author has the source open the .md is what
+       they are editing, and it stays the open file. */
+    if (window.PyIDENotes.isMarkdown(active) && !mdSourceOpen) {
+      active = lastCodeFile;
+      renderTabs();
+    }
   }
 
   /* Always as slides when the notes have `---` in them, with ◀ ▶ under
