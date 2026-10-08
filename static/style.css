@@ -1836,3 +1836,6 @@ body.is-game .live-right .live-notes { flex: 1 1 0; min-height: 120px; }
 .desc-edit .cm-s-easymde .cm-link, .desc-edit .cm-s-easymde .cm-url { color: var(--accent); }
 .desc-edit .cm-s-easymde .cm-header { color: var(--text); }
 .js-pic-label { cursor: pointer; }
+/* The class page's Classroom tag: posted, or not yet. */
+.kind-tag.tag-classroom { color: #2f9e6b; border-color: #2f9e6b; }
+.kind-tag.tag-not-posted { opacity: .55; }
