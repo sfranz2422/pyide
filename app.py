@@ -392,7 +392,8 @@ def auth_callback():
     finally:
         db.close()
 
-    return redirect(session.pop("after_login", "") or url_for("index"))
+    # Nowhere asked for: the front door, which sends each on to their page.
+    return redirect(session.pop("after_login", "") or url_for("home"))
 
 
 @app.get("/logout")
@@ -420,15 +421,50 @@ def logout():
         finally:
             db.close()
     session.clear()
-    return redirect(request.args.get("next") or url_for("index"))
+    return redirect(request.args.get("next") or url_for("home"))
 
 
-# "/" is the editor. "/new" is too, kept from the weeks when "/" was a class
-# page: the class page that moved to Google Sites links to /new, and so may
-# students' bookmarks. "/" is the lower decorator, so it is registered first
-# and is what url_for("index") builds.
-@app.get("/new")
+# The front door. Signed out: open the editor, or sign in. Signed in, it
+# goes on by itself — a teacher to their dashboard (classes on top), a
+# student to their classes — so it is never a page anyone stops at twice.
 @app.get("/")
+def home():
+    # "/" was the editor for most of this app's life, and links were made
+    # to it with something after the "?" — Teach this lesson again's
+    # /?teach=, shared bookmarks. Those were always meant for the editor.
+    if request.query_string:
+        return redirect(url_for("index") + "?" + request.query_string.decode("latin-1"))
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is not None:
+            if accounts.is_teacher(user.email):
+                return redirect(url_for("teacher_home"))
+            return redirect(url_for("my_classes"))
+        return render_template("home.html", **user_context(db))
+    finally:
+        db.close()
+
+
+@app.get("/classes")
+def my_classes():
+    """A student's classes, where signing in lands them. A teacher's are on
+    their dashboard. None yet is said plainly, with the way round it."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return redirect(url_for("login", next=request.path))
+        if accounts.is_teacher(user.email):
+            return redirect(url_for("teacher_home"))
+        return render_template("classes.html", **user_context(db))
+    finally:
+        db.close()
+
+
+# The editor. It was "/" until the front door took that (home), and every
+# link to it is url_for("index"), so they all moved with it.
+@app.get("/new")
 def index():
     return render_template(
         "index.html",

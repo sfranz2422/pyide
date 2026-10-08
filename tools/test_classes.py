@@ -225,14 +225,57 @@ check("  and another teacher", other.get("/class/%d" % C4).status_code == 404)
 check("the teacher can look, as the class would",
       teacher.get("/class/%d" % C4).status_code == 200)
 
-menu = kid1.get("/").get_data(as_text=True)
+menu = kid1.get("/new").get_data(as_text=True)
 check("the class is in the student's name menu",
       'href="/class/%d">Intro — P4</a>' % C4 in menu)
 check("  and not in a student's who isn't on its roster",
-      "Intro — P4" not in kid2.get("/").get_data(as_text=True)
-      and "Intro — P7" in kid2.get("/").get_data(as_text=True))
+      "Intro — P4" not in kid2.get("/new").get_data(as_text=True)
+      and "Intro — P7" in kid2.get("/new").get_data(as_text=True))
 check("the teacher's menu has their classes, to their own pages",
-      'href="/teacher/class/%d">Intro — P4</a>' % C4 in teacher.get("/").get_data(as_text=True))
+      'href="/teacher/class/%d">Intro — P4</a>' % C4 in teacher.get("/new").get_data(as_text=True))
+
+# The front door: "/" sends each person to their page.
+print("\nThe front door")
+r = stranger.get("/")
+page = r.get_data(as_text=True)
+check("signed out, / offers the editor and signing in",
+      r.status_code == 200 and 'href="/new"' in page and 'href="/login?next=/"' in page, r.status_code)
+r = stranger.get("/?teach=abc&a=xyz")
+check("  an old /?… link still goes to the editor, as it was made for",
+      r.status_code == 302 and r.headers["Location"].endswith("/new?teach=abc&a=xyz"),
+      r.headers.get("Location"))
+r = teacher.get("/")
+check("a teacher goes on to their dashboard",
+      r.status_code == 302 and r.headers["Location"].endswith("/teacher"))
+page = teacher.get("/teacher").get_data(as_text=True)
+check("  where their classes are at the top",
+      0 <= page.find(">Classes <") < page.find('href="/teacher/class/%d"' % C4)
+      < page.find("Not in a class"))
+r = kid1.get("/")
+check("a student goes on to their classes",
+      r.status_code == 302 and r.headers["Location"].endswith("/classes"))
+check("  which lists the ones they're on the roster of",
+      'href="/class/%d"' % C4 in kid1.get("/classes").get_data(as_text=True)
+      and 'href="/class/%d"' % C4 not in kid2.get("/classes").get_data(as_text=True))
+_ghost = client(add_user("k9", "nobody@school.org", "Nobody"))
+check("  or says they're not in any yet, and how that changes",
+      "not in any classes yet" in _ghost.get("/classes").get_data(as_text=True))
+check("a teacher asking for /classes gets the dashboard",
+      teacher.get("/classes").headers.get("Location", "").endswith("/teacher"))
+check("signed out, /classes asks them to sign in",
+      "/login" in stranger.get("/classes").headers.get("Location", ""))
+from types import SimpleNamespace                            # noqa: E402
+P.oauth = SimpleNamespace(google=SimpleNamespace(authorize_access_token=lambda: {"userinfo": {
+    "sub": "k1", "email": "kid1@school.org", "email_verified": True, "name": "Kid One"}}))
+check("signing in with nowhere asked for lands on the front door, to go on",
+      client().get("/auth/callback").headers.get("Location") == "/")
+_back = client()
+with _back.session_transaction() as _s:
+    _s["after_login"] = "/a/xyz"
+check("  and from an assignment link, back to the assignment",
+      _back.get("/auth/callback").headers.get("Location") == "/a/xyz")
+check("signing out with nowhere to go lands on the front door",
+      client(KID2).get("/logout").headers.get("Location") == "/")
 
 # Turned in, and marked.
 teacher.post("/api/assignment/%s/out-of" % HELLO, json={"out_of": 10})
@@ -335,7 +378,7 @@ check("deleting a class keeps its assignments, back on the dashboard",
 check("  with every student's work and score",
       q(accounts.Submission, student_id=KID1)[0].score == 8)
 check("  and the class is gone from the student's menu",
-      "Intro — P4" not in kid1.get("/").get_data(as_text=True))
+      "Intro — P4" not in kid1.get("/new").get_data(as_text=True))
 
 bad = results.count(False)
 print("\n%s (%d checks, %d failed)"
