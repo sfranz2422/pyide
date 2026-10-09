@@ -1540,6 +1540,19 @@ What does a line with only --- on it do in these notes?
 - [x] Starts a new slide
 points: 1
 ```
+
+---
+
+## A longer answer
+
+`type: long` gives students a box to write a paragraph in. You give it
+points yourself, on the lesson's page.
+
+```quiz
+In a few sentences, what would you put on the first slide of a lesson, and why?
+type: long
+points: 3
+```
 """
 
 
@@ -4994,6 +5007,41 @@ def live_page(code):
         return render_template("live.html", **ctx)
     finally:
         db.close()
+
+
+#: The examples on /help/questions, each (kind, heading, what to know, the
+#: block). The page shows each block's source beside how it looks, and
+#: test_quiz.py reads every one with quiz.parse and checks it is the kind it
+#: says and answerable — so the help cannot quietly drift from the format.
+QUESTION_EXAMPLES = [
+    ("choice", "Multiple choice",
+     "Put [x] on the right choice. More than one [x] means any of them counts.",
+     'What does len("hello") return?\n- [ ] "hello"\n- [x] 5\n- [ ] 4\npoints: 2'),
+    ("text", "Short answer",
+     "One answer: line for each answer you'll accept. Capitals, extra spaces "
+     "and a full stop at the end don't matter; nothing else is forgiven.",
+     "Which keyword repeats code while a condition stays true?\n"
+     "answer: while\nanswer: a while loop"),
+    ("long", "Long response",
+     "type: long (or type: essay) gives students a box with a small toolbar — "
+     "bold, italic, underline, lists. There is no key: you give it points on "
+     "the assignment's page, and it says \u201cto grade\u201d until you do.",
+     "Explain, in a paragraph, why a while loop needs its condition to change.\n"
+     "type: long\npoints: 5"),
+    ("choice", "Code in a question",
+     "Put code inside a ~~~ fence. Nothing in it is read as a choice or an answer.",
+     "What does this print?\n~~~python\nfor i in range(3):\n    print(i)\n~~~\n"
+     "- [ ] 1 2 3\n- [x] 0 1 2\n- [ ] 0 1 2 3"),
+]
+
+
+@app.get("/help/questions")
+def help_questions():
+    """How to write questions in notes. Open to anyone: it is the format,
+    nothing more, and a teacher may want it before they have signed in."""
+    return render_template("help_questions.html", examples=[
+        {"kind": k, "title": t, "about": a, "block": "```quiz\n%s\n```" % b}
+        for k, t, a, b in QUESTION_EXAMPLES])
 
 
 @app.get("/privacy")
