@@ -1275,8 +1275,10 @@ def _quiz_possible(item):
 
 
 def _mark(key, response):
-    return quiz.is_correct(key.kind, json.loads(key.correct or "[]"),
-                           json.loads(key.answers or "[]"), response)
+    """How much of the answer is right, 0 to 1 (quiz.fraction): whole or
+    nothing for most kinds, per blank or per pair for blank and match."""
+    return quiz.fraction(key.kind, json.loads(key.correct or "[]"),
+                         json.loads(key.answers or "[]"), response)
 
 
 def _quiz_earned(db, assignment_id):
@@ -1304,7 +1306,7 @@ def _earned_one(key, answer):
         return 0.0
     if key.kind == "long":
         return answer.score or 0.0
-    return key.points if _mark(key, answer.response) else 0.0
+    return round(key.points * _mark(key, answer.response), 2)
 
 
 def _answer_reply(key, answer, **more):
@@ -1314,10 +1316,10 @@ def _answer_reply(key, answer, **more):
                "graded": answer.score is not None, "correct": None,
                "points": key.points, "earned": answer.score or 0}
     else:
-        right = key is not None and _mark(key, answer.response)
+        part = _mark(key, answer.response) if key is not None else 0.0
         points = key.points if key is not None else 0
-        out = {"response": answer.response, "correct": right,
-               "points": points, "earned": points if right else 0}
+        out = {"response": answer.response, "correct": part == 1.0,
+               "points": points, "earned": round(points * part, 2)}
     out.update(more)
     return out
 
@@ -1396,7 +1398,21 @@ def quiz_answer():
             return jsonify(error="This question has changed since the page "
                                  "loaded. Reload to get the new one."), 404
 
-        if key.kind == "long":
+        if key.kind in ("blank", "match"):
+            # One string per blank, or per left: anything else is a page
+            # that doesn't match the question, and is refused rather than
+            # marked as a row of wrong answers.
+            got = quiz.items(response)
+            want = len(json.loads((key.answers if key.kind == "blank" else key.correct) or "[]"))
+            if (not response.lstrip().startswith("[") or len(got) != want
+                    or any(len(g) > 300 for g in got)):
+                return jsonify(error="This question has changed since the page "
+                                     "loaded. Reload to get the new one."), 400
+            got = [g.strip() for g in got]
+            if not any(got):
+                return jsonify(error="Answer the question first."), 400
+            response = json.dumps(got)
+        elif key.kind == "long":
             # Cleaned here whatever the page did: it is drawn as markup on
             # the teacher's screen (quiz.clean_html says why).
             if len(response) > LONG_RESPONSE_MAX * 2:
@@ -1718,8 +1734,11 @@ def _answers_for_teacher(db, item):
                        score=_score_text(a.score), right=False,
                        response=quiz.plain_text(a.response))
         else:
-            one.update(response=a.response,
-                       right=key is not None and _mark(key, a.response))
+            part = _mark(key, a.response) if key is not None else 0.0
+            shown = a.response
+            if kind in ("blank", "match"):
+                shown = quiz.response_text(kind, a.response, json.loads(key.choices or "[]"))
+            one.update(response=shown, right=part == 1.0, partial=0 < part < 1)
         out.setdefault(a.student_id, []).append(one)
     return out
 
@@ -5028,6 +5047,20 @@ QUESTION_EXAMPLES = [
      "the assignment's page, and it says \u201cto grade\u201d until you do.",
      "Explain, in a paragraph, why a while loop needs its condition to change.\n"
      "type: long\npoints: 5"),
+    ("blank", "Fill in the blank",
+     "type: blank, then write each answer inside [[ ]] where the blank goes — in "
+     "code too. | separates answers you'll all accept. Each blank is worth its "
+     "share of the points.",
+     "type: blank\nA [[while]] loop keeps going as long as its condition is [[True|true]].\n"
+     "~~~python\nfor i in [[range]](3):\n    print(i)\n~~~\npoints: 3"),
+    ("match", "Matching",
+     "type: match, then one - left -> right line for each pair. Students pick "
+     "each right from a list of all of them, sorted, plus any option: lines, "
+     "which are wrong answers to choose from. Each pair is worth its share of "
+     "the points.",
+     "type: match\nMatch each keyword to what it does.\n- for -> repeats once for each item\n"
+     "- while -> repeats while a condition holds\n- if -> runs once, or not at all\n"
+     "option: stops the program\npoints: 3"),
     ("choice", "Code in a question",
      "Put code inside a ~~~ fence. Nothing in it is read as a choice or an answer.",
      "What does this print?\n~~~python\nfor i in range(3):\n    print(i)\n~~~\n"
