@@ -710,11 +710,22 @@ r = save("print('more')\n")
 _, sub, _ = auto_state()
 check("an ordinary autosave turns nothing in", r.status_code == 200
       and sub.snippet_slug == first and not r.get_json().get("turned_in_at"))
+def snapshots():
+    db = P.SessionLocal()
+    try:
+        return db.query(P.Snippet).count()
+    finally:
+        db.close()
+
+
+copies = snapshots()
 r = save("print('more')\n", turn_in=True)
 _, sub, snap = auto_state()
 check("the page's two-minute save turns the changed work in",
-      r.get_json().get("turned_in_at") and sub.snippet_slug != first
-      and snap.code == "print('more')\n")
+      r.get_json().get("turned_in_at") and snap.code == "print('more')\n")
+check("  rewriting its own last copy, not adding another",
+      sub.snippet_slug == first and snapshots() == copies,
+      "books in a project made a full copy every two minutes")
 check("  still no attempt counted", sub.times_submitted == 0)
 second, second_at = sub.snippet_slug, sub.submitted_at
 r = save("print('more')\n", turn_in=True)
@@ -726,6 +737,35 @@ d, _, _ = auto_state()
 r = kid5.post("/api/submit", json={"draft": d.slug, "code": d.code, "files": json.loads(d.files)})
 check("pressing Turn in afterwards is their first attempt",
       r.status_code == 200 and r.get_json().get("again") is False, r.get_json())
+_, sub, pressed = auto_state()
+pressed_slug = pressed.slug
+r = save("print('after pressing')\n", turn_in=True)
+_, sub, snap = auto_state()
+db = P.SessionLocal()
+kept = db.query(P.Snippet).filter_by(slug=pressed_slug).first().code
+db.close()
+check("the copy they pressed Turn in for is never rewritten",
+      sub.snippet_slug != pressed_slug and kept == "print('more')\n"
+      and snap.code == "print('after pressing')\n", kept)
+auto_slug = sub.snippet_slug
+r = save("print('and again')\n", turn_in=True)
+_, sub, snap = auto_state()
+check("  the automatic one after it is rewritten in place again",
+      sub.snippet_slug == auto_slug and snap.code == "print('and again')\n")
+
+# Three books' worth of data files: a teacher's project with three
+# 8,000-line texts was refused as too large to save.
+d, _, _ = auto_state()
+book = "".join("Line %d of a long novel, about as long as a line of prose.\n" % i
+               for i in range(8000))
+books = dict(json.loads(d.files), **{"book%d.txt" % i: book for i in (1, 2, 3)})
+r = kid5.post("/api/draft/" + d.slug, json={"code": "print(1)\n", "files": books})
+check("three book-length text files save (%d KB each)" % (len(book) // 1024),
+      r.status_code == 200, r.get_json())
+r = kid5.post("/api/draft/" + d.slug, json={"code": "print(1)\n",
+              "files": {"huge.txt": "x" * (P.MAX_FILE_BYTES + 1)}})
+check("  one file over the limit is still refused, by name",
+      r.status_code == 400 and "huge.txt" in r.get_json().get("error", ""), r.get_json())
 
 r = teacher.post("/api/assignment", json={
     "title": "Mine", "code": "x = 1\n", "files": {"notes.md": "```quiz\nPick b\n- [ ] a\n- [x] b\n```\n"}})
