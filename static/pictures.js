@@ -77,7 +77,15 @@ window.PyIDEPictures = (function () {
       upload(file).then(function (url) {
         var pos = mark.find();
         mark.clear();
-        if (!pos) pos = doc.getCursor();
+        /* Gone: the doc was reloaded under it (FlaskIDE's editor swaps files
+           with setValue, which clears every bookmark). The cursor is then in
+           some other file — app.py, main.py — so the picture is handed over
+           instead of being written into code where nobody asked for it. */
+        if (!pos) {
+          window.prompt("The notes were closed while the picture uploaded. " +
+                        "Paste this where you want it:", markdown(file, url));
+          return;
+        }
         var line = doc.getLine(pos.line);
         var before = pos.ch > 0 ? "\n" : "";
         var after = pos.ch < line.length ? "\n" : "";

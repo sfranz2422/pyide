@@ -80,7 +80,7 @@ lesson = teacher.post("/api/lesson", json={"title": "Pictures"}).get_json()["slu
 page = teacher.get("/teacher/%s/lesson" % lesson).get_data(as_text=True)
 check("has Add picture beside the notes", 'id="lesson-pic"' in page)
 check("  and loads pictures.js before lesson_teacher.js, which uses it",
-      PICS in page and page.index(PICS) < page.index("lesson_teacher.js"))
+      PICS in page and page.index(PICS) < page.index('src="/static/lesson_teacher.js"'))
 js = open(os.path.join(PYIDE, "static", "lesson_teacher.js")).read()
 check("  its button opens the picker and writes into the notes",
       re.search(r'\$\("lesson-pic"\)\.addEventListener\("click", function \(\) \{\s*'
@@ -94,7 +94,7 @@ hw = teacher.post("/api/assignment", json={"title": "Pics", "code": "print(1)",
                                            "files": {"notes.md": "# Hi\n"}}).get_json()["slug"]
 page = teacher.get("/teacher/%s/edit" % hw).get_data(as_text=True)
 check("a teacher editing an assignment has Add picture", 'id="notes-pic"' in page)
-check("  and pictures.js, before app.js", PICS in page and page.index(PICS) < page.index("app.js"))
+check("  and pictures.js, before app.js", PICS in page and page.index(PICS) < page.index('src="/static/app.js"'))
 page = teacher.get("/new").get_data(as_text=True)
 check("  and in a new project of their own", 'id="notes-pic"' in page)
 check("a student's own new project has none: the upload would refuse them",
@@ -177,6 +177,16 @@ function later(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await later(30);
   out.midline = d.getValue();
 
+  // The notes reloaded mid-upload (FlaskIDE swaps files with setValue,
+  // which clears bookmarks): nothing is written into whatever is open now;
+  // the markdown is handed over instead.
+  var prompts = []; global.prompt = function (m, v) { prompts.push(v); };
+  d = new Doc("print(1)");
+  Pics.insertInto(d, [file("lost.png")]);
+  d.marks.forEach(function (m) { m.live = false; });
+  await later(30);
+  out.lost = {text: d.getValue(), prompts: prompts};
+
   // Refused: nothing written, the server's words shown.
   answer = {ok: false, body: {error: "That picture is too big (4 MB at most)."}};
   d = new Doc("keep");
@@ -223,6 +233,8 @@ check("a picture goes where the cursor was, not where typing moved it",
       got.get("typed") == "# Title\nLook:\n![cat](/img/abc123)\nmore words", repr(got.get("typed")))
 check("  on a line of its own when dropped mid-line",
       got.get("midline") == "before \n![x](/img/abc123)\nafter", repr(got.get("midline")))
+check("a picture whose place was reloaded away is handed over, not written into code",
+      got.get("lost") == {"text": "print(1)", "prompts": ["![lost](/img/abc123)"]}, got.get("lost"))
 check("a refused picture writes nothing and says why",
       got.get("refused") == {"text": "keep", "alerts": ["That picture is too big (4 MB at most)."]},
       got.get("refused"))
