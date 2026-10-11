@@ -453,6 +453,27 @@
     });
   }
 
+  /* PICTURES IN THE NOTES, for a teacher (pictures.js; the server refuses
+     anyone else). Add picture opens the source first, so the teacher sees
+     where it lands; paste and drop work only while the .md source is in the
+     editor — the same CodeMirror holds main.py, and a picture dropped on
+     code is left to the browser as it always was. */
+  var notesPicBtn = $("notes-pic");
+  if (notesPicBtn && notesEditBtn) {
+    window.PyIDEPictures.attach(editor, function () {
+      return mdSourceOpen && window.PyIDENotes.isMarkdown(active);
+    });
+    notesPicBtn.addEventListener("click", function () {
+      if (!window.PyIDENotes.isMarkdown(active)) return;
+      if (!mdSourceOpen) notesEditBtn.click();
+      var doc = docs[active];
+      window.PyIDEPictures.choose(function (files) {
+        window.PyIDEPictures.insertInto(doc, files);
+        editor.focus();
+      });
+    });
+  }
+
   // live preview while the markdown source is open
   editor.on("change", function () {
     if (mdSourceOpen && window.PyIDENotes.isMarkdown(active)) {
