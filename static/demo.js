@@ -267,14 +267,7 @@
     clearOutput();
     await repaint();
 
-    try {
-      await pyodide.loadPackagesFromImports(loaded.code, {
-        messageCallback: function () {},
-        errorCallback: function () {}
-      });
-    } catch (e) {
-      /* an unavailable import surfaces as a normal ModuleNotFoundError below */
-    }
+    await window.PyIDERuntime.loadImports(pyodide, loaded.code, loaded.files);
 
     pushFilesToPython(loaded.files);
     consoleIO.setEnabled(true);

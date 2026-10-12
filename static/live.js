@@ -1311,6 +1311,9 @@
       stage.hidden = true;
       document.body.classList.remove("is-game");
       clearOutput();
+      /* This page once skipped the import scan entirely, so `import pandas`
+         that ran in the editor was a ModuleNotFoundError in a live lesson. */
+      await window.PyIDERuntime.loadImports(pyodide, source, dataFiles());
       consoleIO.setEnabled(true);
       try {
         pyodide.globals.set("_pyide_source", source);

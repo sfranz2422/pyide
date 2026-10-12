@@ -777,7 +777,14 @@
   var requestsReady = false;
   var requestsWorking = null;
 
-  function wantsRequests(source) { return REQUESTS_RE.test(source); }
+  /* Every .py file, for the reason in PyIDERuntime.loadImports: an import in
+     helpers.py alone was never seen, and requests was never installed. */
+  function wantsRequests(source) {
+    var files = dataFiles();
+    return REQUESTS_RE.test(source) || Object.keys(files).some(function (n) {
+      return /\.py$/.test(n) && REQUESTS_RE.test(files[n]);
+    });
+  }
 
   async function ensureRequests(source) {
     if (requestsReady || !wantsRequests(source)) return;
@@ -868,14 +875,7 @@
       return;                       // the reason is already on screen
     }
 
-    try {
-      await pyodide.loadPackagesFromImports(source, {
-        messageCallback: function () {},
-        errorCallback: function () {}
-      });
-    } catch (e) {
-      /* an unavailable import surfaces as a normal ModuleNotFoundError below */
-    }
+    await window.PyIDERuntime.loadImports(pyodide, source, dataFiles());
 
     pushFilesToPython();
     consoleIO.setEnabled(true);

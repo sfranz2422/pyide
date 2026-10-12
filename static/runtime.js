@@ -555,9 +555,44 @@ window.PyIDERuntime = (function () {
     };
   }
 
+  /* Fetch whatever Pyodide packages (numpy, pandas, ...) the project imports,
+   * before it runs.
+   *
+   * EVERY .py FILE, NOT JUST main.py
+   *
+   * loadPackagesFromImports only reads the text it is handed. Given main.py
+   * alone, a helpers.py doing `import pandas` was never seen, and the program
+   * died with ModuleNotFoundError on a line that is perfectly correct — with
+   * nothing on screen to say the import had to be in main.py too.
+   *
+   * ONE CALL PER FILE, NOT ONE JOINED STRING
+   *
+   * Two files that each compile are not one file that compiles: a
+   * `from __future__` import is only legal at the top, so gluing them together
+   * could make the import scan fail and load nothing, silently.
+   *
+   * A failure here is swallowed on purpose: an import Pyodide can't provide
+   * surfaces as the ordinary ModuleNotFoundError when the program runs, which
+   * is the message a student can look up. */
+  async function loadImports(pyodide, source, files) {
+    var sources = [source];
+    Object.keys(files || {}).forEach(function (name) {
+      if (/\.py$/.test(name)) sources.push(files[name]);
+    });
+    for (var i = 0; i < sources.length; i++) {
+      try {
+        await pyodide.loadPackagesFromImports(sources[i], {
+          messageCallback: function () {},
+          errorCallback: function () {}
+        });
+      } catch (e) { /* see above */ }
+    }
+  }
+
   return {
     BOOTSTRAP: BOOTSTRAP,
     pipeOutput: pipeOutput,
-    attachConsole: attachConsole
+    attachConsole: attachConsole,
+    loadImports: loadImports
   };
 })();
