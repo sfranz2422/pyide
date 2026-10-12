@@ -449,6 +449,11 @@ html, body {
 }
 .output .err { color: var(--red); }
 .output .dim { color: var(--muted); }
+/* plt.show(). On its own line, inside the pane however narrow; the white is
+   matplotlib's own figure background, kept so a chart reads the same in a
+   dark theme as in the textbook. Width is set from the image (runtime.js). */
+.output img.chart { display: block; max-width: 100%; height: auto;
+                    margin: 6px 0; border-radius: 4px; background: #fff; }
 
 /* ------------------------------------------------- typing into the output */
 /* input() reads here rather than in a browser dialog, so the question, the

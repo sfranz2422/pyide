@@ -5,3 +5,7 @@ __pycache__/
 venv/
 .env
 .DS_Store
+
+# Packages node's Pyodide fetches and caches beside itself when a test
+# imports matplotlib or pandas (test_charts.py). Megabytes, and re-fetched.
+node_modules/pyodide/*.whl
