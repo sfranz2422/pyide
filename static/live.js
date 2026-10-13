@@ -1396,6 +1396,7 @@
     }
     if (stageTitle) stageTitle.textContent = teachers ? HOST + "'s game" : "Your game";
     stage.hidden = false;
+    fitCanvas();
     /* The same class the editor sets. It is what turns the output pane into
        a log strip under the picture instead of letting it fight the canvas
        for the right-hand column. */
@@ -1406,6 +1407,9 @@
       var status = await pyodide.runPythonAsync(
         "_pyide_run_game(" + JSON.stringify(source) + ")"
       );
+      // kaypy(width=…, height=…) has set the canvas's size by now, and SDL
+      // its style: fit it again, to the game's own shape.
+      fitCanvas();
       if (status === "ok") await pyodide.runPythonAsync("await _pyide_drive_game()");
     } catch (e) {
       write(String(e) + "\n", "err");
@@ -1488,6 +1492,39 @@
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
+
+  /* THE GAME FITS ITS PANE, whatever size the student drags it to — the
+     largest that fits, keeping the game's own shape, up as well as down
+     (demo.js does the same for a demo link). CSS's max-width alone could
+     only shrink it, and a canvas left at its own 800px was what grew to the
+     full width when a game stopped and pushed the output over the notes.
+     SDL reads the size on screen to place the mouse, so a scaled canvas
+     still clicks where the student points. */
+  var stageFrame = stage ? stage.querySelector(".stage-frame") : null;
+
+  function fitCanvas() {
+    if (!canvas || !stageFrame || stage.hidden) return;
+    var cs = getComputedStyle(stageFrame);
+    var w = stageFrame.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var h = stageFrame.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var ratio = canvas.width / canvas.height;
+    if (!(w > 0 && h > 0 && ratio > 0)) return;
+    var cw = Math.floor(Math.min(w, h * ratio));
+    canvas.style.width = cw + "px";
+    canvas.style.height = Math.floor(cw / ratio) + "px";
+  }
+
+  if (stageFrame && window.ResizeObserver) {
+    new ResizeObserver(fitCanvas).observe(stageFrame);
+  }
+
+  /* The handles between the panes (split.js). Both editors are told,
+     because CodeMirror measures itself only on a window resize, and a pane
+     dragged narrower would otherwise keep a scrollbar for the old width. */
+  window.PyIDESplit.attachAll(document, {
+    wide: window.matchMedia ? window.matchMedia("(min-width: 861px)") : null,
+    onResize: function () { mirror.refresh(); mine.refresh(); fitCanvas(); }
+  });
 
   // ----------------------------------------------------------------- theme
   /* The editor's light/dark button, on the same localStorage key, so a choice

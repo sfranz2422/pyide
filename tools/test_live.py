@@ -533,7 +533,12 @@ check("  that copies the class's whole link",
 # or a folded console opening — cannot take their height. The output took it
 # from the teacher's copy because its basis was `auto`, its own content.
 _css = open(os.path.join(HERE, "..", "static", "style.css")).read()
-for _sel in (".live-right .live-notes", ".pane-right .class-view"):
+#
+# Not the class's page any more: there the notes are what is LEFT, and it is
+# the output that cannot grow — a set size, beside a game or not, that its
+# content cannot change and folding does not hand over. Same promise, the
+# other way round, which is what lets students drag the panes (split.js).
+for _sel in (".pane-right .class-view",):
     _rule = re.search(re.escape(_sel) + r"\s*\{([^}]*)\}", _css)
     check("%s is a fixed size" % _sel,
           _rule and re.search(r"flex:\s*0 0 ", _rule.group(1)),
@@ -541,6 +546,12 @@ for _sel in (".live-right .live-notes", ".pane-right .class-view"):
 check("  and the output beside them takes only what is left",
       re.search(r"\.pane-right #output-view\s*\{\s*flex:\s*1 1 0;", _css)
       and not re.search(r"#output-view\.is-folded\s*\{\s*flex", _css))
+_live_out = [re.search(re.escape(sel) + r"\s*\{([^}]*)\}", _css) for sel in (
+    "body.is-live .live-right #output-view",
+    "body.is-live .live-right .stage:not([hidden]) ~ #output-view")]
+check("on the class's page the output is a set size that cannot grow",
+      all(r and re.search(r"flex:\s*0 1 \d+(px|%)", r.group(1)) for r in _live_out),
+      [r.group(1).strip() if r else None for r in _live_out])
 
 
 # ------------------------------------------------ keeping their own copy
@@ -1274,21 +1285,46 @@ check("  and a copy made some other way is refused",
       and "preventDefault" in live_code,
       "user-select is a hint; find-on-page and extensions get round it")
 
-# THE NOTES WIN WHILE A GAME RUNS. Split three ways on a Chromebook the notes
-# were a heading and nothing else; the canvas is capped lower here, the output
-# is a fixed strip, and the notes take the rest. The last rule for a selector
-# is the one that holds, so it is the last one that is checked.
+# THE RIGHT-HAND COLUMN, AND THE HANDLES BETWEEN PANES. Split three ways on a
+# Chromebook the notes were a heading; and when a game STOPPED, `is-game` came
+# off, the last frame stayed at the column's full width, and the output was
+# squeezed until its lines were drawn over the notes. So the column follows
+# whether the stage is shown, never whether a game is running, the notes are
+# always what is left, and students drag the handles (split.js).
 # One-line rules, so not declares(), which wants each property on its own line.
 def _last_rule_says(selector, prop, value):
-    at = css.rindex(selector + " {")
+    at = css.rfind(selector + " {")
+    if at < 0:
+        return False                   # renamed or gone: a FAIL, not a crash
     rule = css[at + len(selector):css.index("}", at)]
     return re.search(r"[{;]\s*%s:\s*%s\s*;" % (prop, value), rule) is not None
-check("on the class's page, a game leaves the notes the column",
-      _last_rule_says("body.is-live.is-game .live-right .live-notes", "flex", "1 1 0")
-      and _last_rule_says("body.is-live.is-game .live-right .live-notes", "min-height", "0")
-      and _last_rule_says("body.is-live.is-game .live-right #output-view .output", "height", "76px")
-      and _last_rule_says("body.is-live.is-game .live-right #canvas", "max-height", "28vh"),
+check("on the class's page the notes are what is left of the column",
+      _last_rule_says("body.is-live .live-right .live-notes", "flex", "1 1 0")
+      and _last_rule_says("body.is-live .live-right .live-notes", "min-height", "0")
+      and _last_rule_says("body.is-live .live-right .stage", "flex", "0 1 38%")
+      and _last_rule_says("body.is-live .live-right .stage:not([hidden]) ~ #output-view",
+                          "flex", "0 1 96px"),
       "the notes were a heading and nothing else on a Chromebook")
+check("  and none of it changes when a game stops",
+      "body.is-live.is-game" not in css,
+      "a stopped game grew to full width and its output covered the notes")
+_splits = re.findall(r'<div class="split split-([xy])" data-split="([\w-]+)"></div>', page)
+check("every pane on the class's page has a handle",
+      sorted(n for _, n in _splits) == sorted(["live-mirror-code", "live-mirror",
+             "live-left", "live-stage", "live-output"])
+      and "split.js" in page, _splits)
+check("  which tells both editors and the game when a size changes",
+      re.search(r"PyIDESplit\.attachAll\(document, \{[^}]*onResize: function \(\) "
+                r"\{ mirror\.refresh\(\); mine\.refresh\(\); fitCanvas\(\); \}",
+                live_code) is not None,
+      "CodeMirror measures itself only on a window resize")
+check("  and the game is fitted again once it has set its own size",
+      -1 < _game_fn.find("_pyide_run_game(") < _game_fn.find("fitCanvas();", _game_fn.find("_pyide_run_game("))
+      < _game_fn.find("_pyide_drive_game()"),
+      "kaypy(width=…) changes the canvas after the first fit")
+check("  and a handle beside a hidden pane goes with it",
+      ".split:has(+ [hidden]), [hidden] + .split { display: none; }" in css
+      and ".live-split :has(+ .split + [hidden]) { flex: 1 1 0 !important; }" in css)
 
 # A .md FILE IS A LINK THE CLASS CAN CLICK.
 #

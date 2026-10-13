@@ -110,6 +110,13 @@ student's Python. It never pulls files into their project: whatever it
 writes into `/project` is deleted when it stops (`forgetTeacherFiles`), or
 a `scores.txt` from the teacher's game turns up as a tab in theirs.
 
+**The class's page has handles between its panes** (`static/split.js`).
+Each one sizes the pane before it, and the notes are always what's left.
+Sizes are kept per student in localStorage. Nothing in the right-hand
+column may depend on `body.is-game`: that class comes off when a game
+stops while its last frame stays on screen, and that is how a stopped game
+once pushed the output over the notes.
+
 **A lesson for an assignment starts the student's editor** where
 `/a/<slug>` would: their own draft of it if they have one, else its
 starter. It is rendered into the page (`starter`), never sent on the poll,

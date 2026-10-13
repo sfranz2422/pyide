@@ -1675,18 +1675,10 @@ a.needs-grading:hover { filter: brightness(1.1); }
 }
 .live-sent[hidden] { display: none; }
 
-/* The project's notes on the live page, under the output, at a FIXED size:
- * neither grow nor shrink. They were `flex: 1 1 55%` once, a share of the
- * column, and that still moved — the folded output handed them the whole
- * column, opening it took it back, and a game's canvas squeezed them too, so
- * the notes a class was reading shrank under them every time Run was
- * pressed. Now the output takes whatever is left, and scrolls in it. */
-.live-right .live-notes {
-  flex: 0 0 55%;
-  border-top: 1px solid var(--line);
-}
+/* The project's notes on the live page, under the output. How the column is
+ * shared out — and why the notes are no longer a fixed 55% — is under
+ * "THE CLASS'S RIGHT-HAND COLUMN", further down. */
 .live-right .live-notes[hidden] { display: none; }
-.live-right #output-view { flex: 1 1 0; }
 
 /* Folded: just the head. It keeps its space rather than giving it to the
  * notes, which is the point of the notes being a fixed size. The <pre> is
@@ -1803,19 +1795,83 @@ body.is-game .pane-right #output-view { flex: 1 1 0; min-height: 110px; }
 body.is-game .pane-right .class-view,
 body.is-game .live-right .live-notes { flex: 1 1 0; min-height: 120px; }
 
-/* ON THE CLASS'S PAGE THE NOTES WIN. The rules above split the column three
- * ways, and on a Chromebook (1366x768, less the browser's own bars) that left
- * the notes about 60px of text under the slide arrows — a heading and nothing
- * else, with the output's lines scrolling just above it. The notes are what
- * the class is reading; the game is something they glance at, and the output
- * of a game is mostly "Game running". So here the canvas is capped lower, the
- * output is a strip of three or four lines, and the notes take everything
- * else. A student who wants a big game has New tab, which gives it the whole
- * screen. */
-body.is-live.is-game .live-right #canvas { max-height: 28vh; }
-body.is-live.is-game .live-right #output-view { flex: 0 0 auto; min-height: 0; }
-body.is-live.is-game .live-right #output-view .output { flex: none; height: 76px; }
-body.is-live.is-game .live-right .live-notes { flex: 1 1 0; min-height: 0; }
+/* THE CLASS'S RIGHT-HAND COLUMN: GAME, OUTPUT, NOTES — AND HANDLES.
+ *
+ * Every fixed split of this column was wrong for somebody. Shared three ways
+ * on a Chromebook the notes were a heading and nothing else. Capped by
+ * `body.is-game`, the game shrank while it ran — and the moment it stopped,
+ * the class came off, the last frame stayed on screen at the column's full
+ * width, the output between it and the notes was squeezed to nothing, and
+ * its lines were drawn over the notes. So here nothing depends on whether a
+ * game is RUNNING, only on whether the stage is SHOWN, and the handles
+ * between the panes (split.js) let each student choose. A dragged size is
+ * inline on the pane and beats everything below.
+ *
+ * Defaults: the game a bit over a third of the column; the output a strip
+ * of three lines beside a game, and close to half without one; the notes
+ * whatever is left, always. Folding the output keeps its size rather than
+ * handing it to the notes, as before, so the notes do not jump when Run
+ * opens it.
+ *
+ * `body.is-live` on each so these outrank the editor's `body.is-game`
+ * rules above, which are written for a different column. */
+body.is-live .live-right .stage { flex: 0 1 38%; min-height: 0; border-bottom: 0; }
+body.is-live .live-right .stage-frame { flex: 1 1 0; min-height: 0; overflow: hidden; }
+/* live.js's fitCanvas sizes it to the frame, up as well as down. */
+body.is-live .live-right #canvas { max-height: none; max-width: none; }
+body.is-live .live-right #output-view { flex: 0 1 45%; min-height: 0; }
+body.is-live .live-right .stage:not([hidden]) ~ #output-view { flex: 0 1 96px; }
+body.is-live .live-right .output { flex: 1 1 auto; min-height: 0; }
+body.is-live .live-right .live-notes { flex: 1 1 0; min-height: 0; border-top: 0; }
+
+/* ------------------------------------------------------------- handles */
+/* A bar between two panes, with a grip in the middle. It replaces the
+ * border that used to be there, so the page has one line between panes and
+ * not two. touch-action: none, or a finger on a touch screen scrolls the
+ * page instead of dragging. */
+.split {
+  flex: 0 0 7px;
+  position: relative;
+  background: var(--bg-head);
+  touch-action: none;
+}
+.split-x { cursor: col-resize; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.split-y { cursor: row-resize; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.split::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: .6;
+}
+.split-x::after { width: 3px; height: 28px; }
+.split-y::after { width: 28px; height: 3px; }
+.split:hover, .split:focus-visible, .split.is-dragging { background: var(--accent); outline: none; }
+.split:hover::after, .split:focus-visible::after, .split.is-dragging::after { background: #fff; opacity: 1; }
+/* While dragging, the cursor stays a resize arrow over whatever it crosses —
+ * CodeMirror, the canvas — and nothing gets selected on the way. */
+body.is-resizing-x, body.is-resizing-x * { cursor: col-resize !important; user-select: none !important; }
+body.is-resizing-y, body.is-resizing-y * { cursor: row-resize !important; user-select: none !important; }
+
+/* A handle beside a hidden pane goes with it, and the pane it sized fills
+ * the space instead — or the teacher's code would stay at a dragged width
+ * with an empty gap where their output was going to be. */
+.split:has(+ [hidden]), [hidden] + .split { display: none; }
+.live-split :has(+ .split + [hidden]) { flex: 1 1 0 !important; }
+
+/* The handles take the place of these borders. */
+body.is-live .live-left { border-right: 0; }
+body.is-live .live-mirror { border-bottom: 0; }
+body.is-live .live-mirror-out { border-left: 0; }
+
+/* Stacked, the page scrolls and there is nothing to share; split.js takes
+ * the dragged sizes off at the same width. */
+@media (max-width: 860px) {
+  .split { display: none; }
+}
 
 /* ---------------------------------------------------------------- classes */
 .class-cards { list-style: none; margin: 0 0 14px; padding: 0;
