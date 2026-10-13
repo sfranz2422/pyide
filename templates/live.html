@@ -213,7 +213,7 @@
       {#  Handles (split.js): each sizes the pane before it, and the pane
           after takes the rest. Students drag them; the sizes are kept in
           their browser. A handle beside a hidden pane is hidden with it. #}
-      <div class="split split-x" data-split="live-mirror-code"></div>
+      <div class="resizer resizer-x" data-split="live-mirror-code"></div>
       {#  Its own <pre>, never the student's #output: that one is where
           input() takes their typing, and nothing from the network may land
           in it. #}
@@ -229,7 +229,7 @@
       </div>
     </div>
 
-    <div class="split split-y" data-split="live-mirror"></div>
+    <div class="resizer resizer-y" data-split="live-mirror"></div>
 
     <div class="live-pane live-mine">
       {#  Tabs, like the editor's: main.py and every other file in their
@@ -266,7 +266,7 @@
     </div>
   </section>
 
-  <div class="split split-x" data-split="live-left"></div>
+  <div class="resizer resizer-x" data-split="live-left"></div>
 
   <section class="pane pane-right live-right">
     <div id="stage" class="stage" hidden>
@@ -275,7 +275,7 @@
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
       </div>
     </div>
-    <div class="split split-y" data-split="live-stage"></div>
+    <div class="resizer resizer-y" data-split="live-stage"></div>
 
     {#  Folded to its head until opened or until the student presses Run;
         see openConsole in live.js. The teacher's output is not here — it
@@ -293,7 +293,7 @@
       <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
     </div>
-    <div class="split split-y" data-split="live-output"></div>
+    <div class="resizer resizer-y" data-split="live-output"></div>
 
     {#  The project's notes, always in view — not only while the teacher has
         the .md tab open. Rendered by notes.js, which sanitises the HTML and

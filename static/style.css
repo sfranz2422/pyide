@@ -1825,19 +1825,23 @@ body.is-live .live-right .output { flex: 1 1 auto; min-height: 0; }
 body.is-live .live-right .live-notes { flex: 1 1 0; min-height: 0; border-top: 0; }
 
 /* ------------------------------------------------------------- handles */
+/* `.resizer`, NOT `.split`: `.split` is the editor's own <main>. These rules
+ * were written as `.split` once, and every editor page went blank below the
+ * toolbar — the whole editor became a 7px bar, and on a narrow screen it was
+ * display: none. */
 /* A bar between two panes, with a grip in the middle. It replaces the
  * border that used to be there, so the page has one line between panes and
  * not two. touch-action: none, or a finger on a touch screen scrolls the
  * page instead of dragging. */
-.split {
+.resizer {
   flex: 0 0 7px;
   position: relative;
   background: var(--bg-head);
   touch-action: none;
 }
-.split-x { cursor: col-resize; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-.split-y { cursor: row-resize; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.split::after {
+.resizer-x { cursor: col-resize; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.resizer-y { cursor: row-resize; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.resizer::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -1847,10 +1851,10 @@ body.is-live .live-right .live-notes { flex: 1 1 0; min-height: 0; border-top: 0
   background: var(--muted);
   opacity: .6;
 }
-.split-x::after { width: 3px; height: 28px; }
-.split-y::after { width: 28px; height: 3px; }
-.split:hover, .split:focus-visible, .split.is-dragging { background: var(--accent); outline: none; }
-.split:hover::after, .split:focus-visible::after, .split.is-dragging::after { background: #fff; opacity: 1; }
+.resizer-x::after { width: 3px; height: 28px; }
+.resizer-y::after { width: 28px; height: 3px; }
+.resizer:hover, .resizer:focus-visible, .resizer.is-dragging { background: var(--accent); outline: none; }
+.resizer:hover::after, .resizer:focus-visible::after, .resizer.is-dragging::after { background: #fff; opacity: 1; }
 /* While dragging, the cursor stays a resize arrow over whatever it crosses —
  * CodeMirror, the canvas — and nothing gets selected on the way. */
 body.is-resizing-x, body.is-resizing-x * { cursor: col-resize !important; user-select: none !important; }
@@ -1859,8 +1863,8 @@ body.is-resizing-y, body.is-resizing-y * { cursor: row-resize !important; user-s
 /* A handle beside a hidden pane goes with it, and the pane it sized fills
  * the space instead — or the teacher's code would stay at a dragged width
  * with an empty gap where their output was going to be. */
-.split:has(+ [hidden]), [hidden] + .split { display: none; }
-.live-split :has(+ .split + [hidden]) { flex: 1 1 0 !important; }
+.resizer:has(+ [hidden]), [hidden] + .resizer { display: none; }
+.live-split :has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }
 
 /* The handles take the place of these borders. */
 body.is-live .live-left { border-right: 0; }
@@ -1870,7 +1874,7 @@ body.is-live .live-mirror-out { border-left: 0; }
 /* Stacked, the page scrolls and there is nothing to share; split.js takes
  * the dragged sizes off at the same width. */
 @media (max-width: 860px) {
-  .split { display: none; }
+  .resizer { display: none; }
 }
 
 /* ---------------------------------------------------------------- classes */

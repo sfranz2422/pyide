@@ -1308,7 +1308,7 @@ check("on the class's page the notes are what is left of the column",
 check("  and none of it changes when a game stops",
       "body.is-live.is-game" not in css,
       "a stopped game grew to full width and its output covered the notes")
-_splits = re.findall(r'<div class="split split-([xy])" data-split="([\w-]+)"></div>', page)
+_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"></div>', page)
 check("every pane on the class's page has a handle",
       sorted(n for _, n in _splits) == sorted(["live-mirror-code", "live-mirror",
              "live-left", "live-stage", "live-output"])
@@ -1322,9 +1322,16 @@ check("  and the game is fitted again once it has set its own size",
       -1 < _game_fn.find("_pyide_run_game(") < _game_fn.find("fitCanvas();", _game_fn.find("_pyide_run_game("))
       < _game_fn.find("_pyide_drive_game()"),
       "kaypy(width=…) changes the canvas after the first fit")
+# The handles were `.split` once, which is the editor's <main>: every editor
+# page went blank under the toolbar. Only the editor's rules may name it.
+_split_rules = re.findall(r"(?m)^[^/*\n]*\.split\b(?!-)[^{\n]*\{", css)
+check("  without touching the editor, whose <main> is .split",
+      len(_split_rules) == 3 and "resizer" not in open(os.path.join(
+          PYIDE, "templates", "index.html")).read(),
+      _split_rules)
 check("  and a handle beside a hidden pane goes with it",
-      ".split:has(+ [hidden]), [hidden] + .split { display: none; }" in css
-      and ".live-split :has(+ .split + [hidden]) { flex: 1 1 0 !important; }" in css)
+      ".resizer:has(+ [hidden]), [hidden] + .resizer { display: none; }" in css
+      and ".live-split :has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }" in css)
 
 # A .md FILE IS A LINK THE CLASS CAN CLICK.
 #

@@ -1,14 +1,14 @@
 /* PyIDE — handles for resizing panes.
  *
- * A handle is an element with class "split" between two panes. Dragging it
+ * A handle is an element with class "resizer" between two panes. Dragging it
  * sizes the pane BEFORE it; the pane after it (and whatever follows) takes
  * the rest, through the flex rules already in style.css. That is the whole
  * model, and it is deliberately that small: one number per handle, nothing
  * to keep in step when a pane appears or goes away.
  *
- *     <div class="split split-y" data-split="notes" ...></div>
+ *     <div class="resizer resizer-y" data-split="notes" ...></div>
  *
- * split-x drags sideways and sets a width; split-y drags up and down and
+ * resizer-x drags sideways and sets a width; resizer-y drags up and down and
  * sets a height. data-split names the size in this browser's storage, so a
  * student who made the notes bigger finds them that size in the next lesson.
  * Double-click puts the pane back to the page's own size.
@@ -65,7 +65,7 @@ window.PyIDESplit = (function () {
      itself on a window resize and at no other time. */
   function attachAll(root, opts) {
     opts = opts || {};
-    var handles = Array.prototype.slice.call(root.querySelectorAll(".split[data-split]"));
+    var handles = Array.prototype.slice.call(root.querySelectorAll(".resizer[data-split]"));
     var wide = opts.wide || { matches: true };
     var queued = false;
 
@@ -83,7 +83,7 @@ window.PyIDESplit = (function () {
     }
 
     handles.forEach(function (handle) {
-      var vertical = handle.classList.contains("split-y");
+      var vertical = handle.classList.contains("resizer-y");
       handle.setAttribute("role", "separator");
       handle.setAttribute("aria-orientation", vertical ? "horizontal" : "vertical");
       handle.tabIndex = 0;
