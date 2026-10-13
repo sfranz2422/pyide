@@ -10,6 +10,56 @@ Run at once on Render's free tier without trouble.
 
 ---
 
+## For teachers: run your own copy
+
+If you teach and found this on GitHub, you're welcome to run it for your own
+classes. You get your own site, your own students' work in your own database,
+and nothing shared with anyone else's.
+
+1. **Make your own copy of the repository.** Fork it on GitHub, or clone it
+   and push it to a new repository of your own:
+
+   ```bash
+   git clone https://github.com/sfranz2422/pyide.git
+   cd pyide
+   git remote set-url origin https://github.com/YOUR-NAME/pyide.git
+   git push -u origin main
+   ```
+
+2. **Put it on [Render](https://render.com).** Sign in with GitHub, choose
+   **New → Blueprint** and pick your repository. `render.yaml` creates the web
+   service and its Postgres database and connects them. Render redeploys
+   whenever you push.
+
+3. **Set yourself as the teacher.** Add your email to `TEACHER_EMAILS` on the
+   service's Environment page. Google sign-in (`GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`) is optional. Without it, students can still open a
+   link, write code, run it and share it. With it, they get saved work,
+   assignments and turn-in. The steps are in
+   [Setting up Google sign-in](#setting-up-google-sign-in).
+
+4. **Use paid plans before students hand in real work.** Render's free
+   database is deleted after 30 days, and everything in it goes too. See
+   [Don't run this on the free tier](#dont-run-this-on-the-free-tier).
+
+To pick up later improvements from this repository:
+
+```bash
+git remote add upstream https://github.com/sfranz2422/pyide.git
+git pull upstream main
+git push                        # Render redeploys
+```
+
+After a deploy, do a hard refresh in the browser (Cmd+Shift+R or
+Ctrl+Shift+R) so it loads the new code.
+
+The same goes for the sister apps,
+[WebIDE](https://github.com/sfranz2422/webide) (HTML, CSS and JavaScript) and
+[FlaskIDE](https://github.com/sfranz2422/flaskide) (Flask and SQL). They can
+share this app's database, so one sign-in covers all three.
+
+---
+
 ## Accounts, saved work and turning in
 
 Signing in is **optional and additive**. With no Google credentials set, the
