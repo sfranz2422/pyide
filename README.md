@@ -53,6 +53,8 @@ git push                        # Render redeploys
 After a deploy, do a hard refresh in the browser (Cmd+Shift+R or
 Ctrl+Shift+R) so it loads the new code.
 
+It's free to use, change and share under the MIT license (see `LICENSE`).
+
 The same goes for the sister apps,
 [WebIDE](https://github.com/sfranz2422/webide) (HTML, CSS and JavaScript) and
 [FlaskIDE](https://github.com/sfranz2422/flaskide) (Flask and SQL). They can
