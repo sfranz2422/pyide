@@ -1201,12 +1201,42 @@ check("  every save carries those tabs, never an empty map",
       "an autosave sending {} emptied the project of its data files")
 _run_fn = live_code[live_code.index("async function run()"):]
 _run_fn = _run_fn[:_run_fn.index("\n  }\n")]
+# A game goes on to runGame, which the teacher's Play it here shares, so
+# the files have to be in before that call — not inside it, where the
+# teacher's game would be handed them too.
 check("  and Run gives Python the files before running main.py",
       -1 < _run_fn.find("pushFilesToPython();") < _run_fn.find("_pyide_run(")
-      and _run_fn.find("pushFilesToPython();") < _run_fn.find("_pyide_run_game("),
+      and _run_fn.find("pushFilesToPython();") < _run_fn.find("runGame(source, false)"),
       "main.py would open a data file that is not there yet")
 check("  with tabs on the page to switch between them",
       'id="mine-tabs"' in page and 'starterFiles:' in page)
+
+# Play it here: the teacher's game, run on the student's own canvas, because a
+# game cannot come down a once-a-second poll but its code already does. It
+# runs in THEIR Python, in the folder their project is copied into, so
+# anything it writes there would come back as a tab in their project on their
+# next Run — the network writing into their work by the back door.
+_game_fn = live_code[live_code.index("async function runGame("):]
+_game_fn = _game_fn[:_game_fn.index("\n  }\n")]
+_play_fn = live_code[live_code.index("async function playTeacherGame()"):]
+_play_fn = _play_fn[:_play_fn.index("\n  }\n")]
+_stop_fn = live_code[live_code.index("function stopRun()"):]
+_stop_fn = _stop_fn[:_stop_fn.index("\n  }\n")]
+_note_fn = live_code[live_code.index("function noteTeacherGame("):]
+_note_fn = _note_fn[:_note_fn.index("\n  }\n")]
+check("the class can play the teacher's game", 'id="play-teacher"' in page
+      and "playTeacherGame()" in live_code and "runGame(source, true)" in _play_fn)
+check("  only from the teacher's main.py",
+      "!== MAIN) return;" in _note_fn
+      and "looksLikeGame(data.body)" in _note_fn,
+      "a helper .py or the notes would take the game away mid-lesson")
+check("  and nothing it writes becomes theirs",
+      "if (teachers) forgetTeacherFiles();\n        else pullFilesFromPython();" in _game_fn
+      and "forgetTeacherFiles();" in _stop_fn
+      and "teacherFilesBefore = projectEntries()" in _game_fn,
+      "a scores.txt from the teacher's game appeared as a tab in theirs")
+check("  nor is it given their files", "pushFilesToPython" not in _play_fn
+      and "pushFilesToPython" not in _game_fn)
 
 check("  and nothing in the polling path touches it at all",
       "mine.setValue(" not in after_mirror,
@@ -1243,6 +1273,22 @@ check("  and a copy made some other way is refused",
       re.search(r'\["copy", "cut"\]', live_code) is not None
       and "preventDefault" in live_code,
       "user-select is a hint; find-on-page and extensions get round it")
+
+# THE NOTES WIN WHILE A GAME RUNS. Split three ways on a Chromebook the notes
+# were a heading and nothing else; the canvas is capped lower here, the output
+# is a fixed strip, and the notes take the rest. The last rule for a selector
+# is the one that holds, so it is the last one that is checked.
+# One-line rules, so not declares(), which wants each property on its own line.
+def _last_rule_says(selector, prop, value):
+    at = css.rindex(selector + " {")
+    rule = css[at + len(selector):css.index("}", at)]
+    return re.search(r"[{;]\s*%s:\s*%s\s*;" % (prop, value), rule) is not None
+check("on the class's page, a game leaves the notes the column",
+      _last_rule_says("body.is-live.is-game .live-right .live-notes", "flex", "1 1 0")
+      and _last_rule_says("body.is-live.is-game .live-right .live-notes", "min-height", "0")
+      and _last_rule_says("body.is-live.is-game .live-right #output-view .output", "height", "76px")
+      and _last_rule_says("body.is-live.is-game .live-right #canvas", "max-height", "28vh"),
+      "the notes were a heading and nothing else on a Chromebook")
 
 # A .md FILE IS A LINK THE CLASS CAN CLICK.
 #

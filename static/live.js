@@ -254,6 +254,7 @@
    * class already reads in the Notes pane, but it is still part of what is
    * saved: a save that left it out would delete the assignment's notes. */
   var MAIN = "main.py";
+  var HOST = L.hostName || "Your teacher";
   var PROJECT_DIR = "/project";
   var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
   var FILES_KEY = DRAFT_KEY + "-files";
@@ -803,6 +804,7 @@
     showSnippet(data);
     showNotes(data);
     showTeacherOutput(data);
+    noteTeacherGame(data);
   }
 
   /* ------------------------------------------------ the teacher's caret
@@ -962,6 +964,39 @@
        on a window resize — without this its scrollbar and the caret's
        follow are worked out for the old width. */
     mirror.refresh();
+  }
+
+  /* THE TEACHER'S GAME, PLAYED HERE.
+
+     A game is not output that can be sent: it is a picture sixty times a
+     second, and this page hears from the teacher once a second. So the
+     teacher's pane used to show what a game printed — "Game running…" —
+     and the class never saw the game itself. But the teacher's code already
+     comes down on every poll, so Play it here runs THAT code in this
+     browser, on the student's own canvas. It hands them nothing to copy:
+     the code is the same text the mirror shows, and the game is only ever
+     a picture.
+
+     Only main.py counts. With the notes or a .txt open, the game they had
+     on main.py is still the one offered; a non-game main.py takes it away.
+     The pane is shown for it too, so the button is there before the
+     teacher's first Run. */
+  var teacherGame = "";
+  var playTeacherBtn = $("play-teacher");
+
+  function noteTeacherGame(data) {
+    if (!playTeacherBtn || typeof data.body !== "string") return;
+    if ((data.filename || MAIN) !== MAIN) return;
+    teacherGame = window.PyIDEGame.looksLikeGame(data.body) ? data.body : "";
+    playTeacherBtn.hidden = !teacherGame;
+    if (teacherGame && teacherView.hidden) {
+      teacherView.hidden = false;
+      mirror.refresh();                // narrower now; see showTeacherOutput
+    }
+  }
+
+  if (playTeacherBtn) {
+    playTeacherBtn.addEventListener("click", function () { playTeacherGame(); });
   }
 
   /* The output pane starts folded to its head, leaving the column to the
@@ -1331,18 +1366,35 @@
       return;
     }
 
+    await runGame(source, false);
+  }
+
+  /* A game on this page's canvas: theirs from Run, or the teacher's from
+     Play it here. The teacher's never touches their project — see
+     forgetTeacherFiles. */
+  var stageTitle = $("stage-title");
+
+  async function runGame(source, teachers) {
     var token = ++runToken;
     setBusy(true, "game");
+    if (teachers) teacherFilesBefore = projectEntries();
     try {
       canvas = await window.PyIDEGame.ensureReady(pyodide, function () {}, source);
       canvas.addEventListener("mousedown", function () { canvas.focus(); });
     } catch (e) {
       write("The game engine could not load.\n" + String(e) + "\n", "err");
+      forgetTeacherFiles();
       setBusy(false);
       return;
     }
     clearOutput();
-    write("Game running. Click the picture to play, and the editor to type.\n", "dim");
+    if (teachers) {
+      write("Playing " + HOST + "'s game, as their code is right now. "
+            + "Click the picture to play. Stop, then Run, goes back to yours.\n", "dim");
+    } else {
+      write("Game running. Click the picture to play, and the editor to type.\n", "dim");
+    }
+    if (stageTitle) stageTitle.textContent = teachers ? HOST + "'s game" : "Your game";
     stage.hidden = false;
     /* The same class the editor sets. It is what turns the output pane into
        a log strip under the picture instead of letting it fight the canvas
@@ -1361,10 +1413,56 @@
       // Only if this is still the run the toolbar is showing. See runToken.
       if (token === runToken) {
         window.PyIDEGame.stop(pyodide);
-        pullFilesFromPython();
+        if (teachers) forgetTeacherFiles();
+        else pullFilesFromPython();
         setBusy(false);
       }
     }
+  }
+
+  /* Play it here. Their own run, if one is going, is stopped first — one
+     canvas, one game. The teacher's code is compiled before anything loads,
+     like theirs, because the teacher is usually half way through typing a
+     line; that gets one sentence in the output, not the syntax card, whose
+     job is pointing at a line in THEIR editor. */
+  async function playTeacherGame() {
+    if (!pyodide || !teacherGame) return;
+    if (running) stopRun();
+    var source = teacherGame;
+    openConsole(true);
+    var bad = window.PyIDESyntax.check(pyodide, source, {});
+    if (bad) {
+      clearOutput();
+      write(HOST + "'s code can't run right now: line " + bad.line
+            + " isn't finished. Try again in a moment.\n", "dim");
+      return;
+    }
+    await runGame(source, true);
+  }
+
+  /* NOTHING THE TEACHER'S GAME WRITES BECOMES THEIRS. It runs in their
+     Python, in the folder their project is copied into, and kaypy's
+     setData() keeps a file there. pullFilesFromPython would have made a tab
+     of it in their project on their next Run — the network writing into
+     their work by the back door. So whatever appeared while it played is
+     deleted when it stops, by either way it can stop. */
+  var teacherFilesBefore = null;
+
+  function projectEntries() {
+    try { return pyodide.FS.readdir(PROJECT_DIR); } catch (e) { return []; }
+  }
+
+  function forgetTeacherFiles() {
+    if (!teacherFilesBefore) return;
+    var before = teacherFilesBefore;
+    teacherFilesBefore = null;
+    projectEntries().forEach(function (name) {
+      if (before.indexOf(name) >= 0) return;
+      var path = PROJECT_DIR + "/" + name;
+      try {
+        if (!pyodide.FS.isDir(pyodide.FS.stat(path).mode)) pyodide.FS.unlink(path);
+      } catch (e) { /* gone already */ }
+    });
   }
 
   function stopRun() {
@@ -1380,6 +1478,7 @@
        stopped; only the button disagrees. The student asked to stop and the
        engine has been told, so the UI is correct to say so now. */
     window.PyIDEGame.stop(pyodide);
+    forgetTeacherFiles();
     write("\n— stopped —\n", "dim");
     setBusy(false);
     document.body.classList.remove("is-game");

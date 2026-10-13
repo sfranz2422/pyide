@@ -122,9 +122,17 @@ window.PyIDEGame = (function () {
       }
       return nativeAdd(type, fn, opts);
     };
-    // So a listener SDL takes off by the function it put on comes off.
+    /* So a listener SDL takes off by the function it put on comes off — and
+       comes off the list too. SDL takes its own away when closeOldWindow
+       shuts its window, and one left on the list would be put back by the
+       next keyboardToGame, for a window that no longer exists, and then
+       stay on the document for good. */
     document.removeEventListener = function (type, fn, opts) {
-      return nativeRemove(type, (guarded && guarded.get(fn)) || fn, opts);
+      var mine = (guarded && guarded.get(fn)) || fn;
+      sdlKeyListeners = sdlKeyListeners.filter(function (entry) {
+        return !(entry[0] === type && entry[1] === mine);
+      });
+      return nativeRemove(type, mine, opts);
     };
   }
 
@@ -338,7 +346,40 @@ window.PyIDEGame = (function () {
     try { pyodide._api._skip_unwind_fatal_error = true; } catch (e) { /* older */ }
 
     keyboardToGame(true);           // the game is about to want the keys
+    closeOldWindow(pyodide);
     return freshCanvas(pyodide);
+  }
+
+  /* THE MOUSE ONLY WORKED ON THE FIRST RUN.
+   *
+   * SDL puts its mouse listeners on the canvas element itself, once, when its
+   * window is made — and kaypy's browser path never calls pygame.quit(), so
+   * the window from the first game outlived it. The second Run's set_mode()
+   * reused that window, and its mouse listeners stayed on the first canvas,
+   * which freshCanvas had already taken out of the page. Drawing followed
+   * the new canvas (setCanvas2D) and the keyboard was on `document`, so the
+   * game looked perfectly healthy and simply never heard a click:
+   * onMouseDown, onClick, mousePos all dead, with no error anywhere.
+   *
+   * It hid well. A fresh page is a first run, so the New tab always worked,
+   * and so does the first Run of every lesson — it was found on a live
+   * page, where students Run over and over in one tab.
+   *
+   * Closing the display here, before the canvas is swapped, means every game
+   * makes its own window on its own canvas. Only the display: the mixer
+   * and pygame's other parts carry on as they were. */
+  function closeOldWindow(pyodide) {
+    if (!pyodide || !pyodide.runPython) return;
+    try {
+      pyodide.runPython(
+        "import pygame as _pg\n" +
+        "if _pg.display.get_init():\n" +
+        "    _pg.display.quit()\n"
+      );
+    } catch (e) {
+      /* No window to close is the first-run case, and the next set_mode()
+         makes one either way. */
+    }
   }
 
   /* End a running game.

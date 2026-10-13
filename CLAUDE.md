@@ -103,6 +103,13 @@ that copies the teacher's code down. Typing it is the exercise, and the
 teacher's pane is `user-select: none` for the same reason. That is a speed
 bump, not a lock: the page is sent the file in order to show it.
 
+**Play it here** (`playTeacherGame` in `live.js`) is the teacher's game on
+the student's own canvas. A game can't come down a once-a-second poll, but
+its code already does, so the button runs the mirror's `main.py` in the
+student's Python. It never pulls files into their project: whatever it
+writes into `/project` is deleted when it stops (`forgetTeacherFiles`), or
+a `scores.txt` from the teacher's game turns up as a tab in theirs.
+
 **A lesson for an assignment starts the student's editor** where
 `/a/<slug>` would: their own draft of it if they have one, else its
 starter. It is rendered into the page (`starter`), never sent on the poll,

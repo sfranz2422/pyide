@@ -214,7 +214,13 @@
           input() takes their typing, and nothing from the network may land
           in it. #}
       <div id="teacher-output-view" class="live-mirror-out" hidden>
-        <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s output</span></div>
+        <div class="pane-head"><span>{{ live.host_name or "Teacher" }}'s output</span>
+          {#  The teacher's game, run in THIS browser on the student's own
+              canvas: a game cannot be sent down a once-a-second poll, but
+              its code already is. Shown while the teacher's main.py is a
+              game. See playTeacherGame in live.js. #}
+          <button id="play-teacher" class="btn btn-run btn-small" type="button" hidden
+                  title="Play {{ live.host_name or 'your teacher' }}'s game here, as their code is right now">▶ Play it here</button></div>
         <pre id="teacher-output" class="output"></pre>
       </div>
     </div>
@@ -256,7 +262,7 @@
 
   <section class="pane pane-right live-right">
     <div id="stage" class="stage" hidden>
-      <div class="pane-head"><span>Game</span></div>
+      <div class="pane-head"><span id="stage-title">Your game</span></div>
       <div class="stage-frame">
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
       </div>
@@ -343,6 +349,7 @@
     output: {{ (live.output if live else '') | tojson }},
     cursor: {{ (live.cursor if live else '') | tojson }},
     title: {{ (live.title if live else '') | tojson }},
+    hostName: {{ ((live.host_name if live else '') or 'Your teacher') | tojson }},
     signedIn: {{ 'true' if user else 'false' }},
     // Whose typing this browser keeps (live.js, DRAFT_KEY). An id, not a name.
     me: {{ (user.id if user else none) | tojson }},

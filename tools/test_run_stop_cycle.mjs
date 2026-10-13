@@ -265,6 +265,66 @@ check("  and comes off by the function SDL put on",
       keyListeners().length === before - 1);
 G.stop(pyodide);
 
+// ------------------------------------------ the mouse on every Run, not one
+// SDL puts its mouse listeners on the canvas element when it makes its
+// window. kaypy never closed that window in the browser, so from the second
+// Run on, the mouse listeners were on a canvas no longer in the page: the
+// game drew and took keys, and never heard a click. Found on a live page,
+// where students Run again and again in one tab; a New tab is always a
+// first run, which is why it "fixed" it. So: every Run must close SDL's old
+// window BEFORE the new canvas is handed over — after, and the new window
+// would be made on the dead element all the same.
+//
+// Closing the window makes SDL take ITS OWN key listeners off — that
+// window's three and nothing else — and the next game's window puts three new
+// functions on. The old three must leave game.js's list with them: left on
+// it, the next Run puts them back, and they stay on the document for good,
+// because the window that would have taken them off is gone.
+//
+// The earlier sections' stand-ins for SDL never had a window to close, so the
+// first close here takes all of those off, and the count starts clean.
+const ours = [ctrlEnter, escape, lateShortcut];
+const OURS = ours.length;
+let windowKeys = null;              // [type, fn] of the open window; null: the earlier ones
+let quitBeforeHandOver = [];
+pyodide.runPython = (src) => {
+  pyodide.ran.push(src);
+  if (!src.includes("display.quit()")) return;
+  const off = windowKeys
+    || keyListeners().filter((l) => !ours.includes(l.fn)).map((l) => [l.type, l.fn]);
+  off.forEach(([type, fn]) => document.removeEventListener(type, fn));
+  windowKeys = [];
+};
+pyodide.canvas.setCanvas2D = (el) => {
+  canvasHandedTo = el;
+  const last = pyodide.ran.length ? pyodide.ran[pyodide.ran.length - 1] : "";
+  quitBeforeHandOver.push(last.includes("display.quit()"));
+};
+const sdlWindow = () => {
+  windowKeys = ["keydown", "keyup", "keypress"].map((type) => {
+    const fn = () => {};
+    document.addEventListener(type, fn);
+    return [type, fn];
+  });
+};
+for (let i = 0; i < 3; i++) {
+  await G.ensureReady(pyodide, null, SOURCE);
+  sdlWindow();
+  G.stop(pyodide);
+}
+check("every Run closes SDL's old window first",
+      quitBeforeHandOver.length === 3 && quitBeforeHandOver.every(Boolean),
+      quitBeforeHandOver.join(" "));
+await G.ensureReady(pyodide, null, SOURCE);
+check("  and the closed window's keys are not put back",
+      keyListeners().length === OURS,
+      keyListeners().length + " key listeners before the new window");
+sdlWindow();
+check("  so a new window holds exactly its own three",
+      keyListeners().length === OURS + 3, keyListeners().length + " key listeners");
+G.stop(pyodide);
+check("  and Stop still clears them", keyListeners().length === OURS);
+
 console.log();
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `${failed} of ${results.length} FAILED`

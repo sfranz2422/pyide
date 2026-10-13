@@ -1514,6 +1514,15 @@ a.needs-grading:hover { filter: brightness(1.1); }
   background: var(--bg-panel);
 }
 .live-mirror-out[hidden] { display: none; }
+/* Play it here, in the head of the teacher's output: small enough to sit in a
+ * pane heading without making it taller than the one beside it. */
+.pane-head .btn-small {
+  padding: 2px 10px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.pane-head .btn-small[hidden] { display: none; }
 .live-mirror-out .output { flex: 1 1 auto; }
 
 .live-mirror .CodeMirror { background: var(--bg-head); }
@@ -1793,6 +1802,20 @@ body.is-game .pane-right #canvas { max-height: 40vh; width: auto; }
 body.is-game .pane-right #output-view { flex: 1 1 0; min-height: 110px; }
 body.is-game .pane-right .class-view,
 body.is-game .live-right .live-notes { flex: 1 1 0; min-height: 120px; }
+
+/* ON THE CLASS'S PAGE THE NOTES WIN. The rules above split the column three
+ * ways, and on a Chromebook (1366x768, less the browser's own bars) that left
+ * the notes about 60px of text under the slide arrows — a heading and nothing
+ * else, with the output's lines scrolling just above it. The notes are what
+ * the class is reading; the game is something they glance at, and the output
+ * of a game is mostly "Game running". So here the canvas is capped lower, the
+ * output is a strip of three or four lines, and the notes take everything
+ * else. A student who wants a big game has New tab, which gives it the whole
+ * screen. */
+body.is-live.is-game .live-right #canvas { max-height: 28vh; }
+body.is-live.is-game .live-right #output-view { flex: 0 0 auto; min-height: 0; }
+body.is-live.is-game .live-right #output-view .output { flex: none; height: 76px; }
+body.is-live.is-game .live-right .live-notes { flex: 1 1 0; min-height: 0; }
 
 /* ---------------------------------------------------------------- classes */
 .class-cards { list-style: none; margin: 0 0 14px; padding: 0;
