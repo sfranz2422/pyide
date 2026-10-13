@@ -57,6 +57,34 @@
     setTimeout(function () { editor.refresh(); }, 0);
   }
 
+  /* A GAME PANE DRAGGED TO A SIZE OF ITS OWN (split.js marks it is-sized)
+     has the canvas fitted to it: the largest that fits, in the game's own
+     shape, up as well as down. Not otherwise — left alone, the pane is as
+     tall as the canvas under style.css's own cap, as it always was, and the
+     inline size from here is taken off again. */
+  var stageFrame = stage ? stage.querySelector(".stage-frame") : null;
+
+  function fitCanvas() {
+    var el = document.getElementById("canvas");
+    if (!el || !stageFrame || stage.hidden) return;
+    if (!stage.classList.contains("is-sized")) {
+      el.style.width = el.style.height = "";
+      return;
+    }
+    var cs = getComputedStyle(stageFrame);
+    var w = stageFrame.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var h = stageFrame.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var ratio = el.width / el.height;
+    if (!(w > 0 && h > 0 && ratio > 0)) return;
+    var cw = Math.floor(Math.min(w, h * ratio));
+    el.style.width = cw + "px";
+    el.style.height = Math.floor(cw / ratio) + "px";
+  }
+
+  if (stageFrame && window.ResizeObserver) {
+    new ResizeObserver(fitCanvas).observe(stageFrame);
+  }
+
   // ----------------------------------------------------------------- theme
   /* Light mode exists mainly for projecting the editor in class, where a dark
      screen washes out. The choice is remembered per browser; with none saved
@@ -942,6 +970,7 @@
     write("Game running. Click the picture to play, and the editor to type.\n", "dim");
     stage.hidden = false;
     relayout();
+    fitCanvas();
     canvas.focus();
 
     pushFilesToPython();
@@ -960,6 +989,7 @@
       var status_ = await pyodide.runPythonAsync(
         "_pyide_run_game(" + JSON.stringify(source) + ")"
       );
+      fitCanvas();             // kaypy(width=…, height=…) has set its size now
       if (status_ === "ok") {
         await pyodide.runPythonAsync("await _pyide_drive_game()");
       }
@@ -1105,9 +1135,36 @@
   });
 
   // Every change to any file counts, including a data file or the notes
-  editor.on("change", function () {
+  editor.on("change", function (cm, change) {
     account.noteEdit();
     rescue.noteEdit();
+    // Typed, pasted or dropped — not a starter or a rescue put in by the page.
+    if (change.origin !== "setValue") typedHere = true;
+  });
+
+  /* THE LOGO GOES TO THE FRONT DOOR — a student's classes, a teacher's
+     dashboard. A saved project has lost nothing by leaving: it autosaves,
+     and pagehide sends whatever is pending (account.js). A project with
+     nowhere to save to — the blank editor, before Save — is the one case
+     where a click on the logo would throw typing away without a word, so
+     that one asks. */
+  var typedHere = false;
+  var homeLink = $("home-link");
+  if (homeLink) {
+    homeLink.addEventListener("click", function (e) {
+      if (window.PYIDE.readonly || window.PYIDE.draftSlug || !typedHere) return;
+      if (!window.confirm("Leave this page? What you've typed here isn't saved.")) {
+        e.preventDefault();
+      }
+    });
+  }
+
+  /* The handles between the panes (split.js), the same ones the class's live
+     page has. The editor is told, because CodeMirror measures itself only
+     on a window resize. */
+  window.PyIDESplit.attachAll(document, {
+    wide: window.matchMedia ? window.matchMedia("(min-width: 861px)") : null,
+    onResize: function () { editor.refresh(); fitCanvas(); }
   });
 
 

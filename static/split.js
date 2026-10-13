@@ -6,6 +6,15 @@
  * model, and it is deliberately that small: one number per handle, nothing
  * to keep in step when a pane appears or goes away.
  *
+ * data-size="next" sizes the pane AFTER it instead, for a pane that sits at
+ * the end of a column below one that fills — the editor's "Class sees",
+ * under an output and an instructions pane that take turns being shown, so
+ * the pane before the handle is not always the same one.
+ *
+ * A sized pane gets the class "is-sized", for the rules that only make sense
+ * once a pane has a height of its own — a game's canvas fitted to the pane,
+ * instead of the pane fitted to the canvas.
+ *
  *     <div class="resizer resizer-y" data-split="notes" ...></div>
  *
  * resizer-x drags sideways and sets a width; resizer-y drags up and down and
@@ -52,11 +61,17 @@ window.PyIDESplit = (function () {
     } catch (e) { /* blocked: sized for this visit only */ }
   }
 
-  /* The pane a handle sizes: the element before it. */
-  function paneOf(handle) { return handle.previousElementSibling; }
+  function sizesNext(handle) { return handle.dataset.size === "next"; }
+
+  /* The pane a handle sizes: the element before it, or after it. */
+  function paneOf(handle) {
+    return sizesNext(handle) ? handle.nextElementSibling : handle.previousElementSibling;
+  }
 
   function apply(pane, px) {
+    if (!pane) return;
     pane.style.flex = px == null ? "" : "0 1 " + Math.round(px) + "px";
+    pane.classList.toggle("is-sized", px != null);
   }
 
   /* opts.wide: a MediaQueryList, true while panes sit side by side.
@@ -96,7 +111,9 @@ window.PyIDESplit = (function () {
       function limits(pane) {
         var parent = pane.parentNode.getBoundingClientRect();
         var start = pane.getBoundingClientRect();
-        var total = vertical ? parent.bottom - start.top : parent.right - start.left;
+        var total = sizesNext(handle)
+          ? (vertical ? start.bottom - parent.top : start.right - parent.left)
+          : (vertical ? parent.bottom - start.top : parent.right - start.left);
         return { min: MIN, max: Math.max(MIN, total - REST - (vertical
           ? handle.offsetHeight : handle.offsetWidth)) };
       }
@@ -117,6 +134,7 @@ window.PyIDESplit = (function () {
         var rect = pane.getBoundingClientRect();
         var from = vertical ? e.clientY : e.clientX;
         var size = vertical ? rect.height : rect.width;
+        var sign = sizesNext(handle) ? -1 : 1;  // dragging up grows the pane below
         var last = size;
         handle.setPointerCapture(e.pointerId);
         handle.classList.add("is-dragging");
@@ -124,7 +142,7 @@ window.PyIDESplit = (function () {
 
         function move(ev) {
           var at = vertical ? ev.clientY : ev.clientX;
-          last = setSize(pane, size + at - from);
+          last = setSize(pane, size + sign * (at - from));
         }
         function up() {
           handle.removeEventListener("pointermove", move);
@@ -153,6 +171,7 @@ window.PyIDESplit = (function () {
         e.preventDefault();
         var pane = paneOf(handle);
         var rect = pane.getBoundingClientRect();
+        if (sizesNext(handle)) step = -step;
         save(handle.dataset.split,
              setSize(pane, (vertical ? rect.height : rect.width) + step));
       });

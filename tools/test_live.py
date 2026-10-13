@@ -1322,15 +1322,35 @@ check("  and the game is fitted again once it has set its own size",
       -1 < _game_fn.find("_pyide_run_game(") < _game_fn.find("fitCanvas();", _game_fn.find("_pyide_run_game("))
       < _game_fn.find("_pyide_drive_game()"),
       "kaypy(width=…) changes the canvas after the first fit")
+# The editor has them too: beside the code, under a game, and above the
+# teacher's "Class sees" — which is sized from above, because the output and
+# the instructions take turns being the pane before it.
+_editor_page = open(os.path.join(PYIDE, "templates", "index.html")).read()
+_app_js = open(os.path.join(PYIDE, "static", "app.js")).read()
+_ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>', _editor_page)
+check("the editor has handles too",
+      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-stage"]
+      and ("y", "editor-class", ' data-size="next"') in _ed_splits
+      and -1 < _editor_page.find("split.js") < _editor_page.find("filename='app.js'"),
+      _ed_splits)
+check("  which tell its editor and its game when a size changes",
+      re.search(r"PyIDESplit\.attachAll\(document, \{[^}]*onResize: function \(\) "
+                r"\{ editor\.refresh\(\); fitCanvas\(\); \}", _app_js) is not None
+      and "if (!stage.classList.contains(\"is-sized\"))" in _app_js,
+      "a dragged game pane would keep the canvas at its old size")
+
 # The handles were `.split` once, which is the editor's <main>: every editor
 # page went blank under the toolbar. Only the editor's rules may name it.
-_split_rules = re.findall(r"(?m)^[^/*\n]*\.split\b(?!-)[^{\n]*\{", css)
+# Rules for what is INSIDE it (.split > .pane-editor) are the editor's own
+# handles and fine; a rule that styles .split itself is the editor's or a bug.
+_split_rules = re.findall(r"(?m)^[^/*\n]*\.split\b(?!-)\s*[,{][^\n]*", css)
 check("  without touching the editor, whose <main> is .split",
-      len(_split_rules) == 3 and "resizer" not in open(os.path.join(
+      len(_split_rules) == 3
+      and '<main class="split">' in open(os.path.join(
           PYIDE, "templates", "index.html")).read(),
       _split_rules)
 check("  and a handle beside a hidden pane goes with it",
-      ".resizer:has(+ [hidden]), [hidden] + .resizer { display: none; }" in css
+      ".resizer:has(+ [hidden]), [hidden] + .resizer:not([data-size=\"next\"]) { display: none; }" in css
       and ".live-split :has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }" in css)
 
 # A .md FILE IS A LINK THE CLASS CAN CLICK.

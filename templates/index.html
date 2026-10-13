@@ -39,7 +39,11 @@
 <body{% if authoring %} class="is-authoring"{% endif %}>
 
 <header class="bar">
-  <div class="brand"><span class="logo">🐍</span> PyIDE</div>
+  {#  To the front door, which sends a student to their classes and a
+      teacher to the dashboard. It was not a link at all here, and on the
+      other pages it led back to this editor — url_for('index') is /new. #}
+  <div class="brand"><a id="home-link" class="brandlink" href="{{ url_for('home') }}"
+       title="Your classes"><span class="logo">🐍</span> PyIDE</a></div>
 
   <div class="meta">
     <input id="title" class="field field-title" type="text"
@@ -226,6 +230,11 @@
     <div class="editor-wrap"><textarea id="editor">{{ code }}</textarea></div>
   </section>
 
+  {#  Handles (split.js), as on the class's live page: each sizes the pane
+      before it — "Class sees" is sized by the one above it instead, since
+      the output and the instructions take turns above. #}
+  <div class="resizer resizer-x" data-split="editor-left"></div>
+
   <section class="pane pane-right">
     <div id="stage" class="stage" hidden>
       <div class="pane-head"><span>Game</span></div>
@@ -233,6 +242,7 @@
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
       </div>
     </div>
+    <div class="resizer resizer-y" data-split="editor-stage"></div>
 
     <div id="output-view" class="subpane">
       <div class="pane-head">
@@ -266,6 +276,7 @@
         way to know what the class was reading was to walk over and look at
         a student's screen. Same place as on theirs, under the output. #}
     {% if is_teacher %}
+      <div class="resizer resizer-y" data-split="editor-class" data-size="next"></div>
       <div id="class-view" class="subpane class-view" hidden>
         <div class="pane-head"><span>Class sees</span>
           {#  Only when the notes have two or more slides, divided by `---`.
@@ -405,6 +416,7 @@
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>
 <script src="{{ url_for('static', filename='rescue.js') }}"></script>
 <script src="{{ url_for('static', filename='account.js') }}"></script>
+<script src="{{ url_for('static', filename='split.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

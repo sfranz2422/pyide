@@ -1863,13 +1863,28 @@ body.is-resizing-y, body.is-resizing-y * { cursor: row-resize !important; user-s
 /* A handle beside a hidden pane goes with it, and the pane it sized fills
  * the space instead — or the teacher's code would stay at a dragged width
  * with an empty gap where their output was going to be. */
-.resizer:has(+ [hidden]), [hidden] + .resizer { display: none; }
+.resizer:has(+ [hidden]), [hidden] + .resizer:not([data-size="next"]) { display: none; }
 .live-split :has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }
 
 /* The handles take the place of these borders. */
 body.is-live .live-left { border-right: 0; }
 body.is-live .live-mirror { border-bottom: 0; }
 body.is-live .live-mirror-out { border-left: 0; }
+
+/* THE EDITOR'S HANDLES. Left alone, the game pane is as tall as its canvas
+ * under the 40vh cap, as it always was. Dragged, it has a height of its own
+ * (split.js marks it is-sized), and the canvas is fitted to the pane instead
+ * — app.js's fitCanvas — so the frame has to give way rather than hold the
+ * canvas's height. */
+.stage.is-sized { min-height: 0; }
+.stage.is-sized .stage-frame { flex: 1 1 0; min-height: 0; overflow: hidden; }
+body .pane-right .stage.is-sized #canvas { max-height: none; max-width: none; }
+@media (min-width: 861px) {
+  /* The handles take the place of these borders, as on the live page. */
+  .split > .pane-editor { border-right: 0; }
+  .split .stage:not([hidden]) { border-bottom: 0; }
+  .split .pane-right .class-view { border-top: 0; }
+}
 
 /* Stacked, the page scrolls and there is nothing to share; split.js takes
  * the dragged sizes off at the same width. */
@@ -1885,6 +1900,23 @@ body.is-live .live-mirror-out { border-left: 0; }
   color: var(--text); text-decoration: none; }
 .class-card:hover { border-color: var(--accent); }
 .class-card strong { font-size: 16px; }
+/* A student's classes (classes.html): a heading that says what the list is,
+ * and one wide card per class with an Open button at its end — the whole
+ * card is the link. Bare names in thin boxes did not look clickable. */
+.enrolled-title { font-size: 24px; margin: 8px 0 4px; }
+.enrolled-sub { color: var(--muted); margin: 0 0 20px; }
+.enrolled { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.enrolled-card { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-panel); color: var(--text); text-decoration: none;
+  box-shadow: 0 1px 3px var(--shadow); transition: border-color .12s, transform .12s; }
+.enrolled-card:hover, .enrolled-card:focus-visible { border-color: var(--brand); transform: translateY(-1px); outline: none; }
+.enrolled-card:hover .enrolled-open { background: var(--brand-hover); border-color: var(--brand-hover); }
+.enrolled-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.enrolled-name { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.enrolled-teacher { color: var(--muted); font-size: 14px; }
+.enrolled-open { flex: none; white-space: nowrap; }
+
 .class-tools { margin-bottom: 18px; }
 .class-tools .grade-line { margin-bottom: 8px; }
 .class-line p { margin: 0 0 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
