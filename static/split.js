@@ -144,10 +144,25 @@ window.PyIDESplit = (function () {
           var at = vertical ? ev.clientY : ev.clientX;
           last = setSize(pane, size + sign * (at - from));
         }
+        /* EVERY WAY A DRAG CAN END ends it. While it lasts, the body's class
+           forces the resize cursor and user-select: none onto the whole page,
+           so a drag that never hears its end leaves the cursor stuck as a
+           resize arrow and the editor refusing every key — it happened mid
+           lesson, and only a reload cleared it. pointerup alone is not
+           enough: a release outside the window, a Ctrl-click opening the
+           Mac's context menu, or the tab losing focus can each swallow it.
+           lostpointercapture comes whenever the capture goes, for whatever
+           reason (and after every pointerup too); blur covers the window
+           going away under the drag. */
+        var done = false;
         function up() {
+          if (done) return;
+          done = true;
           handle.removeEventListener("pointermove", move);
           handle.removeEventListener("pointerup", up);
           handle.removeEventListener("pointercancel", up);
+          handle.removeEventListener("lostpointercapture", up);
+          window.removeEventListener("blur", up);
           handle.classList.remove("is-dragging");
           document.body.classList.remove("is-resizing-y", "is-resizing-x");
           save(handle.dataset.split, last);
@@ -155,6 +170,8 @@ window.PyIDESplit = (function () {
         handle.addEventListener("pointermove", move);
         handle.addEventListener("pointerup", up);
         handle.addEventListener("pointercancel", up);
+        handle.addEventListener("lostpointercapture", up);
+        window.addEventListener("blur", up);
       });
 
       handle.addEventListener("dblclick", function () {

@@ -1822,7 +1822,12 @@ body.is-live .live-right #canvas { max-height: none; max-width: none; }
 body.is-live .live-right #output-view { flex: 0 1 45%; min-height: 0; }
 body.is-live .live-right .stage:not([hidden]) ~ #output-view { flex: 0 1 96px; }
 body.is-live .live-right .output { flex: 1 1 auto; min-height: 0; }
-body.is-live .live-right .live-notes { flex: 1 1 0; min-height: 0; border-top: 0; }
+/* "Whatever is left, always" — and never nothing. With min-height: 0 a
+ * dragged size bigger than the column (kept from a bigger window, or from
+ * before the game pane appeared above it) left the notes 0px tall: still
+ * there, not hidden, just gone, and it survived closing the tab because the
+ * size is kept in the student's browser. 80px is split.js's REST. */
+body.is-live .live-right .live-notes { flex: 1 1 0; min-height: 80px; border-top: 0; }
 
 /* ------------------------------------------------------------- handles */
 /* `.resizer`, NOT `.split`: `.split` is the editor's own <main>. These rules
@@ -1873,6 +1878,13 @@ body.is-resizing-y, body.is-resizing-y * { cursor: row-resize !important; user-s
  * first drag, before anything was sized, so it looked like a stiff handle
  * rather than a bug. Found in WebIDE first. */
 .is-sized + .resizer:not([data-size="next"]) + * { flex-basis: 0; }
+/* And keeps a floor. A size is kept per browser and can be bigger than the
+ * room there is now — split.js only clamps it while it is being dragged —
+ * and the pane after it, with no basis of its own, then got nothing at all:
+ * the class's notes went this way, and a student's own editor or the whole
+ * right column could too. A folded output is only its head, so not that. */
+.is-sized + .resizer-y:not([data-size="next"]) + :not(.is-folded) { min-height: 80px; }
+.is-sized + .resizer-x:not([data-size="next"]) + * { min-width: 80px; }
 
 /* The handles take the place of these borders. */
 body.is-live .live-left { border-right: 0; }
