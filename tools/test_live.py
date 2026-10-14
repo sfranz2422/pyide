@@ -1352,6 +1352,9 @@ check("  without touching the editor, whose <main> is .split",
 check("  and a handle beside a hidden pane goes with it",
       ".resizer:has(+ [hidden]), [hidden] + .resizer:not([data-size=\"next\"]) { display: none; }" in css
       and ".live-split :has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }" in css)
+check("  the pane after a sized one takes what is left",
+      '.is-sized + .resizer:not([data-size="next"]) + * { flex-basis: 0; }' in css,
+      "the teacher's code dragged 100px taller grew 48")
 
 # A .md FILE IS A LINK THE CLASS CAN CLICK.
 #
