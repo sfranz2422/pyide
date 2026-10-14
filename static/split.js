@@ -153,7 +153,10 @@ window.PyIDESplit = (function () {
            Mac's context menu, or the tab losing focus can each swallow it.
            lostpointercapture comes whenever the capture goes, for whatever
            reason (and after every pointerup too); blur covers the window
-           going away under the drag. */
+           going away under the drag. And a button let go over an iframe (a
+           page's preview) is heard by the iframe and nobody else, so as a
+           last resort the pointer moving over this page with no button
+           down, or a new press anywhere else, means it is over. */
         var done = false;
         function up() {
           if (done) return;
@@ -163,6 +166,8 @@ window.PyIDESplit = (function () {
           handle.removeEventListener("pointercancel", up);
           handle.removeEventListener("lostpointercapture", up);
           window.removeEventListener("blur", up);
+          document.removeEventListener("pointermove", stray, true);
+          document.removeEventListener("pointerdown", stray, true);
           handle.classList.remove("is-dragging");
           document.body.classList.remove("is-resizing-y", "is-resizing-x");
           save(handle.dataset.split, last);
@@ -172,6 +177,11 @@ window.PyIDESplit = (function () {
         handle.addEventListener("pointercancel", up);
         handle.addEventListener("lostpointercapture", up);
         window.addEventListener("blur", up);
+        function stray(ev) {
+          if (ev.type === "pointerdown" ? ev.target !== handle : !ev.buttons) up();
+        }
+        document.addEventListener("pointermove", stray, true);
+        document.addEventListener("pointerdown", stray, true);
       });
 
       handle.addEventListener("dblclick", function () {

@@ -1361,12 +1361,14 @@ check("    and keeps a floor, however big a size kept from another window",
       "a student's notes went to 0px and stayed that way after closing the tab")
 # A drag that never hears its end leaves the body's class on: the resize
 # cursor everywhere and user-select: none, so the editor took no keys. It
-# happened mid-lesson; pointerup alone can be swallowed.
+# happened mid-lesson; pointerup alone can be swallowed, and a button let go
+# over an iframe is heard only by the iframe.
 _split_code = code_only(open(os.path.join(PYIDE, "static", "split.js")).read())
 check("a handle's drag ends however the pointer goes, not only on pointerup",
       all('addEventListener("%s", up)' % ev in _split_code
           for ev in ("pointerup", "pointercancel", "lostpointercapture"))
       and 'window.addEventListener("blur", up)' in _split_code
+      and 'document.addEventListener("pointermove", stray, true)' in _split_code
       and re.search(r"function up\(\) \{\s*if \(done\) return;", _split_code) is not None,
       "the cursor stayed a resize arrow and the editor refused every key")
 
