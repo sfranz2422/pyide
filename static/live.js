@@ -1044,7 +1044,37 @@
      `snippetSeen` is the stamp of the snippet already shown (or closed), so
      a Close stays closed across polls, but the teacher sending again — even
      the same text — brings it back. An empty snippet is the teacher taking
-     it back: the card goes, and with it the button. */
+     it back: the card goes, and with it the button.
+
+     IT GOES BY ITSELF after SNIPPET_MS. A teacher sends a line for the
+     moment and moves on; the card stayed on every screen until each student
+     closed it, an hour later still offering a line that no longer fit. Five
+     minutes from when it first appeared on THIS page, which is remembered
+     (localStorage, by page and snippet) so a reload does not start the five
+     minutes again — while a student who joins late still gets their own
+     five. Sending again, even the same text, is a new snippet and a new five
+     minutes. Storage blocked: the clock starts at each load, which is only a
+     card that lasts a little longer. */
+  var SNIPPET_MS = 5 * 60 * 1000;
+  var snippetTimer = null;
+  var SNIPPET_KEY = "snippet-seen:" + location.pathname;
+
+  function snippetFirstSeen(seq) {
+    try {
+      var kept = JSON.parse(localStorage.getItem(SNIPPET_KEY) || "null");
+      if (kept && kept.seq === seq && typeof kept.at === "number") return kept.at;
+      localStorage.setItem(SNIPPET_KEY, JSON.stringify({ seq: seq, at: Date.now() }));
+    } catch (e) { /* storage blocked: from now, then */ }
+    return Date.now();
+  }
+
+  function hideSnippet() {
+    clearTimeout(snippetTimer);
+    if (snippetCard.hidden) return;
+    snippetCard.hidden = true;
+    setTimeout(function () { mine.refresh(); }, 0);
+  }
+
   var snippetCard = $("snippet");
   var snippetCode = $("snippet-code");
   var snippetSeen = -1;
@@ -1062,6 +1092,13 @@
     if (seq === snippetSeen) return;   // already shown, or closed
     snippetSeen = seq;
     snippetText = text;
+    clearTimeout(snippetTimer);
+    var left = SNIPPET_MS - (Date.now() - snippetFirstSeen(seq));
+    if (left <= 0) {                   // came back to it after its five minutes
+      snippetCard.hidden = true;
+      return;
+    }
+    snippetTimer = setTimeout(hideSnippet, left);
     snippetCode.textContent = text;
     snippetCard.hidden = false;
     // The card takes room from the editor above it; CodeMirror only notices
@@ -1074,10 +1111,7 @@
       if (!snippetText) return;
       insertSnippet(snippetText);
     });
-    $("snippet-close").addEventListener("click", function () {
-      snippetCard.hidden = true;
-      setTimeout(function () { mine.refresh(); }, 0);
-    });
+    $("snippet-close").addEventListener("click", hideSnippet);
   }
 
   /* At the caret, as its own line(s). Indented to match the line the caret
