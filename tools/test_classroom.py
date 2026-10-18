@@ -832,7 +832,9 @@ made = {}
 for name in ("Oldest", "Middle", "Newest"):
     made[name] = teacher.post("/api/assignment", json={
         "code": "# %s\n" % name, "files": {}, "title": name}).get_json()["slug"]
-day = datetime(2026, 9, 1)
+# Noon UTC: the same day in New York, where the page now shows it.
+# Midnight UTC is the evening before there.
+day = datetime(2026, 9, 1, 12)
 
 
 def backdate():
@@ -868,7 +870,7 @@ teacher.post("/api/assignment/%s" % made["Oldest"], json={
 check("editing the code puts it at the top",
       order() == ["Oldest", "Newest", "Middle"], order())
 check("  of the Go live list too", picker() == ["Oldest", "Newest", "Middle"], picker())
-today = datetime.now().strftime("%b %d, %Y")
+today = datetime.now(P.SCHOOL_TZ).strftime("%b %d, %Y")
 check("  showing today as when it changed",
       ('title="Set Sep 01, 2026">%s</td>' % today) in
       teacher.get("/teacher").get_data(as_text=True))
