@@ -3114,6 +3114,12 @@ def classroom_post(slug):
     from the assignment page (_lesson_for), for work done in a live lesson.
     Either way it is this assignment's: work turned in from the lesson goes
     to the assignment, so Sync grades it the same.
+
+    `due` is when it is due, as UTC "YYYY-MM-DDTHH:MM", or nothing for no
+    due date. The page turns the teacher's own date and time into UTC,
+    because Classroom's dueDate/dueTime are UTC and only the browser knows
+    which clock the teacher meant: 11:59 PM in Pennsylvania is the next day
+    in UTC, and sending the date as typed would put it due a day early.
     """
     db = SessionLocal()
     try:
@@ -3130,6 +3136,9 @@ def classroom_post(slug):
         topic = str(asked.get("topic") or "")
         if topic and not re.fullmatch(r"[0-9A-Za-z_-]{1,40}", topic):
             return jsonify(error="That isn't one of the class's topics."), 400
+        due, problem = _due_for_classroom(asked.get("due"))
+        if problem:
+            return jsonify(error=problem), 400
         access, why = _classroom_token(db, user)
         if access is None:
             return jsonify(error=why), 409
@@ -3176,6 +3185,7 @@ def classroom_post(slug):
                 "state": "DRAFT" if asked.get("draft") is True else "PUBLISHED",
                 "maxPoints": item.out_of,
                 **({"topicId": topic} if topic else {}),
+                **due,
             })
         if status != 200 or not work.get("id"):
             return jsonify(error=_google_message(work, "Google wouldn't create "
@@ -3191,9 +3201,30 @@ def classroom_post(slug):
         db.commit()
         return jsonify(ok=True, course=post.course_name, url=post.url,
                        draft=asked.get("draft") is True,
-                       link="live" if live else "assignment", topic=topic)
+                       link="live" if live else "assignment", topic=topic,
+                       due=bool(due))
     finally:
         db.close()
+
+
+def _due_for_classroom(asked):
+    """({dueDate, dueTime} for a courseWork body, or {} for none; problem).
+
+    Classroom wants both or neither — a dueDate alone is refused — so the
+    page always sends a time, 11:59 PM unless the teacher picked another.
+    A due time already past is refused here in words, rather than letting
+    Google refuse it with a message no teacher can read."""
+    if not asked:
+        return {}, None
+    try:
+        when = datetime.strptime(str(asked), "%Y-%m-%dT%H:%M").replace(
+            tzinfo=timezone.utc)
+    except ValueError:
+        return {}, "That due date isn't a date."
+    if when <= datetime.now(timezone.utc):
+        return {}, "That due date has already passed."
+    return {"dueDate": {"year": when.year, "month": when.month, "day": when.day},
+            "dueTime": {"hours": when.hour, "minutes": when.minute}}, None
 
 
 def _forget_post(db, item, post):
