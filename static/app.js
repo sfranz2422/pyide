@@ -1590,6 +1590,46 @@
       });
     }
 
+    // ------------------------------------------------ the laser pointer
+    /* Hold Alt and point (static/laser.js has how, and why it is not a
+       push). Over the code, the open file's line and character — not for a
+       markdown file, which the class reads rendered, so its lines are
+       nowhere on their screen. Over the notes here, the "Class sees" pane
+       or the popped-out slides, a place on that slide: each says which
+       slide it is showing, and a student on another one sees no dot. */
+    function sendPointer(pointer) {
+      if (!liveCode) return;
+      fetch("/api/live/" + encodeURIComponent(liveCode) + "/point", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pointer: pointer, seq: nextSeq() })
+      }).catch(function () {
+        // A dropped one is fine: the next move, or the beat, sends it again.
+      });
+    }
+    window.LiveLaser.teacher({
+      active: function () { return !!liveCode; },
+      send: sendPointer,
+      surfaces: function () {
+        var L = window.LiveLaser, list = [];
+        if (!window.PyIDENotes.isMarkdown(active)) {
+          list.push({ el: editor.getWrapperElement(),
+                      point: function (x, y) { return L.pointAtCode(editor, x, y); } });
+        }
+        if (!notesView.hidden) {
+          list.push({ el: notesBody,
+                      point: function (x, y) { return L.pointAtSlide(notesBody, notesSlides.at(), x, y); } });
+        }
+        if (classView && !classView.hidden) {
+          list.push({ el: classNotes,
+                      point: function (x, y) {
+                        return L.pointAtSlide(classNotes, currentSlides() ? slideAt : 0, x, y);
+                      } });
+        }
+        return list;
+      }
+    });
+
     /* The tail of what the last Run printed. textContent, so an input()
        prompt waiting for the teacher's answer goes as the words of the
        prompt and nothing else. Trimmed here as well as on the server, to
@@ -2110,6 +2150,8 @@
         popChan.onmessage = function (e) {
           var d = e.data || {};
           if (d.type === "go" && typeof d.slide === "number") popoutGo(d.slide);
+          // The laser, pointed in the pop-out: sent from here, like all else.
+          else if (d.type === "point" && typeof d.pointer === "string") sendPointer(d.pointer);
           else if (d.type === "hello") tellPopout(true);
         };
         setInterval(function () { tellPopout(false); }, 500);

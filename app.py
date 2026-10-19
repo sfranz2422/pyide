@@ -5176,6 +5176,52 @@ def live_push(code):
         db.close()
 
 
+#: What a laser pointer may be (static/laser.js makes them): a place in the
+#: open file, "c:line:ch", or on a slide, "s:slide:path:where" — `path` the
+#: child indices down from the slide's box, `where` a character in a text
+#: node ("t12") or a spot in an element in thousandths ("e450,300"). Always
+#: inside the 80 characters of LiveSession.pointer: a longer one would be
+#: refused by Postgres, and only SQLite would let it through.
+LASER = re.compile(r"c:\d{1,6}:\d{1,6}"
+                   r"|s:\d{1,4}:(?:\d{1,3}(?:\.\d{1,3}){0,11})?:(?:t\d{1,6}|e\d{1,4},\d{1,4})")
+
+
+@app.post("/api/live/<code>/point")
+def live_point(code):
+    """Where the teacher's laser pointer is, or "" when they let go of Alt.
+
+    Separate from the push, and leaving `version` alone, so pointing does
+    not send thirty students the whole file several times a second (see
+    LiveSession.pointer). Kept in order by its own stamp, as a push is, so a
+    late "" cannot put out a pointer that came after it — or a late place
+    bring back one the teacher has let go of."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None or user is None or live.host_id != user.id:
+            return jsonify(error="This is not your live lesson."), 403
+        if live.ended:
+            return jsonify(error="That live lesson has ended.", ended=True), 409
+        data = request.get_json(silent=True) or {}
+        try:
+            seq = int(data.get("seq", 0))
+        except (TypeError, ValueError):
+            return jsonify(error="Bad sequence number."), 400
+        pointer = data.get("pointer")
+        if not isinstance(pointer, str) or (pointer and not LASER.fullmatch(pointer)):
+            return jsonify(error="That isn't somewhere to point."), 400
+        changed = (db.query(accounts.LiveSession)
+                     .filter(accounts.LiveSession.id == live.id,
+                             accounts.LiveSession.pointer_seq < seq)
+                     .update({"pointer": pointer, "pointer_seq": seq},
+                             synchronize_session=False))
+        db.commit()
+        return jsonify(ok=True, stale=not changed)
+    finally:
+        db.close()
+
+
 @app.post("/api/live/<code>/send")
 def live_send(code):
     """A snippet the teacher highlighted and sent, or "" to take it back.
@@ -5246,6 +5292,7 @@ def live_stop(code):
             return jsonify(error="This is not your live lesson."), 403
         live.ended = 1
         live.updated_at = _live_now()
+        live.pointer = ""          # or teaching it again starts with it lit
         db.commit()
         return jsonify(ended=True)
     finally:
@@ -5274,7 +5321,19 @@ def live_poll(code):
             seen = -1
 
         if seen == live.version and not live.ended:
-            return ("", 304)
+            # The laser pointer has its own stamp (LiveSession.pointer). A
+            # page that sends `p` and is behind on it gets the pointer and
+            # nothing else; a page from before the laser sends none and
+            # gets its 304 as always.
+            try:
+                pointed = int(request.args.get("p", -1))
+            except (TypeError, ValueError):
+                pointed = -1
+            if "p" not in request.args or pointed == live.pointer_seq:
+                return ("", 304)
+            return jsonify(version=live.version, pointer_only=True,
+                           pointer=live.pointer or "",
+                           pointer_seq=live.pointer_seq or 0)
         # A page left open on an older link for the assignment is sent on to
         # its lesson, as live_page sends one opened there. Only asked of an
         # ended row: an older one always is (live_start ends it), and that
@@ -5297,6 +5356,9 @@ def live_poll(code):
             slide=live.slide or "",
             output=live.output or "",
             cursor=live.cursor or "",
+            # Nobody points at an ended lesson, whatever was left in the row.
+            pointer="" if live.ended else (live.pointer or ""),
+            pointer_seq=live.pointer_seq or 0,
         )
     finally:
         db.close()
