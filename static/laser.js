@@ -35,17 +35,28 @@
  * tab went away with Alt held": a pointer not heard about for FADE_MS goes
  * out by itself. Otherwise a crashed laptop leaves a dot lit all lesson.
  *
- * It is a second or so behind and moves in steps a few times a second; the
- * dot glides between them (a CSS transition) and the trail is the same dot
- * drawn again with slower transitions. Good for "this line" and "this word",
- * not for drawing circles.
+ * HOW FAR BEHIND. It moves in steps, four times a second, and glides
+ * between them (a CSS transition); the trail is the same dot drawn again with
+ * slower ones. Measured in a real Chrome against a local server: about half
+ * a second from the mouse stopping to the dot arriving, at first, which a
+ * teacher comparing two screens side by side read as "in the wrong place" —
+ * it was in the right place, late. Now about a quarter of a second, plus the
+ * trip to the server and back: the teacher sends every SEND_MS, the class
+ * asks every 250 ms while it is lit and for WARM_MS after, and the glide is
+ * 0.1 s. Faster than that would mean every student asking more than four
+ * times a second, which two workers cannot answer for a whole class.
  */
 (function () {
   "use strict";
 
-  var SEND_MS = 200;      // the teacher sends at most this often
+  var SEND_MS = 80;       // the teacher sends at most this often
   var BEAT_MS = 1500;     // and again this often while holding still
   var FADE_MS = 4000;     // a pointer not heard of for this long goes out
+  /* How long after the dot was last lit the class keeps asking fast. A
+     teacher who points once usually points again, and the first point after
+     a quiet spell waits for a once-a-second poll — the slowest part of the
+     whole delay, and the part that read as "it doesn't work" in class. */
+  var WARM_MS = 30000;
   var DEPTH = 12;         // the most child indices a path may hold
   var TRAIL = 3;          // dots behind the dot
 
@@ -312,7 +323,7 @@
      frame while lit, because the slide re-renders and the mirror scrolls
      under it, and neither says so. */
   function student(opts) {
-    var pointer = "", heard = 0, frame = 0, spot = null, dots = [];
+    var pointer = "", heard = 0, frame = 0, spot = null, dots = [], litAt = 0;
 
     function hide() {
       dots.forEach(function (d) { d.classList.remove("on"); });
@@ -358,14 +369,15 @@
         var moved = p !== pointer;
         pointer = p;
         heard = Date.now();
+        if (p) litAt = heard;
         if (moved && p && opts.code && opts.code.follow) {
           var pos = p.charAt(0) === "c" ? codePos(opts.code.cm, p) : null;
           if (pos) opts.code.follow(pos);
         }
         if (!frame) frame = requestAnimationFrame(place);
       },
-      // Whether a dot is lit, so the page can poll faster while it is.
-      lit: function () { return !!pointer && Date.now() - heard <= FADE_MS; }
+      // Whether the page should poll fast: lit now, or lit not long ago.
+      lit: function () { return !!litAt && Date.now() - litAt <= WARM_MS; }
     };
   }
 

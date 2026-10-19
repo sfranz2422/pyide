@@ -228,7 +228,7 @@ else:
     for ln in lines:
         label, _, detail = ln[5:].partition("\t")
         check(label, ln.startswith("ok"), "" if ln.startswith("ok") else detail[:150])
-    check("the browser run reported every check", len(lines) == 12,
+    check("the browser run reported every check", len(lines) == 13,
           (len(lines), out.stderr.strip()[-200:]))
     server.shutdown()
 

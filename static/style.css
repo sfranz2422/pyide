@@ -2451,15 +2451,15 @@ a:not([class]):hover { color: var(--accent-hover); }
   box-sizing: border-box;
   box-shadow: 0 0 8px 3px rgba(255, 38, 38, 0.6), 0 0 26px 10px rgba(255, 38, 38, 0.3);
   pointer-events: none; opacity: 0;
-  transition: transform 0.22s ease-out, opacity 0.25s;
+  transition: transform 0.1s linear, opacity 0.25s;
 }
 .laser-dot.on { opacity: 1; }
 /* The trail: the same dot again, smaller and fainter, arriving later. */
 .laser-trail { width: 14px; height: 14px; margin: -7px 0 0 -7px; box-shadow: none; border: 0;
                background: rgba(255, 38, 38, 0.6); }
-.laser-trail-1.on { opacity: 0.55; transition: transform 0.32s ease-out, opacity 0.25s; }
-.laser-trail-2.on { opacity: 0.35; transition: transform 0.44s ease-out, opacity 0.25s; }
-.laser-trail-3.on { opacity: 0.2; transition: transform 0.58s ease-out, opacity 0.25s; }
+.laser-trail-1.on { opacity: 0.45; transition: transform 0.18s ease-out, opacity 0.25s; }
+.laser-trail-2.on { opacity: 0.28; transition: transform 0.26s ease-out, opacity 0.25s; }
+.laser-trail-3.on { opacity: 0.15; transition: transform 0.34s ease-out, opacity 0.25s; }
 /* Lit again somewhere new: appears there, rather than gliding in. */
 .laser-dot.laser-jump { transition: none; }
 /* The teacher's own, under the mouse: no glide, it is the mouse. */

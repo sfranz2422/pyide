@@ -140,7 +140,7 @@
   /* The teacher's laser pointer, on the slide in front of the student (only
      when it is the slide pointed at), and asked for faster while it is lit
      — as in live.js, which has why. */
-  var LASER_MS = 400, pointerSeq = -1;
+  var LASER_MS = 250, pointerSeq = -1;
   var laser = window.LiveLaser.student({
     slides: { body: $("lesson-body"), at: function () { return slides.at(); } }
   });

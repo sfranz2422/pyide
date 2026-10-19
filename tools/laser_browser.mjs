@@ -147,6 +147,16 @@ try {
   await sleep(1500);
   say(!(await dot(St)).on, "letting go of Alt puts it out for the class");
 
+  // Still asking fast after the dot has gone out (WARM_MS), so pointing
+  // again does not wait on a once-a-second poll. Counted past FADE_MS.
+  await sleep(4000);
+  await ev(St, `(() => { window.__polls = 0; const f = window.fetch;
+    window.fetch = function (u) { if (String(u).indexOf("?v=") > 0) window.__polls++;
+                                  return f.apply(this, arguments); }; })()`);
+  await sleep(2000);
+  const polls = await ev(St, "window.__polls");
+  say(polls >= 6, "after pointing, the class keeps asking fast for a while", polls);
+
   // ------------------------------------------------ the pop-out
   await ev(T, `document.querySelector(".js-popout").click()`);
   await sleep(2500);

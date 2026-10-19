@@ -1170,10 +1170,11 @@
   }
 
   var POLL_MS = 1000;
-  /* While the teacher's laser is lit, asked this often instead, so the dot
-     keeps up with the teacher's hand (static/laser.js). Only then: thirty
-     students at this pace all lesson would be too much for the server. */
-  var LASER_MS = 400;
+  /* While the teacher's laser is lit, and for half a minute after (WARM_MS
+     in laser.js), asked this often instead, so the dot keeps up with the
+     teacher's hand. Only then: thirty students at this pace all lesson
+     would be too much for the server. */
+  var LASER_MS = 250;
 
   /* The teacher's laser pointer: over the mirror, or on the slide in the
      notes pane — there only when the student is on the slide pointed at.
