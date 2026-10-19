@@ -93,7 +93,7 @@
   if (window.LiveLaser) {
     window.LiveLaser.teacher({
       active: function () { return live && lost.hidden; },
-      send: function (p) { chan.postMessage({ type: "point", pointer: p }); },
+      send: function (p, path) { chan.postMessage({ type: "point", pointer: p, path: path }); },
       surfaces: function () {
         return [{ el: body, point: function (x, y) {
           return window.LiveLaser.pointAtSlide(body, view.at(), x, y);

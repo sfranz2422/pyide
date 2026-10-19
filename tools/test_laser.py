@@ -92,7 +92,8 @@ other = client(add_user("o", "other@example.org", "Other Teacher"))
 student = client(add_user("s", "kid@example.org", "Kid"))
 anyone = client()
 
-CODE = "for i in range(5):\n    print('hello', i)\n"
+CODE = ("for i in range(5):\n    print('hello', i)\n\n\n\n"
+        "# I'll make a circle around THIS\n")
 code = teacher.post("/api/live/start", json={"body": CODE, "filename": "main.py",
                                              "title": "Laser"}).get_json()["code"]
 POINT = "/api/live/%s/point" % code
@@ -109,8 +110,9 @@ check("  and nothing they sent was kept", row(code).pointer == "c:1:6", row(code
 
 # --------------------------------------------------------------- what
 print("What a pointer may be")
-GOOD = ["c:0:0", "c:12:4", "s:0::e500,500", "s:2:0.3.1:t17", "s:1:4:e450,300",
-        "s:9999:" + ".".join(["999"] * 12) + ":t999999", ""]
+GOOD = ["c:0:0", "c:12:4", "c:5:2835:-120", "c:999999:99999999:-99999",
+        "s:0::e500,500", "s:2:0.3.1:t17", "s:2:0.3.1:t17:85,-140", "s:1:4:e450,300",
+        "s:9999:" + ".".join(["999"] * 12) + ":t999999:-99999,-99999", ""]
 seq = 100
 for p in GOOD:
     seq += 1
@@ -119,12 +121,37 @@ for p in GOOD:
           r.status_code == 200 and row(code).pointer == p, r.status_code)
 check("the longest there can be fits its column",
       len(GOOD[-2]) <= accounts.LiveSession.pointer.type.length, len(GOOD[-2]))
-BAD = ["c:1", "x:1:2", "s:1:0.1:t", "s:1:0.1:q4", "s:1:1000:t1",
+BAD = ["c:1", "x:1:2", "c:1:2:3:4", "c:1:2:--3", "s:1:0.1:t", "s:1:0.1:q4", "s:1:1000:t1",
+       "s:1:0.1:t4:5", "s:1:0.1:e4,5:6,7",
        "s:1:" + ".".join(["1"] * 13) + ":t1", "c:1:2 ", "<b>", 7, None]
 for p in BAD:
     seq += 1
     r = teacher.post(POINT, json={"pointer": p, "seq": seq})
     check("  %-40s is refused" % repr(p), r.status_code == 400, r.status_code)
+
+# --------------------------------------------------------------- the path
+print("The path to it")
+PATH = "100@c:5:2835:-120;140@c:5:2900:-100;180@s:0:1:t4:20,30"
+seq += 1
+r = teacher.post(POINT, json={"pointer": "c:5:2900:-100", "path": PATH, "seq": seq})
+check("a path of places, each with the teacher's clock, is kept",
+      r.status_code == 200 and row(code).pointer_path == PATH, row(code).pointer_path)
+for bad in ("100@c:1", "c:5:1:1", "100@", "x@c:1:2", "1234567890@c:1:2", 7,
+            ";".join(["1@c:1:2"] * 21)):
+    seq += 1
+    r = teacher.post(POINT, json={"pointer": "c:1:2", "path": bad, "seq": seq})
+    check("  %-40s is refused" % repr(bad)[:40], r.status_code == 400, r.status_code)
+check("  and nothing refused was kept", row(code).pointer_path == PATH)
+seq += 1
+teacher.post(POINT, json={"pointer": "c:1:2", "seq": seq})
+check("an editor from before paths sends none, and none is kept",
+      row(code).pointer_path == "", row(code).pointer_path)
+seq += 1
+teacher.post(POINT, json={"pointer": "c:1:2", "path": PATH, "seq": seq})
+seq += 1
+teacher.post(POINT, json={"pointer": "", "path": PATH, "seq": seq})
+check("letting go clears the path with the place",
+      row(code).pointer == "" and row(code).pointer_path == "", row(code).pointer_path)
 
 # --------------------------------------------------------------- order
 print("In order, and apart from the file")
@@ -147,12 +174,15 @@ check("file and pointer both current: 304", r.status_code == 304, r.status_code)
 r = anyone.get(POLL + "?v=%d" % v)
 check("a page from before the laser sends no p, and still gets its 304",
       r.status_code == 304, r.status_code)
-teacher.post(POINT, json={"pointer": "s:0:1:t4", "seq": 6000})
+teacher.post(POINT, json={"pointer": "s:0:1:t4", "path": "9@s:0:1:t4", "seq": 6000})
 r = anyone.get(POLL + "?v=%d&p=5000" % v)
 d = r.get_json() or {}
-check("only the pointer moved: the pointer, and nothing else",
+check("only the pointer moved: the pointer and its path, and nothing else",
       r.status_code == 200 and d.get("pointer_only") is True and d.get("pointer") == "s:0:1:t4"
+      and d.get("pointer_path") == "9@s:0:1:t4"
       and d.get("pointer_seq") == 6000 and "body" not in d and "notes" not in d, d)
+check("  and the full answer carries the path too",
+      anyone.get(POLL).get_json().get("pointer_path") == "9@s:0:1:t4")
 r = anyone.get(POLL + "?v=%d&p=6000" % v)
 check("  and then 304 again", r.status_code == 304, r.status_code)
 r = anyone.get(POLL + "?v=%d&p=zzz" % v)
@@ -160,18 +190,21 @@ check("  a p that is not a number is just behind",
       r.status_code == 200 and (r.get_json() or {}).get("pointer_only"), r.status_code)
 
 teacher.post("/api/live/%s/stop" % code)
-check("stopping puts the pointer out", row(code).pointer == "", row(code).pointer)
+check("stopping puts the pointer out", row(code).pointer == "" and row(code).pointer_path == "",
+      row(code).pointer)
 r = teacher.post(POINT, json={"pointer": "c:0:0", "seq": 9000})
 check("and an ended lesson cannot be pointed at", r.status_code == 409, r.status_code)
 db = P.SessionLocal()
 try:
-    db.query(accounts.LiveSession).filter_by(code=code).update({"pointer": "c:1:1"})
+    db.query(accounts.LiveSession).filter_by(code=code).update(
+        {"pointer": "c:1:1", "pointer_path": "1@c:1:1"})
     db.commit()
 finally:
     db.close()
 ended = anyone.get(POLL).get_json()
 check("an ended lesson points at nothing, whatever is left in its row",
-      ended.get("ended") is True and ended.get("pointer") == "", ended.get("pointer"))
+      ended.get("ended") is True and ended.get("pointer") == ""
+      and ended.get("pointer_path") == "", ended.get("pointer"))
 
 # --------------------------------------------------------------- the pages
 print("Every page that points or shows the dot loads laser.js")
@@ -208,7 +241,8 @@ else:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % server.server_port
 
-    notes = ("# Loops\n\nA **for loop** repeats code once for each item in a list.\n\n"
+    notes = ("# Loops\n\nA **for loop** repeats code once for each item in a list. "
+             "Look at THIS word in the middle of a longer sentence that wraps.\n\n"
              "---\n\n## Second slide\n\nThe word *range* gives numbers counting up.\n")
     draft = teacher.post("/api/draft", json={"code": CODE, "files": {"notes.md": notes},
                                              "title": "Laser"}).get_json()["slug"]
@@ -228,7 +262,7 @@ else:
     for ln in lines:
         label, _, detail = ln[5:].partition("\t")
         check(label, ln.startswith("ok"), "" if ln.startswith("ok") else detail[:150])
-    check("the browser run reported every check", len(lines) == 13,
+    check("the browser run reported every check", len(lines) == 15,
           (len(lines), out.stderr.strip()[-200:]))
     server.shutdown()
 

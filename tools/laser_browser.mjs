@@ -100,6 +100,50 @@ try {
     const cm = ${mirror} ? cms.find((c) => c.getOption("readOnly") === "nocursor") : cms[0];
     const c = cm.charCoords({ line: ${line}, ch: ${ch} }, "window");
     return { x: (c.left + c.right) / 2, y: (c.top + c.bottom) / 2 }; })()`);
+  /* A circle drawn round `word` in about a second, the way a hand draws
+     one, and where the student's dot went on every frame. The teacher's
+     first real test was exactly this, round THIS, with an empty line above
+     it: the class saw the dot leap to the left margin and back. Measured in
+     `unit`s (a letter's width in code, an em on a slide) on each screen, so
+     a student's narrower pane or other text size is allowed for. Passes
+     when every frame is on the circle and it goes all the way round. */
+  async function circle(word, tRoot, sRoot, tUnit, sUnit) {
+    const find = (root) => `(() => { const w = document.createTreeWalker(${root}, NodeFilter.SHOW_TEXT);
+      for (let n; (n = w.nextNode());) { const i = n.data.indexOf(${JSON.stringify(word)}); if (i < 0) continue;
+        const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + ${word.length});
+        const b = r.getBoundingClientRect(); return { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 }; }
+      return null; })()`;
+    const ct = await ev(T, find(tRoot)), cs = await ev(St, find(sRoot));
+    const R = 3.2 * await ev(T, tUnit), Rs = 3.2 * await ev(St, sUnit);
+    await move(T, { x: ct.x + R, y: ct.y }, true);
+    await sleep(500);
+    await ev(St, `(() => { window.__track = []; if (window.__ticking) return; window.__ticking = true;
+      (function tick() { const d = [...document.querySelectorAll(".laser-dot")].find((d) => !/trail|here/.test(d.className));
+        if (d && d.classList.contains("on")) { const b = d.getBoundingClientRect();
+          window.__track.push([b.left + b.width / 2, b.top + b.height / 2]); }
+        requestAnimationFrame(tick); })(); })()`);
+    for (let k = 0; k <= 40; k++) {
+      const a = k / 40 * 2 * Math.PI;
+      await move(T, { x: ct.x + R * Math.cos(a), y: ct.y + R * Math.sin(a) }, true);
+      await sleep(25);
+    }
+    await sleep(1500);
+    const track = await ev(St, "window.__track");
+    await move(T, { x: ct.x + R, y: ct.y }, false);
+    await sleep(1200);
+    const off = track.map(([x, y]) => Math.abs(Math.hypot(x - cs.x, y - cs.y) - Rs));
+    const round = new Set(track.map(([x, y]) =>
+      Math.round((Math.atan2(y - cs.y, x - cs.x) + Math.PI) / (2 * Math.PI) * 36) % 36));
+    const worst = Math.max(...off);
+    return { ok: track.length > 20 && worst <= 0.12 * Rs && round.size >= 32,
+             detail: { frames: track.length, worst: Math.round(worst), radius: Math.round(Rs),
+                       directions: round.size } };
+  }
+  const editorCM = `document.querySelector(".CodeMirror").CodeMirror`;
+  const mirrorCM = `[...document.querySelectorAll(".CodeMirror")].map((e) => e.CodeMirror)
+                      .find((c) => c.getOption("readOnly") === "nocursor")`;
+  const emIn = (sel) => `parseFloat(getComputedStyle(document.querySelector("${sel} p")).fontSize)`;
+
   const near = (got, want) => !!(got && got.on && want
     && Math.abs(got.x - want.x) <= 4 && Math.abs(got.y - want.y) <= 4);
   const nudge = (at, dx) => ({ x: at.x + dx, y: at.y });
@@ -124,12 +168,21 @@ try {
   say(await ev(T, `!!document.querySelector(".laser-here.on")`),
       "  and the teacher sees their own dot, for the projector");
 
+  let c = await circle("THIS", `${editorCM}.getWrapperElement()`, `${mirrorCM}.getWrapperElement()`,
+                       `${editorCM}.defaultCharWidth()`, `${mirrorCM}.defaultCharWidth()`);
+  say(c.ok, "code: a circle round a word, with an empty line above it, arrives as that circle", c.detail);
+
   at = await letter(T, "#class-notes", "loop", 0);
   await move(T, at, true);
   await sleep(2000);
   want = await letter(St, "#live-notes", "loop", 0);
   say(near(await dot(St), want), "slide: the same letter on a narrower screen",
       { got: await dot(St), want });
+  c = await circle("THIS", `document.querySelector("#class-notes")`, `document.querySelector("#live-notes")`,
+                   emIn("#class-notes"), emIn("#live-notes"));
+  say(c.ok, "slide: a circle round a word in a sentence that wraps differently", c.detail);
+  await move(T, at, true);                 // back on "loop" for what follows
+  await sleep(1500);
 
   // Held still past FADE_MS (4 s): the beat keeps it lit.
   await sleep(5000);

@@ -5176,14 +5176,20 @@ def live_push(code):
         db.close()
 
 
-#: What a laser pointer may be (static/laser.js makes them): a place in the
-#: open file, "c:line:ch", or on a slide, "s:slide:path:where" — `path` the
-#: child indices down from the slide's box, `where` a character in a text
-#: node ("t12") or a spot in an element in thousandths ("e450,300"). Always
-#: inside the 80 characters of LiveSession.pointer: a longer one would be
-#: refused by Postgres, and only SQLite would let it through.
-LASER = re.compile(r"c:\d{1,6}:\d{1,6}"
-                   r"|s:\d{1,4}:(?:\d{1,3}(?:\.\d{1,3}){0,11})?:(?:t\d{1,6}|e\d{1,4},\d{1,4})")
+#: What a laser pointer may be (static/laser.js has the formats and why):
+#: a place in the open file, "c:line:column:down" with the last two in
+#: hundredths, or on a slide, "s:slide:path:where" — `path` the child indices
+#: down from the slide's box, `where` a character and a distance from it in
+#: hundredths of an em ("t12:85,-140"), or a spot on a picture in
+#: thousandths ("e450,300"). "c:line:ch" and a bare "t12" are what the first
+#: version sent, and an editor tab opened before the change still sends them.
+#: Always inside the 80 characters of LiveSession.pointer: a longer one would
+#: be refused by Postgres, and only SQLite would let it through.
+LASER = re.compile(r"c:\d{1,6}:\d{1,8}(?::-?\d{1,5})?"
+                   r"|s:\d{1,4}:(?:\d{1,3}(?:\.\d{1,3}){0,11})?:"
+                   r"(?:t\d{1,6}(?::-?\d{1,5},-?\d{1,5})?|e\d{1,4},\d{1,4})")
+#: The path to it: up to LASER_PATH places, each with the teacher's clock.
+LASER_PATH = 20
 
 
 @app.post("/api/live/<code>/point")
@@ -5211,10 +5217,22 @@ def live_point(code):
         pointer = data.get("pointer")
         if not isinstance(pointer, str) or (pointer and not LASER.fullmatch(pointer)):
             return jsonify(error="That isn't somewhere to point."), 400
+        # The path is checked place by place, as `pointer` is: it goes to
+        # every student, so nothing in it is passed on unread. An editor tab
+        # from before paths sends none, and its class sees the place alone.
+        path = data.get("path", "")
+        if not isinstance(path, str):
+            return jsonify(error="That isn't a path."), 400
+        items = path.split(";") if path else []
+        if len(items) > LASER_PATH or not all(
+                re.fullmatch(r"\d{1,9}@(.+)", it) and LASER.fullmatch(it.split("@", 1)[1])
+                for it in items):
+            return jsonify(error="That isn't a path."), 400
         changed = (db.query(accounts.LiveSession)
                      .filter(accounts.LiveSession.id == live.id,
                              accounts.LiveSession.pointer_seq < seq)
-                     .update({"pointer": pointer, "pointer_seq": seq},
+                     .update({"pointer": pointer, "pointer_seq": seq,
+                              "pointer_path": path if pointer else ""},
                              synchronize_session=False))
         db.commit()
         return jsonify(ok=True, stale=not changed)
@@ -5293,6 +5311,7 @@ def live_stop(code):
         live.ended = 1
         live.updated_at = _live_now()
         live.pointer = ""          # or teaching it again starts with it lit
+        live.pointer_path = ""
         db.commit()
         return jsonify(ended=True)
     finally:
@@ -5333,6 +5352,7 @@ def live_poll(code):
                 return ("", 304)
             return jsonify(version=live.version, pointer_only=True,
                            pointer=live.pointer or "",
+                           pointer_path=live.pointer_path or "",
                            pointer_seq=live.pointer_seq or 0)
         # A page left open on an older link for the assignment is sent on to
         # its lesson, as live_page sends one opened there. Only asked of an
@@ -5358,6 +5378,7 @@ def live_poll(code):
             cursor=live.cursor or "",
             # Nobody points at an ended lesson, whatever was left in the row.
             pointer="" if live.ended else (live.pointer or ""),
+            pointer_path="" if live.ended else (live.pointer_path or ""),
             pointer_seq=live.pointer_seq or 0,
         )
     finally:

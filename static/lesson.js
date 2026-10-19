@@ -147,7 +147,7 @@
   function takePointer(data) {
     if (typeof data.pointer_seq !== "number") return;
     pointerSeq = data.pointer_seq;
-    laser.show(data.pointer || "");
+    laser.show(data.pointer || "", data.pointer_path || "");
   }
   function livePace() { return laser.lit() ? LASER_MS : POLL_MS; }
   var moving = false;      // sent on to another link; this page is done

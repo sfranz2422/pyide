@@ -1190,7 +1190,7 @@
   function takePointer(data) {
     if (typeof data.pointer_seq !== "number") return;
     pointerSeq = data.pointer_seq;
-    laser.show(data.pointer || "");
+    laser.show(data.pointer || "", data.pointer_path || "");
   }
   /* A lesson made ahead from the assignment page, whose link was posted
      before it began. Its page keeps checking — not every second, since a

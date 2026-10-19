@@ -172,11 +172,11 @@
   if (window.LiveLaser) {
     window.LiveLaser.teacher({
       active: function () { return !!live; },
-      send: function (p) {
+      send: function (p, path) {
         if (!live) return;
         fetch("/api/live/" + encodeURIComponent(live) + "/point", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pointer: p, seq: nextSeq() })
+          body: JSON.stringify({ pointer: p, path: path || "", seq: nextSeq() })
         }).catch(function () { /* the next move, or the beat, sends it again */ });
       },
       surfaces: function () {

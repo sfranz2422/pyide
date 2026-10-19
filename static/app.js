@@ -1597,12 +1597,12 @@
        nowhere on their screen. Over the notes here, the "Class sees" pane
        or the popped-out slides, a place on that slide: each says which
        slide it is showing, and a student on another one sees no dot. */
-    function sendPointer(pointer) {
+    function sendPointer(pointer, path) {
       if (!liveCode) return;
       fetch("/api/live/" + encodeURIComponent(liveCode) + "/point", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pointer: pointer, seq: nextSeq() })
+        body: JSON.stringify({ pointer: pointer, path: path || "", seq: nextSeq() })
       }).catch(function () {
         // A dropped one is fine: the next move, or the beat, sends it again.
       });
@@ -2151,7 +2151,7 @@
           var d = e.data || {};
           if (d.type === "go" && typeof d.slide === "number") popoutGo(d.slide);
           // The laser, pointed in the pop-out: sent from here, like all else.
-          else if (d.type === "point" && typeof d.pointer === "string") sendPointer(d.pointer);
+          else if (d.type === "point" && typeof d.pointer === "string") sendPointer(d.pointer, d.path);
           else if (d.type === "hello") tellPopout(true);
         };
         setInterval(function () { tellPopout(false); }, 500);
