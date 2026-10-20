@@ -212,7 +212,8 @@
      is not one, or the teacher's own copy, there is nowhere to record an
      answer, and notes.js says so on the question rather than taking one. */
   window.PyIDENotes.setQuizContext({ assignment: window.PYIDE.assignmentSlug,
-                                     signedIn: window.PYIDE.signedIn });
+                                     signedIn: window.PYIDE.signedIn,
+                                     viewOnly: window.PYIDE.viewOnly });
 
   function showOutput() {
     notesView.hidden = true;
