@@ -16,8 +16,8 @@
      projected in light mode never opens with a flash of dark. */
   (function () {
     try {
-      var saved = localStorage.getItem("pyide-theme");
-      if (saved === "light" || saved === "dark") {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) {
         document.documentElement.setAttribute("data-theme", saved);
       }
       var size = parseInt(localStorage.getItem("pyide-code-size"), 10);
