@@ -369,6 +369,10 @@ bare = "\n".join(_re.split(r"\s{3,}", ln)[0] for ln in example.split("\n"))
 got, bad = autograde.parse(bare)
 check("the help page's example is all tests", len(got) == 7 and not bad, (len(got), bad))
 
+authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
+check("writing the notes, the teacher has a Tests link to the format",
+      'help/questions#tests"' in authoring and ">Tests</a>" in authoring)
+
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
 check("the editor has Check my work and loads autograde.js",
       'id="check"' in editor and "autograde.js" in editor)
