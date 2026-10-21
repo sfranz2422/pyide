@@ -174,9 +174,20 @@ for email, name in (("amy@school.org", "Amy Adams"), ("ben@school.org", "Ben Bro
                     ("cal@school.org", "Cal Cole"), ("dee@school.org", "Dee Never")):
     add(accounts.Enrollment(class_id=CLASS, email=email, name=name))
 
+# The same file runs in all three editors (like xp.py), and each keeps an
+# assignment's program its own way: PyIDE in `code`, the others in a file.
+ENTRY = {"pyide": None, "webide": "index.html", "flaskide": "app.py"}[P.APP_NAME]
+
+
+def starter(notes):
+    if ENTRY is None:
+        return {"code": "print('hi')\n", "files": {"notes.md": notes}}
+    return {"files": {ENTRY: "<h1>Hi</h1>\n" if ENTRY.endswith(".html")
+                      else "from flask import Flask\n", "notes.md": notes}}
+
+
 SLUG = teacher.post("/api/class/%d/new" % CLASS, json={"title": "Loops"}).get_json()["slug"]
-teacher.post("/api/assignment/%s" % SLUG, json={
-    "code": "print('hi')\n", "title": "Loops", "files": {"notes.md": NOTES}})
+teacher.post("/api/assignment/%s" % SLUG, json=dict(starter(NOTES), title="Loops"))
 
 
 def answer(c, qid, response):
