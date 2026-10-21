@@ -302,6 +302,16 @@ check("a student's own check is kept", r.status_code == 200 and r.get_json()["ea
 page = teacher.get("/teacher/" + SLUG).get_data(as_text=True)
 check("  and counts for nothing: no grade from it", "Tests not checked" in page
       and "(their check 9 / 9)" in page)
+def test_xp(uid):
+    db = P.SessionLocal()
+    try:
+        return sum(a.xp for a in db.query(accounts.XpAward).filter(
+            accounts.XpAward.user_id == uid, accounts.XpAward.source.like("test:%")))
+    finally:
+        db.close()
+
+
+check("  and pays no XP", test_xp(AMY) == 0, test_xp(AMY))
 check("  not on the class page either",
       "badge-grade" not in amy.get("/class/%d" % CLASS).get_data(as_text=True))
 
@@ -317,6 +327,10 @@ r = teacher.post("/api/assignment/%s/tests/verify" % SLUG,
                  json={"student": AMY, "results": ALL_RIGHT})
 check("the teacher's check counts: 9 / 9 is the total", r.status_code == 200
       and r.get_json()["total"] == "9", r.get_json())
+check("  and pays %d XP a point for the tests that pass" % xp.XP_PER_POINT,
+      test_xp(AMY) == 9 * xp.XP_PER_POINT and r.get_json()["xp"] >= 90, test_xp(AMY))
+teacher.post("/api/assignment/%s/tests/verify" % SLUG, json={"student": AMY, "results": ALL_RIGHT})
+check("  checking again pays nothing twice", test_xp(AMY) == 9 * xp.XP_PER_POINT, test_xp(AMY))
 BEN_LINES = ran["wrong_math"]["results"]
 r = teacher.post("/api/assignment/%s/tests/verify" % SLUG,
                  json={"student": BEN, "results": BEN_LINES})
@@ -374,6 +388,13 @@ check("writing the notes, the teacher has a Tests link to the format",
       'help/questions#tests"' in authoring and ">Tests</a>" in authoring)
 
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
+# Ben fixes his code: the next check pays the tests that now pass, only.
+before = test_xp(BEN)
+teacher.post("/api/assignment/%s/tests/verify" % SLUG, json={"student": BEN, "results": ALL_RIGHT})
+check("fixed code is paid for the tests that now pass, and only those",
+      before == ran["wrong_math"]["earned"] * xp.XP_PER_POINT
+      and test_xp(BEN) == 9 * xp.XP_PER_POINT, (before, test_xp(BEN)))
+
 check("the editor has Check my work and loads autograde.js",
       'id="check"' in editor and "autograde.js" in editor)
 
