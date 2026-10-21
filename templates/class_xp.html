@@ -47,7 +47,7 @@
       {% for s in students %}
         <tr data-student="{{ s.id or '' }}">
           <td class="xp-who">
-            {% if s.id %}<span class="avatar xp-board-avatar" data-avatar='{{ s.avatar|tojson }}'></span>{% endif %}
+            {% if s.id %}<span class="avatar xp-board-avatar" data-avatar-view="bust" data-avatar='{{ s.avatar|tojson }}'></span>{% endif %}
             <span>{{ s.name }}<br><span class="dim small">{{ s.email }}{% if s.hidden %} · hidden from the leaderboard{% endif %}</span></span>
           </td>
           {% if s.id %}

@@ -2476,9 +2476,9 @@ a:not([class]):hover { color: var(--accent-hover); }
 .view-link #view-url { flex: 1 1 320px; min-width: 0; font-family: "IBM Plex Mono", monospace; font-size: 13px; }
 .view-link .dim { flex-basis: 100%; }
 
-/* XP (xp.py). An avatar is an SVG drawn into any .avatar (avatar.js),
-   always round, sized by whoever holds it. */
-.avatar { display: inline-block; border-radius: 50%; overflow: hidden; flex: none;
+/* XP (xp.py). An avatar is an SVG drawn into any .avatar (avatar.js), a
+   rounded square like a character card, sized by whoever holds it. */
+.avatar { display: inline-block; border-radius: 22%; overflow: hidden; flex: none;
   width: 40px; height: 40px; background: var(--bg-head); line-height: 0; }
 .avatar svg { width: 100%; height: 100%; display: block; }
 

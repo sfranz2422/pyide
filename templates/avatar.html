@@ -47,9 +47,20 @@
   var parts = {{ parts|tojson }};
   var level = {{ level|tojson }};
   var chosen = {{ avatar|tojson }};
-  var NAMES = { skin: "Skin", face: "Face", hair: "Hair", hair_color: "Hair color",
-                eyes: "Eyes", mouth: "Mouth", glasses: "Glasses", hat: "Hat",
-                background: "Background" };
+  var NAMES = { style: "Character or picture", icon: "Picture", skin: "Skin", face: "Face",
+                hair: "Hair", hair_color: "Hair color", beard: "Beard", eyes: "Eyes",
+                mouth: "Mouth", marks: "Face marks", glasses: "Glasses", mask: "Mask",
+                hat: "Head", outfit: "Outfit", effect: "Magic", background: "Background" };
+  // Close-ups for the small buttons: a mouth is a few pixels of a whole
+  // portrait. avatar.js's svg() knows the views.
+  var VIEW = { eyes: "face", mouth: "face", marks: "face", glasses: "face", mask: "face",
+               beard: "face", face: "face", skin: "face", hair: "head", hair_color: "head",
+               hat: "head" };
+  // Which kinds belong to which style; the background is both's.
+  function shown(kind) {
+    if (kind === "style" || kind === "background") return true;
+    return (kind === "icon") === (chosen.style === "icon");
+  }
   var box = document.getElementById("parts");
   var state = document.getElementById("state");
 
@@ -58,12 +69,16 @@
     box.querySelectorAll("button[data-kind]").forEach(function (b) {
       b.setAttribute("aria-pressed", chosen[b.dataset.kind] === b.dataset.id ? "true" : "false");
     });
+    box.querySelectorAll("fieldset[data-kind]").forEach(function (f) {
+      f.hidden = !shown(f.dataset.kind);
+    });
   }
 
   parts.forEach(function (entry) {
     var kind = entry.kind;
     var group = document.createElement("fieldset");
     group.className = "avatar-kind";
+    group.dataset.kind = kind;
     var legend = document.createElement("legend");
     legend.textContent = NAMES[kind] || kind;
     group.appendChild(legend);
@@ -77,7 +92,7 @@
       // student sees what they are choosing rather than reading a word.
       var pic = document.createElement("span");
       pic.className = "avatar";
-      pic.innerHTML = window.PyIDEAvatar.svg(lookWith(kind, p.id));
+      pic.innerHTML = window.PyIDEAvatar.svg(lookWith(kind, p.id), VIEW[kind]);
       var label = document.createElement("span");
       label.textContent = p.label;
       b.appendChild(pic);
@@ -108,11 +123,15 @@
     var look = Object.assign({}, chosen);
     look[kind] = id;
     if (kind === "hair" || kind === "hair_color") look.hat = "none";
+    // Without this a Picture button would show the character, and the
+    // Character button the picture.
+    if (kind === "icon") look.style = "icon";
     return look;
   }
   function refreshPictures() {
     box.querySelectorAll("button[data-kind]").forEach(function (b) {
-      b.querySelector(".avatar").innerHTML = window.PyIDEAvatar.svg(lookWith(b.dataset.kind, b.dataset.id));
+      b.querySelector(".avatar").innerHTML =
+        window.PyIDEAvatar.svg(lookWith(b.dataset.kind, b.dataset.id), VIEW[b.dataset.kind]);
     });
   }
 
