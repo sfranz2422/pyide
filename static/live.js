@@ -1429,6 +1429,7 @@
           "_pyide_run(_pyide_source, " + TIME_LIMIT_SECONDS + ")"
         );
         if (result === "ok") write("\n— finished —\n", "dim");
+        if (result === "ok" || result === "cancelled") reportRun();
       } catch (e) {
         write(String(e) + "\n", "err");
       } finally {
@@ -1440,6 +1441,15 @@
     }
 
     await runGame(source, false);
+  }
+
+  /* A run of their own code that worked, for XP (xp.js); the server
+     decides whether it pays. */
+  function reportRun() {
+    if (!L.signedIn || !window.PyIDEXP) return;
+    var files = dataFiles();
+    files[MAIN] = mainSource();
+    window.PyIDEXP.ran(files);
   }
 
   /* A game on this page's canvas: theirs from Run, or the teacher's from
@@ -1483,6 +1493,9 @@
       // kaypy(width=…, height=…) has set the canvas's size by now, and SDL
       // its style: fit it again, to the game's own shape.
       fitCanvas();
+      // Theirs only: the teacher's game played here is not their work.
+      // Before the loop, which may never settle when Stop is pressed.
+      if (status === "ok" && !teachers) reportRun();
       if (status === "ok") await pyodide.runPythonAsync("await _pyide_drive_game()");
     } catch (e) {
       write(String(e) + "\n", "err");

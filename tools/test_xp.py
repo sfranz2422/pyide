@@ -1,0 +1,473 @@
+#!/usr/bin/env python3
+"""XP, levels, badges, tokens, leaderboards and avatars (xp.py; "XP" in app.py).
+
+    python3 tools/test_xp.py
+
+WHY THIS FILE EXISTS
+
+XP is points students compete over, so every way of earning it is a way of
+earning it twice, and every place it is shown is a place a student's name
+is shown to the class. This pins:
+
+  * a question pays XP_PER_POINT per point, part for part right, once — a
+    second answer, a wrong one and the teacher's practice pay nothing;
+  * answering every question pays once, and only when it is every one;
+  * the full-marks bonus pays once, from a score, and to those already at
+    full marks when it is set;
+  * a run pays only after RUN_EVERY_SECONDS of WORKING time, only when the
+    code changed, never twice in RUN_EVERY_SECONDS, and never a teacher —
+    and the working time counts at most one step per gap;
+  * a teacher gives and takes XP only to their own class's students, and
+    Use takes one token and never goes below none;
+  * a leaderboard has only its class, first name and last initial, never an
+    email, in order, equal XP an equal place, and nobody who hid;
+  * the home page shows it all, and avatars keep to unlocked parts —
+    and avatar.js can draw every part xp.py lists (needs node).
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PYIDE = os.path.dirname(HERE)
+
+DB = os.path.join(tempfile.mkdtemp(), "xp.db")
+os.environ["DATABASE_URL"] = "sqlite:///" + DB
+os.environ["TEACHER_EMAILS"] = "teacher@school.org, other@school.org"
+os.environ["SECRET_KEY"] = "k" * 32
+os.environ.pop("ALLOWED_EMAIL_DOMAINS", None)
+
+sys.path.insert(0, PYIDE)
+import app as P                                              # noqa: E402
+import accounts                                              # noqa: E402
+import quiz                                                  # noqa: E402
+import xp                                                    # noqa: E402
+
+results = []
+
+
+def check(label, condition, detail=""):
+    results.append(bool(condition))
+    print("  %-4s %-64s %s" % ("ok" if condition else "FAIL", label, detail))
+
+
+def add(row):
+    db = P.SessionLocal()
+    try:
+        db.add(row)
+        db.commit()
+        return row.id
+    finally:
+        db.close()
+
+
+def add_user(sub, email, name, first="", last=""):
+    return add(accounts.User(google_sub=sub, email=email, name=name,
+                             first_name=first, last_name=last))
+
+
+def client(uid=None, **session):
+    c = P.app.test_client()
+    if uid is not None:
+        with c.session_transaction() as s:
+            s["uid"] = uid
+            s.update(session)
+    return c
+
+
+def total(uid):
+    db = P.SessionLocal()
+    try:
+        return xp.total(db, uid)
+    finally:
+        db.close()
+
+
+def awards(uid, prefix=""):
+    db = P.SessionLocal()
+    try:
+        return [a.source for a in db.query(accounts.XpAward).filter_by(user_id=uid)
+                if a.source.startswith(prefix)]
+    finally:
+        db.close()
+
+
+def age_awards(uid, seconds):
+    """Move a student's awards into the past, as if time had gone by. A
+    run's source is the minute it was paid in, so that moves too — or the
+    next run, in the same real minute, would collide with it."""
+    db = P.SessionLocal()
+    try:
+        for a in db.query(accounts.XpAward).filter_by(user_id=uid):
+            a.created_at = a.created_at - P.timedelta(seconds=seconds)
+            if a.source.startswith("run:"):
+                a.source = "run:%d" % (int(a.source[4:]) - seconds // 60 - 1)
+        db.commit()
+    finally:
+        db.close()
+
+
+NOTES = """# Loops
+
+```quiz
+What does len("hello") return?
+- [ ] 4
+- [x] 5
+points: 2
+```
+
+```quiz
+Fill in: for i in [[range]](3): print([[i]])
+type: blank
+points: 2
+```
+
+```quiz
+Why do loops matter?
+type: long
+points: 3
+```
+"""
+
+KEYS = quiz.keys(NOTES)
+MC, BLANK, LONG = (KEYS + [{}, {}, {}])[:3]
+check("the notes have three questions", len(KEYS) == 3, len(KEYS))
+
+# ----------------------------------------------------------------- the rules
+print("\nThe rules")
+
+check("level 1 at 0 XP, 2 at 100, still 2 at 249, 3 at 250",
+      [xp.level_of(n) for n in (0, 99, 100, 249, 250)] == [1, 1, 2, 2, 3])
+check("  and on past the end of the list",
+      xp.level_of(xp.LEVEL_STARTS[-1] + xp.LEVEL_STEP_AFTER) == len(xp.LEVEL_STARTS) + 1)
+s = xp.summary(1040, tokens_used=1)
+check("a summary: tokens earned less used, badges by XP",
+      s["tokens_earned"] == 2 and s["tokens"] == 1
+      and [b["have"] for b in s["badges"]][:6] == [True, True, True, True, True, False],
+      s["tokens"])
+check("  progress through the level, 0 to 100",
+      xp.summary(175)["progress"] == 50, xp.summary(175)["progress"])
+check("a name on the board is the first name and last initial",
+      xp.board_name(accounts.User(name="Mary Ann Smith", first_name="Mary Ann",
+                                  last_name="Smith", email="m@x")) == "Mary Ann S."
+      and xp.board_name(accounts.User(name="Ana Cruz", email="a@x")) == "Ana C."
+      and xp.board_name(accounts.User(name="", email="z@x")) == "Student")
+
+# ------------------------------------------------------------------- people
+TEACHER = add_user("t1", "teacher@school.org", "Mr Franz")
+OTHER = add_user("t2", "other@school.org", "Ms Other")
+AMY = add_user("s1", "amy@school.org", "Amy Adams", "Amy", "Adams")
+BEN = add_user("s2", "Ben@School.org", "Ben Brown", "Ben", "Brown")
+CAL = add_user("s3", "cal@school.org", "Cal Cole", "Cal", "Cole")
+OUT = add_user("s4", "out@school.org", "Out Sider", "Out", "Sider")
+teacher, other = client(TEACHER), client(OTHER)
+amy, ben, cal, out = client(AMY), client(BEN), client(CAL), client(OUT)
+
+CLASS = teacher.post("/api/class", json={"name": "P4 Intro"}).get_json()["id"]
+for email, name in (("amy@school.org", "Amy Adams"), ("ben@school.org", "Ben Brown"),
+                    ("cal@school.org", "Cal Cole"), ("dee@school.org", "Dee Never")):
+    add(accounts.Enrollment(class_id=CLASS, email=email, name=name))
+
+SLUG = teacher.post("/api/class/%d/new" % CLASS, json={"title": "Loops"}).get_json()["slug"]
+teacher.post("/api/assignment/%s" % SLUG, json={
+    "code": "print('hi')\n", "title": "Loops", "files": {"notes.md": NOTES}})
+
+
+def answer(c, qid, response):
+    r = c.post("/api/quiz/answer", json={"assignment": SLUG, "question": qid,
+                                         "response": response})
+    return r.status_code, r.get_json() or {}
+
+
+# ------------------------------------------------------------------ questions
+print("\nQuestions")
+
+st, d = answer(amy, MC["qid"], "5")
+check("a right answer worth 2 points pays 20 XP", st == 200 and d.get("xp") == 20
+      and total(AMY) == 20, (st, d.get("xp"), total(AMY)))
+st, d = answer(amy, MC["qid"], "4")
+check("  answering it again pays nothing", d.get("xp", 0) == 0 and total(AMY) == 20,
+      total(AMY))
+st, d = answer(ben, MC["qid"], "4")
+check("a wrong answer pays nothing", d.get("xp", 0) == 0 and total(BEN) == 0
+      and not awards(BEN), awards(BEN))
+st, d = answer(amy, BLANK["qid"], json.dumps(["range", "x"]))
+check("half of a blank question pays half its XP", d.get("xp") == 10
+      and total(AMY) == 30, (d.get("xp"), total(AMY)))
+check("  and nothing for answering them all yet", not awards(AMY, "all:"))
+st, d = answer(amy, LONG["qid"], "<p>Because they repeat.</p>")
+check("a long response pays nothing itself, but finishing the set pays %d"
+      % xp.ALL_ANSWERED_XP, d.get("xp") == xp.ALL_ANSWERED_XP
+      and awards(AMY, "all:") and total(AMY) == 30 + xp.ALL_ANSWERED_XP,
+      (d.get("xp"), total(AMY)))
+r = teacher.post("/api/quiz/answer", json={"assignment": SLUG, "question": MC["qid"],
+                                           "response": "5"}).get_json()
+check("the teacher's practice answer pays nothing", not awards(TEACHER)
+      and r.get("practice"), awards(TEACHER))
+
+# ------------------------------------------------------------ full marks
+print("\nThe full-marks bonus")
+
+r = teacher.post("/api/assignment/%s/out-of" % SLUG, json={"out_of": 10})
+check("the assignment is out of 10", r.status_code == 200, r.status_code)
+
+
+def sub_of(uid):
+    db = P.SessionLocal()
+    try:
+        return db.query(accounts.Submission).filter_by(student_id=uid).first().id
+    finally:
+        db.close()
+
+
+def score(uid, value):
+    return teacher.post("/api/assignment/%s/feedback" % SLUG, json={
+        "submission": sub_of(uid), "feedback": "", "score": value})
+
+
+score(AMY, 7)          # 7 + 3 from the questions = 10, full marks — but no bonus yet
+check("full marks with no bonus set pays nothing", not awards(AMY, "bonus:"))
+r = teacher.post("/api/assignment/%s/xp-bonus" % SLUG, json={"xp": 50}).get_json()
+check("setting a bonus pays those already at full marks",
+      r.get("paid") == 1 and awards(AMY, "bonus:"), r)
+check("  and not those below it", not awards(BEN, "bonus:"))
+score(BEN, 9)          # 9 + 0 = 9
+check("a score short of full marks pays nothing", not awards(BEN, "bonus:"))
+score(BEN, 10)
+check("a score reaching full marks pays the bonus", awards(BEN, "bonus:")
+      and total(BEN) == 50, total(BEN))
+score(BEN, 9)
+score(BEN, 10)
+check("  once, however often it is reached", total(BEN) == 50, total(BEN))
+check("someone else's assignment's bonus can't be set",
+      other.post("/api/assignment/%s/xp-bonus" % SLUG, json={"xp": 5}).status_code == 404)
+check("a bonus has to be a sensible number",
+      teacher.post("/api/assignment/%s/xp-bonus" % SLUG, json={"xp": -5}).status_code == 400
+      and teacher.post("/api/assignment/%s/xp-bonus" % SLUG, json={"xp": "x"}).status_code == 400)
+
+# ------------------------------------------------------------------ running
+print("\nRunning a program")
+
+def run(uid, code, busy):
+    c = client(uid, busy=busy, act=int(time.time()))
+    return c.post("/api/xp/run", json={"code": code}).get_json(), c
+
+
+d, _ = run(CAL, "aaaa", xp.RUN_EVERY_SECONDS - 60)
+check("not yet: less than 30 minutes of work", d.get("awarded") == 0
+      and d.get("minutes") == 1 and total(CAL) == 0, d)
+d, c = run(CAL, "aaaa", xp.RUN_EVERY_SECONDS)
+check("30 minutes of work and a run pays %d" % xp.RUN_XP,
+      d.get("awarded") == xp.RUN_XP and total(CAL) == xp.RUN_XP, d)
+with c.session_transaction() as s:
+    check("  and the working time starts again", s.get("busy") == 0, s.get("busy"))
+# A minute on, so the minute in a run's source can't be what refuses this:
+# the clock check alone has to.
+db = P.SessionLocal()
+for a in db.query(accounts.XpAward).filter_by(user_id=CAL):
+    a.source = "run:%d" % (int(a.source[4:]) - 1)
+db.commit()
+db.close()
+d, _ = run(CAL, "bbbb", xp.RUN_EVERY_SECONDS)
+check("not twice in 30 minutes, even from another browser",
+      d.get("awarded") == 0 and total(CAL) == xp.RUN_XP, d)
+age_awards(CAL, xp.RUN_EVERY_SECONDS + 5)
+d, _ = run(CAL, "aaaa", xp.RUN_EVERY_SECONDS)
+check("30 minutes on, the same code again pays nothing",
+      d.get("awarded") == 0 and d.get("same"), d)
+d, _ = run(CAL, "cccc", xp.RUN_EVERY_SECONDS)
+check("  changed code pays", d.get("awarded") == xp.RUN_XP
+      and total(CAL) == 2 * xp.RUN_XP, d)
+d, _ = run(TEACHER, "dddd", 10 ** 6)
+check("a teacher earns nothing by running", d.get("awarded") == 0 and not awards(TEACHER))
+check("signed out earns nothing",
+      client().post("/api/xp/run", json={"code": "eeee"}).get_json().get("awarded") == 0)
+
+# The working time itself: a request that counts as activity adds the time
+# since the last one, but never more than one step.
+c = client(CAL, act=int(time.time()) - 120, busy=0)
+c.post("/api/alive", json={})
+with c.session_transaction() as s:
+    check("two minutes of work since the last sign adds two minutes",
+          115 <= s.get("busy", 0) <= 130, s.get("busy"))
+c = client(CAL, act=int(time.time()) - 3600, busy=0)
+c.post("/api/alive", json={})
+with c.session_transaction() as s:
+    check("an hour away adds only one step", s.get("busy") == P.BUSY_STEP_SECONDS,
+          s.get("busy"))
+c = client(CAL, act=int(time.time()) - 120, busy=0)
+c.get("/api/alive")
+with c.session_transaction() as s:
+    check("a poll (a GET to /api/) adds nothing", s.get("busy", 0) == 0, s.get("busy"))
+
+# ------------------------------------------------------------- teacher's XP
+print("\nGiving XP and using tokens")
+
+r = teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 990,
+                                                   "reason": "Helped a classmate"})
+check("the teacher gives XP to a student in the class", r.status_code == 200
+      and r.get_json()["xp"] == 1000 and r.get_json()["tokens"] == 2, r.get_json())
+check("  and the student sees why",
+      "Helped a classmate" in cal.get("/classes").get_data(as_text=True))
+check("not to someone outside the class",
+      teacher.post("/api/class/%d/xp" % CLASS, json={"student": OUT, "xp": 5})
+      .status_code == 404 and total(OUT) == 0)
+check("not from a teacher whose class it isn't",
+      other.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 5})
+      .status_code in (403, 404))
+_before = total(AMY)
+check("not by a student",
+      amy.post("/api/class/%d/xp" % CLASS, json={"student": AMY, "xp": 500})
+      .status_code == 403 and total(AMY) == _before, total(AMY))
+check("0 and too much are refused",
+      teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 0}).status_code == 400
+      and teacher.post("/api/class/%d/xp" % CLASS,
+                       json={"student": CAL, "xp": xp.GRANT_LIMIT + 1}).status_code == 400)
+r = teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": -10,
+                                                   "reason": "Oops"})
+check("a negative grant takes XP back", r.status_code == 200 and total(CAL) == 990,
+      total(CAL))
+teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 10})
+
+page = teacher.get("/teacher/class/%d/xp" % CLASS).get_data(as_text=True)
+check("the teacher's XP page lists the class, and who hasn't signed in",
+      "Cal Cole" in page and "Dee Never" in page and "Hasn't signed in" in page
+      and "Out Sider" not in page)
+
+
+def use(c, uid):
+    return c.post("/api/class/%d/tokens" % CLASS, json={"student": uid})
+
+
+r = use(teacher, CAL)
+check("Use takes one token", r.status_code == 200 and r.get_json()["tokens"] == 1,
+      r.get_json())
+check("  not for another teacher", use(other, CAL).status_code in (403, 404))
+check("  not for a student", use(cal, CAL).status_code == 403)
+use(teacher, CAL)
+r = use(teacher, CAL)
+check("  and never below none", r.status_code == 409, r.status_code)
+db = P.SessionLocal()
+check("  two used in all", db.get(accounts.User, CAL).tokens_used == 2)
+db.close()
+
+# ------------------------------------------------------------- leaderboard
+print("\nThe leaderboard")
+
+add(accounts.XpAward(user_id=BEN, source="test:tie", xp=total(AMY) - total(BEN),
+                     reason="", app="pyide"))          # Ben level with Amy
+page = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+board = page[page.find('id="leaderboard"'):]
+order = [n for n in ("Cal C.", "Amy A.", "Ben B.") if n in board]
+check("the board has the class's students, first name and last initial",
+      order == ["Cal C.", "Amy A.", "Ben B."], order)
+check("  ranked by XP, top first",
+      board.find("Cal C.") < board.find("Amy A.") and board.find("Cal C.") < board.find("Ben B."))
+check("  equal XP is an equal place",
+      board.count('<span class="xp-place">2</span>') == 2, total(AMY) == total(BEN))
+check("  no emails, no full names", "@school.org" not in board and "Adams" not in board
+      and "Brown" not in board)
+check("  nobody from outside the class", "Out S." not in board)
+check("  and the reader is marked", '<li class="me' in board and "(you)" in board)
+
+r = cal.post("/api/me/board", json={"hidden": True})
+board = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+board = board[board.find('id="leaderboard"'):]
+check("a student who hides leaves the board", "Cal C." not in board
+      and '<span class="xp-place">1</span>' in board)
+check("  and still earns", total(CAL) == 1000)
+page = cal.get("/class/%d" % CLASS).get_data(as_text=True)
+check("  and their class page says they're hidden", "You&#39;re hidden" in page
+      or "You're hidden" in page)
+cal.post("/api/me/board", json={"hidden": False})
+
+_token = re.search(r'/view/([A-Za-z0-9_-]+)"', teacher.get(
+    "/teacher/class/%d" % CLASS).get_data(as_text=True)).group(1)
+view = amy.get("/view/" + _token).get_data(as_text=True)
+check("the view-only link shows no leaderboard", 'id="leaderboard"' not in view
+      and "Amy A." not in view, len(view))
+
+# ------------------------------------------------------------------ home
+print("\nThe student's home page")
+
+page = cal.get("/classes").get_data(as_text=True)
+check("their level, XP and tokens", "Level 6" in page and "1000 XP" in page
+      and "<strong>0</strong> tokens" in page, "")
+check("  their badges, earned and not", 'class="have" title="Thousand Club' in page
+      and 'class="locked" title="Liftoff' in page)
+check("  their place in each class", "#1 of 3 in P4 Intro" in page)
+check("  and their avatar, to change", "data-avatar=" in page and "/me/avatar" in page)
+check("a teacher has no XP panel", "xp-card" not in teacher.get(
+    "/classes", follow_redirects=True).get_data(as_text=True))
+
+# ---------------------------------------------------------------- avatars
+print("\nAvatars")
+
+r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR, hat="beanie")})
+def saved_avatar(uid):
+    db = P.SessionLocal()
+    try:
+        return json.loads(db.get(accounts.User, uid).avatar or "{}")
+    finally:
+        db.close()
+
+
+check("an unlocked part is saved", r.status_code == 200
+      and saved_avatar(AMY).get("hat") == "beanie", r.get_json())
+r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR, hat="crown")})
+check("a part above their level is refused", r.status_code == 400
+      and "level 10" in r.get_json()["error"], r.get_json())
+r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR,
+                                                    hat="<script>")})
+check("a part that doesn't exist is refused", r.status_code == 400)
+r = amy.post("/api/me/avatar", json={"avatar": "nope"})
+check("  and so is something that isn't an avatar", r.status_code == 400)
+db = P.SessionLocal()
+u = db.get(accounts.User, AMY)
+u.avatar = '{"hat": "<script>", "skin": "s4"}'
+check("a bad saved avatar draws as the default's parts, keeping the good ones",
+      xp.avatar_of(u)["hat"] == "none" and xp.avatar_of(u)["skin"] == "s4")
+db.rollback()
+db.close()
+check("the avatar page shows the parts", "Wizard hat" in amy.get("/me/avatar")
+      .get_data(as_text=True))
+
+node = shutil.which("node")
+if node:
+    script = ("global.window = {}; require(%s);"
+              "const A = window.PyIDEAvatar;"
+              "const out = {drawable: A.drawable, svg: A.svg(%s)};"
+              "process.stdout.write(JSON.stringify(out));") % (
+        json.dumps(os.path.join(PYIDE, "static", "avatar.js")),
+        json.dumps(dict(xp.DEFAULT_AVATAR, background="galaxy", hat="crown")))
+    res = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    try:
+        got = json.loads(res.stdout)
+    except ValueError:
+        got = {}
+    check("node ran avatar.js", bool(got), res.stderr[-300:])
+    for kind, parts in xp.AVATAR_PARTS.items():
+        missing = [p[0] for p in parts if p[0] not in got.get("drawable", {}).get(kind, [])]
+        check("  avatar.js draws every %s" % kind, not missing, missing)
+    check("  and draws an SVG", got.get("svg", "").startswith("<svg")
+          and "linearGradient" in got.get("svg", ""))
+else:
+    check("node is available to run avatar.js", False, "brew install node")
+
+# --------------------------------------------------------------- database
+print("\nAn older database")
+
+for table, column in (("users", "avatar"), ("users", "board_hidden"),
+                      ("users", "tokens_used"), ("assignments", "xp_bonus")):
+    check("  %s.%s is added to an existing table" % (table, column),
+          any(t == table and c == column for t, c, _ in accounts.LATER_COLUMNS))
+
+print()
+failed = results.count(False)
+print("%d checks, %s" % (len(results), "all ok" if not failed else "%d FAILED" % failed))
+sys.exit(1 if failed else 0)

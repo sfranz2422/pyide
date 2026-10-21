@@ -2475,3 +2475,115 @@ a:not([class]):hover { color: var(--accent-hover); }
 .view-link-label { font-weight: 600; }
 .view-link #view-url { flex: 1 1 320px; min-width: 0; font-family: "IBM Plex Mono", monospace; font-size: 13px; }
 .view-link .dim { flex-basis: 100%; }
+
+/* XP (xp.py). An avatar is an SVG drawn into any .avatar (avatar.js),
+   always round, sized by whoever holds it. */
+.avatar { display: inline-block; border-radius: 50%; overflow: hidden; flex: none;
+  width: 40px; height: 40px; background: var(--bg-head); line-height: 0; }
+.avatar svg { width: 100%; height: 100%; display: block; }
+
+/* The student's home: avatar, level and bar, then badges and recent XP
+   beside it — stacked on a phone. */
+.xp-card { display: grid; grid-template-columns: auto 1fr minmax(240px, 360px); gap: 20px;
+  align-items: start; border: 1px solid var(--line); border-top: 4px solid var(--brand);
+  border-radius: 10px; background: var(--bg-panel); padding: 18px 20px; margin: 0 0 24px; }
+.xp-avatar { width: 96px; height: 96px; box-shadow: 0 0 0 3px var(--line); }
+.xp-avatar:hover, .xp-avatar:focus-visible { box-shadow: 0 0 0 3px var(--brand); outline: none; }
+.xp-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.xp-level { font-size: 24px; font-weight: 600; }
+.xp-title { color: var(--muted); }
+.xp-total { margin-left: auto; font-family: var(--mono); font-size: 18px; font-weight: 500; }
+.xp-bar { height: 12px; border-radius: 6px; background: var(--bg-head); overflow: hidden;
+  margin: 10px 0 6px; border: 1px solid var(--line); }
+.xp-bar span { display: block; height: 100%; background: var(--green); border-radius: 6px; }
+.xp-next { margin: 0 0 12px; }
+.xp-facts { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.xp-tokens { font-size: 16px; }
+.xp-rank { font-size: 14px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--text); text-decoration: none; }
+.xp-rank:hover { border-color: var(--brand); }
+.xp-side h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 0 0 8px; }
+.xp-side h2 + * { margin-bottom: 14px; }
+.xp-badges { list-style: none; margin: 0; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.xp-badges li { display: flex; flex-direction: column; align-items: center; gap: 2px;
+  text-align: center; padding: 6px 2px; border-radius: 8px; border: 1px solid var(--line); }
+.xp-badges li.locked { opacity: .35; filter: grayscale(1); }
+.xp-badge-icon { font-size: 22px; line-height: 1.1; }
+.xp-badge-name { font-size: 11px; line-height: 1.2; }
+.xp-recent { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.xp-recent li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.xp-recent li:last-child { border-bottom: 0; }
+.xp-plus { color: var(--green); font-family: var(--mono); }
+.xp-minus { color: var(--red); font-family: var(--mono); }
+.xp-hide { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+.xp-hide input { accent-color: var(--accent); }
+@media (max-width: 860px) {
+  .xp-card { grid-template-columns: auto 1fr; }
+  .xp-side { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .xp-card { grid-template-columns: 1fr; justify-items: start; }
+  .xp-total { margin-left: 0; }
+}
+
+/* A class's leaderboard. */
+.xp-board { margin-top: 28px; max-width: 720px; }
+.xp-board-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; background: var(--bg-panel); }
+.xp-board-list li { display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  border-bottom: 1px solid var(--line); }
+.xp-board-list li:last-child { border-bottom: 0; }
+.xp-board-list li.me { background: color-mix(in srgb, var(--brand) 16%, transparent); }
+.xp-place { width: 2.2em; text-align: right; font-family: var(--mono); font-weight: 500; }
+/* By place, not by row: two students tied for third are both third. */
+.xp-board-list li.top .xp-place { color: var(--amber); }
+.xp-board-avatar { width: 36px; height: 36px; }
+.xp-board-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.xp-board-xp { font-family: var(--mono); white-space: nowrap; }
+
+/* The teacher's XP page. */
+.xp-table { width: 100%; border-collapse: collapse; }
+.xp-table th, .xp-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  vertical-align: middle; }
+.xp-who { display: flex; gap: 10px; align-items: center; }
+.xp-give { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.xp-give .xp-amount { width: 6em; }
+.xp-give .xp-reason { width: 14em; }
+
+/* The avatar editor. */
+.avatar-editor { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+.avatar-preview { position: sticky; top: calc(var(--bar-h) + 16px); display: flex;
+  flex-direction: column; gap: 10px; align-items: flex-start; }
+.avatar-preview .avatar { width: 200px; height: 200px; box-shadow: 0 0 0 4px var(--line); }
+.avatar-kind { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 8px 12px 12px; }
+.avatar-kind legend { padding: 0 6px; font-weight: 600; }
+.avatar-option { position: relative; display: inline-flex; flex-direction: column; align-items: center;
+  gap: 4px; width: 84px; padding: 6px 4px; margin: 4px; border: 2px solid var(--line);
+  border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-size: 12px;
+  cursor: pointer; }
+.avatar-option .avatar { width: 56px; height: 56px; }
+.avatar-option[aria-pressed="true"] { border-color: var(--brand); }
+.avatar-option:disabled { cursor: not-allowed; opacity: .45; }
+.avatar-lock { position: absolute; top: 2px; right: 4px; font-size: 11px; }
+@media (max-width: 700px) {
+  .avatar-editor { grid-template-columns: 1fr; }
+  .avatar-preview { position: static; }
+  .avatar-preview .avatar { width: 140px; height: 140px; }
+}
+
+/* "+5 XP", for a moment, bottom right. */
+.xp-toast { position: fixed; right: 18px; bottom: 18px; z-index: 1000; padding: 10px 16px;
+  border-radius: 999px; background: var(--green); color: var(--on-green); font-weight: 600;
+  box-shadow: 0 4px 14px var(--shadow); opacity: 0; transform: translateY(10px);
+  pointer-events: none; }
+.xp-toast.show { animation: xp-toast 3.2s ease forwards; }
+@keyframes xp-toast {
+  0% { opacity: 0; transform: translateY(10px); }
+  10%, 80% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xp-toast.show { animation-duration: 3.2s; animation-timing-function: steps(1, end); }
+}

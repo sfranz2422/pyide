@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XP · {{ course.name }} — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  try {
+    var saved = localStorage.getItem("pyide-theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) {}
+</script>
+</head>
+<body class="class-page class-teacher">
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">{{ course.name }} · XP &amp; tokens</span></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('student_class', class_id=course.id) }}#leaderboard">Leaderboard</a>
+    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
+  </div>
+</header>
+
+{#  Each student's XP is theirs across every class and editor, so the same
+    student shows the same total on each of your class pages. A token is
+    one per {{ token_every }} XP; Use lowers the count, and what it bought
+    is yours to record. Give XP takes a negative number too — that is how a
+    grant made by mistake is taken back. #}
+<main class="sheet">
+  <h1 class="att-title">XP &amp; tokens</h1>
+  <p class="dim">One token for every {{ token_every }} XP. Press <strong>Use</strong>
+    when a student spends one; it only lowers the count. XP you give shows on the
+    student's home page with your reason. A negative number takes XP back.</p>
+
+  {% if students %}
+  <table class="xp-table">
+    <thead><tr><th>Student</th><th>Level</th><th>XP</th><th>Tokens</th><th>Give XP</th></tr></thead>
+    <tbody>
+      {% for s in students %}
+        <tr data-student="{{ s.id or '' }}">
+          <td class="xp-who">
+            {% if s.id %}<span class="avatar xp-board-avatar" data-avatar='{{ s.avatar|tojson }}'></span>{% endif %}
+            <span>{{ s.name }}<br><span class="dim small">{{ s.email }}{% if s.hidden %} · hidden from the leaderboard{% endif %}</span></span>
+          </td>
+          {% if s.id %}
+            <td>{{ s.level }} <span class="dim small">{{ s.title }}</span></td>
+            <td class="js-xp">{{ s.xp }}</td>
+            <td><strong class="js-tokens">{{ s.tokens }}</strong>
+              <button class="btn js-use" type="button" {{ "disabled" if not s.tokens }}>Use</button></td>
+            <td>
+              <form class="xp-give">
+                <input class="field xp-amount" type="number" min="-{{ grant_limit }}" max="{{ grant_limit }}"
+                       step="1" placeholder="XP" aria-label="XP for {{ s.name }}" required>
+                <input class="field xp-reason" type="text" maxlength="200" placeholder="Reason"
+                       aria-label="Reason">
+                <button class="btn" type="submit">Give</button>
+                <span class="dim small js-state" role="status"></span>
+              </form>
+            </td>
+          {% else %}
+            <td colspan="4" class="dim">Hasn't signed in yet, so has no XP.</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="dim">No students yet. Sync the roster on the class's page.</p>
+  {% endif %}
+</main>
+<script src="{{ url_for('static', filename='avatar.js') }}"></script>
+<script>
+(function () {
+  var api = "/api/class/{{ course.id }}";
+  function post(path, body) {
+    return fetch(api + path, { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); });
+  }
+  document.querySelectorAll("tr[data-student]").forEach(function (row) {
+    var id = row.dataset.student;
+    if (!id) return;
+    var use = row.querySelector(".js-use");
+    var tokens = row.querySelector(".js-tokens");
+    use.addEventListener("click", function () {
+      if (!confirm("Use one of this student's tokens?")) return;
+      use.disabled = true;
+      post("/tokens", { student: id }).then(function (out) {
+        if (!out.ok) { alert(out.d.error || "That didn't save."); }
+        else { tokens.textContent = out.d.tokens; }
+        use.disabled = !(out.ok ? out.d.tokens : +tokens.textContent);
+      }).catch(function () { use.disabled = false; alert("That didn't save. Try again."); });
+    });
+    var form = row.querySelector(".xp-give");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var state = form.querySelector(".js-state");
+      var amount = form.querySelector(".xp-amount");
+      var reason = form.querySelector(".xp-reason");
+      state.textContent = "Saving…";
+      post("/xp", { student: id, xp: amount.value, reason: reason.value }).then(function (out) {
+        if (!out.ok) { state.textContent = out.d.error || "That didn't save."; return; }
+        state.textContent = "Given.";
+        row.querySelector(".js-xp").textContent = out.d.xp;
+        tokens.textContent = out.d.tokens;
+        use.disabled = !out.d.tokens;
+        amount.value = ""; reason.value = "";
+      }).catch(function () { state.textContent = "That didn't save. Try again."; });
+    });
+  });
+})();
+</script>
+</body>
+</html>

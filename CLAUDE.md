@@ -41,11 +41,11 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by thirteen of these: `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by fourteen of these: `test_charts.py`, `test_dungeon.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
-`test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py` and
-`test_tabstops.py`. They run
+`test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
+`test_tabstops.py` and `test_xp.py`. They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -261,6 +261,42 @@ what to make and where to put it is the exercise. Pinned by a check in
 `test_dungeon.py`, because it is the kind of convenience that creeps back.
 (The kaypy-site playground keeps a diverging copy of `sprites.js` that still
 writes the `add`. That is deliberate.)
+
+**XP** (`xp.py`; "XP" in `app.py`; `static/xp.js`, `static/avatar.js`).
+Students earn XP for questions the notes mark themselves (`XP_PER_POINT` a
+point, part for part right), for answering every question in the notes, for
+full marks on an assignment with an `xp_bonus`, from the teacher by hand
+(`/teacher/class/<id>/xp`, negative takes it back), and for a program that
+ran without an error. It makes levels, badges and tokens (one per 500 XP),
+all worked out from the total and never stored; `users.tokens_used` is the
+only token state, lowered by Use with a conditional UPDATE. **Nothing here
+touches a grade** — the teacher trades tokens for points by hand.
+
+One total per *person*, across every class and all three apps, so **`xp.py`
+and `avatar.js` are shared like `accounts.py`**: change them here and copy
+them to WebIDE and FlaskIDE. XP is rows in `xp_awards`, never updated, and
+the unique `(user_id, source)` is what stops anything paying twice — a
+double click, two workers, a page sent twice. `xp.award` commits on its own
+and is called *after* the thing it pays for is committed.
+
+**The server cannot see a run.** The page posts a hash of its `.py` files
+(never the code), and the server pays `RUN_XP` only after
+`RUN_EVERY_SECONDS` of *working* time since the last paid run, never twice in
+that much clock time, and only when the hash changed. Working time is
+`session["busy"]`, counted in `_sign_out_idle_student` as `act` moves — one
+`BUSY_STEP_SECONDS` at most per gap, and never for a GET to `/api/`, or an
+open tab would earn by polling. A faked claim earns what a real one would,
+which is the whole defence. A game reports when its setup has run, before
+`_pyide_drive_game()`, because that await can stay pending after Stop.
+
+A class's leaderboard (`_board`) shows its roster's signed-in students by
+their whole XP, **first name and last initial only** (`xp.board_name`),
+never an email, and not on the view-only link. Students can hide and still
+earn. Their home page (`/classes`) shows all of it. An avatar is part ids
+only (no uploads, no text), cleaned by `xp.clean_avatar` against the level
+that unlocks each part; `test_xp.py` checks `avatar.js` can draw every id
+`xp.py` lists, since a missing one draws as nothing. The spinner is phase 2
+and not designed yet.
 
 ## Style
 

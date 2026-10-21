@@ -30,6 +30,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 import accounts
 import quiz
+import xp
 
 APP_NAME = "pyide"          # this editor, in the shared account tables
 
@@ -499,6 +500,7 @@ def logout():
 # Signed-out students have nothing to sign out of.
 
 STUDENT_IDLE_SECONDS = 2 * 60 * 60
+BUSY_STEP_SECONDS = 6 * 60
 
 
 def _counts_as_activity():
@@ -544,6 +546,13 @@ def _sign_out_idle_student():
     # signing out every student in the room on the deploy. Once a minute at
     # most, so a busy student is not sent a new cookie on every request.
     if last is None or (_counts_as_activity() and t - last >= 60):
+        # Time spent working, toward a Run's XP (xp_run). Each step counts
+        # for at most BUSY_STEP_SECONDS, a little over the page's 5-minute
+        # beat: a student who is typing beats that often, so their time all
+        # counts, and one who went to lunch comes back with one step's worth
+        # rather than the hour they were away.
+        if last is not None:
+            session["busy"] = session.get("busy", 0) + min(t - last, BUSY_STEP_SECONDS)
         session["act"] = t
 
 
@@ -639,7 +648,8 @@ def my_classes():
         enrolled = [{"name": c.name, "teacher": teachers.get(c.teacher_id, ""),
                      "url": url_for("student_class", class_id=c.id)}
                     for c in courses]
-        return render_template("classes.html", enrolled=enrolled, **user_context(db))
+        return render_template("classes.html", enrolled=enrolled,
+                               game=_game_card(db, user), **user_context(db))
     finally:
         db.close()
 
@@ -1762,8 +1772,12 @@ def quiz_answer():
             draft = db.query(accounts.Draft).filter_by(
                 owner_id=user.id, assignment_id=item.id).first()
             turned = _auto_turn_in(db, item, user, draft)
+            # Only for an answer this request recorded: a second click that
+            # found the first one's answer is not a second chance at XP.
+            gained = (_quiz_xp(db, item, user, key, had)
+                      if had.response == response else 0)
             return jsonify(_answer_reply(key, had, already=had.response != response,
-                                         turned_in_at=_when(turned)))
+                                         turned_in_at=_when(turned), xp=gained))
         return jsonify(_answer_reply(key, had, already=had.response != response))
     finally:
         db.close()
@@ -1818,6 +1832,7 @@ def quiz_grade():
             return jsonify(error=why), 400
         row.score = score
         db.commit()
+        _full_marks_xp(db, item, student_id)
         earned = _quiz_earned(db, item.id).get(student_id)
         sub = db.query(accounts.Submission).filter_by(
             assignment_id=item.id, student_id=student_id).first()
@@ -2597,6 +2612,7 @@ def give_feedback(slug):
         sub.feedback_at = accounts.now() if has_any else None
         sub.feedback_seen = 0
         db.commit()
+        _full_marks_xp(db, item, sub.student_id)
         earned = _quiz_earned(db, item.id).get(sub.student_id)
         total = _total(sub.score, earned)
         return jsonify(ok=True, feedback=text, score=_score_text(sub.score),
@@ -4568,6 +4584,8 @@ def student_class(class_id):
         rows, _ = _class_rows(db, course, user=user, student=True)
         ctx = user_context(db)
         ctx.update(course=course, rows=rows, preview=teacher,
+                   board=_board(db, course, me=user),
+                   board_hidden=bool(user.board_hidden) and not teacher,
                    attend_class=_attend(db, user, course, "Class page"))
         return render_template("class_student.html", **ctx)
     finally:
@@ -4678,6 +4696,362 @@ def class_attendance(class_id):
         ctx = user_context(db)
         ctx.update(course=course, visits=visits, roster=roster, days=days)
         return render_template("attendance.html", **ctx)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# XP
+# --------------------------------------------------------------------------
+# Points for doing the work, levels and badges they add up to, tokens the
+# teacher trades for exam points by hand, a leaderboard per class and an
+# avatar to put on it. The rules are xp.py, shared by all three editors; this
+# is where they are paid and shown. One total per person (accounts.XpAward).
+#
+# Only students earn. A teacher trying their own questions is answered as
+# practice and recorded nowhere, and they have no XP to show.
+
+def _earns_xp(user):
+    return user is not None and not accounts.is_teacher(user.email)
+
+
+def _quiz_xp(db, item, user, key, answer):
+    """XP for an answer just given: its part of the question's points, then
+    a bonus once every question in the notes has an answer, then the
+    assignment's full-marks bonus if that answer got them there. Called
+    after the answer is committed, so nothing here can lose it."""
+    if not _earns_xp(user):
+        return 0
+    got = 0
+    if key.kind != "long":
+        # Marked against the key as it is now, once. A long response has no
+        # key — its points come from the teacher's mark, which is a grade,
+        # not something the notes marked themselves.
+        got += xp.award(db, user.id, "quiz:%d:%s" % (item.id, key.qid),
+                        key.points * _mark(key, answer.response) * xp.XP_PER_POINT,
+                        "Question in %s" % item.title, APP_NAME)
+    # Every question in the notes AS SAVED: a question reworded since leaves
+    # its old row in quiz_questions, and counting those would make "all of
+    # them" impossible.
+    asked = {q["qid"] for q in _quiz_possible(item)}
+    if asked:
+        have = {qid for (qid,) in db.query(accounts.QuizAnswer.qid).filter_by(
+            assignment_id=item.id, student_id=user.id)}
+        if asked <= have:
+            got += xp.award(db, user.id, "all:%d" % item.id, xp.ALL_ANSWERED_XP,
+                            "Answered every question in %s" % item.title, APP_NAME)
+    return got + _full_marks_xp(db, item, user.id)
+
+
+def _has_full_marks(db, item, student_id):
+    """Full marks: the grade (score plus questions) reaching Out of, or —
+    for an assignment with no points — every question's points earned. An
+    assignment with neither has no full marks to get."""
+    earned = _quiz_earned(db, item.id).get(student_id)
+    if item.out_of:
+        sub = db.query(accounts.Submission).filter_by(
+            assignment_id=item.id, student_id=student_id).first()
+        total = _total(sub.score if sub else None, earned)
+        return total is not None and total >= item.out_of
+    possible = sum(q["points"] for q in _quiz_possible(item))
+    return possible > 0 and earned is not None and earned >= possible - 0.001
+
+
+def _full_marks_xp(db, item, student_id):
+    """The assignment's bonus, once, to a student with full marks. Asked
+    whenever their marks move — an answer, a score, a long response marked —
+    and for everyone when the bonus is set. Kept if marks later fall: it was
+    earned when it was paid, and taking XP back is the teacher's to do."""
+    if (item.xp_bonus or 0) <= 0 or not _has_full_marks(db, item, student_id):
+        return 0
+    return xp.award(db, student_id, "bonus:%d" % item.id, item.xp_bonus,
+                    "Full marks on %s" % item.title, APP_NAME)
+
+
+def _class_students(db, course):
+    """[(Enrollment, User or None)] for a class's roster, by name. None is a
+    student who has never signed in, who has no XP and nowhere to keep it."""
+    roster = (db.query(accounts.Enrollment).filter_by(class_id=course.id)
+                .order_by(accounts.Enrollment.name, accounts.Enrollment.email).all())
+    emails = [e.email for e in roster]
+    users = {}
+    if emails:
+        for u in db.query(accounts.User).filter(
+                func.lower(accounts.User.email).in_(emails)):
+            users[(u.email or "").lower()] = u
+    return [(e, users.get(e.email)) for e in roster]
+
+
+def _board(db, course, me=None):
+    """A class's leaderboard: its signed-in students, ranked by their whole
+    XP (every class, every editor), first name and last initial only. Those
+    who hid themselves are left off — `me` included, whose page says so.
+    Equal XP is an equal place: two students on 40 are both second."""
+    people = [u for _, u in _class_students(db, course)
+              if u is not None and not u.board_hidden]
+    have = xp.totals(db, [u.id for u in people])
+    people.sort(key=lambda u: (-have.get(u.id, 0), xp.board_name(u).lower()))
+    out, place, last = [], 0, None
+    for i, u in enumerate(people):
+        total = have.get(u.id, 0)
+        if total != last:
+            place, last = i + 1, total
+        level = xp.level_of(total)
+        out.append({"place": place, "name": xp.board_name(u), "xp": total,
+                    "level": level, "avatar": xp.avatar_of(u),
+                    "me": me is not None and u.id == me.id})
+    return out
+
+
+def _game_card(db, user):
+    """Everything about one student's XP, for their home page."""
+    total = xp.total(db, user.id)
+    card = xp.summary(total, user.tokens_used)
+    card["avatar"] = xp.avatar_of(user)
+    card["hidden"] = bool(user.board_hidden)
+    card["recent"] = [{"xp": a.xp, "reason": a.reason, "when": a.created_at}
+                      for a in xp.recent(db, user.id)]
+    card["ranks"] = []
+    for course in _my_classes(db, user):
+        board = _board(db, course, me=user)
+        mine = [row["place"] for row in board if row["me"]]
+        card["ranks"].append({"name": course.name, "of": len(board),
+                              "place": mine[0] if mine else None,
+                              "url": url_for("student_class", class_id=course.id)})
+    # Roughly how long until a Run pays again. Only roughly: the time is
+    # counted as they work (_sign_out_idle_student), not by the clock.
+    card["run_minutes"] = max(0, (xp.RUN_EVERY_SECONDS - session.get("busy", 0)) // 60)
+    card["run_xp"] = xp.RUN_XP
+    return card
+
+
+@app.post("/api/xp/run")
+def xp_run():
+    """A program ran without an error, in this student's browser. Pays
+    xp.RUN_XP when they have worked xp.RUN_EVERY_SECONDS since the last run
+    that paid, and the code (`code`, a hash the page makes of its .py files)
+    differs from that run's.
+
+    The server cannot see a run, so this is trusting the page — and the
+    limits are what make that safe (xp.py says why). The time is counted in
+    the session, as they work; the clock check beside it stops a second
+    browser doubling the rate, since each browser has its own session."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if not _earns_xp(user):
+            return jsonify(awarded=0)
+        code = re.sub(r"[^0-9a-z]", "", str((request.get_json(silent=True) or {})
+                                            .get("code", "")).lower())[:64]
+        if not code:
+            return jsonify(error="No code."), 400
+        busy = session.get("busy", 0)
+        if busy < xp.RUN_EVERY_SECONDS:
+            return jsonify(awarded=0, minutes=(xp.RUN_EVERY_SECONDS - busy + 59) // 60)
+        runs = (db.query(accounts.XpAward)
+                  .filter(accounts.XpAward.user_id == user.id,
+                          accounts.XpAward.source.like("run:%")))
+        cutoff = accounts.now() - timedelta(seconds=xp.RUN_EVERY_SECONDS)
+        if runs.filter(accounts.XpAward.created_at > cutoff).first() is not None:
+            return jsonify(awarded=0)
+        last = runs.order_by(accounts.XpAward.id.desc()).first()
+        if last is not None and last.detail == code:
+            return jsonify(awarded=0, same=True)
+        # One per minute at most, by the source: two tabs claiming at once
+        # collide on it and only one is paid.
+        got = xp.award(db, user.id, "run:%d" % (int(time.time()) // 60), xp.RUN_XP,
+                       "Ran a program", APP_NAME, detail=code)
+        if got:
+            session["busy"] = 0
+        return jsonify(awarded=got, xp=xp.total(db, user.id))
+    finally:
+        db.close()
+
+
+@app.post("/api/me/board")
+def me_board():
+    """Hide from, or come back to, every class's leaderboard."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first."), 401
+        user.board_hidden = 1 if (request.get_json(silent=True) or {}).get("hidden") else 0
+        db.commit()
+        return jsonify(ok=True, hidden=bool(user.board_hidden))
+    finally:
+        db.close()
+
+
+@app.get("/me/avatar")
+def avatar_page():
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return redirect(url_for("login", next=request.path))
+        level = xp.level_of(xp.total(db, user.id))
+        ctx = user_context(db)
+        ctx.update(avatar=xp.avatar_of(user), level=level,
+                   parts=xp.parts_for_page(),
+                   back=url_for("teacher_home" if accounts.is_teacher(user.email)
+                                else "my_classes"))
+        return render_template("avatar.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.post("/api/me/avatar")
+def save_avatar():
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first."), 401
+        level = xp.level_of(xp.total(db, user.id))
+        avatar, why = xp.clean_avatar((request.get_json(silent=True) or {}).get("avatar"),
+                                      level)
+        if why:
+            return jsonify(error=why), 400
+        user.avatar = json.dumps(avatar, sort_keys=True)
+        db.commit()
+        return jsonify(ok=True, avatar=avatar)
+    finally:
+        db.close()
+
+
+@app.post("/api/assignment/<slug>/xp-bonus")
+def set_xp_bonus(slug):
+    """The XP an assignment pays for full marks; 0 is none. Setting it pays
+    everyone who already has full marks, so students who finished early are
+    not the ones who miss out."""
+    db = SessionLocal()
+    try:
+        user, item, bounce = _own_assignment(db, slug)
+        if bounce:
+            return bounce
+        raw = (request.get_json(silent=True) or {}).get("xp")
+        try:
+            value = int(str(raw if raw not in (None, "") else 0).strip())
+        except ValueError:
+            return jsonify(error="The bonus has to be a whole number."), 400
+        if value < 0 or value > xp.GRANT_LIMIT:
+            return jsonify(error="The bonus has to be between 0 and %d." % xp.GRANT_LIMIT), 400
+        item.xp_bonus = value
+        item.updated_at = accounts.now()
+        db.commit()
+        paid = 0
+        if value:
+            students = ({sid for (sid,) in db.query(accounts.Submission.student_id)
+                         .filter_by(assignment_id=item.id)}
+                        | {sid for (sid,) in db.query(accounts.QuizAnswer.student_id)
+                           .filter_by(assignment_id=item.id)})
+            paid = sum(1 for sid in students if _full_marks_xp(db, item, sid))
+        return jsonify(ok=True, xp_bonus=value, paid=paid)
+    finally:
+        db.close()
+
+
+@app.get("/teacher/class/<int:class_id>/xp")
+def class_xp(class_id):
+    """The class's XP, for its teacher: each student's total, level and
+    unspent tokens, with Use and Give XP."""
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        if course is None or course.teacher_id != user.id:
+            abort(404)
+        pairs = _class_students(db, course)
+        have = xp.totals(db, [u.id for _, u in pairs if u is not None])
+        students = []
+        for e, u in pairs:
+            row = {"name": e.name or e.email, "email": e.email, "id": None}
+            if u is not None:
+                row.update(xp.summary(have.get(u.id, 0), u.tokens_used))
+                row.update(id=u.id, avatar=xp.avatar_of(u), hidden=bool(u.board_hidden))
+            students.append(row)
+        ctx = user_context(db)
+        ctx.update(course=course, students=students, token_every=xp.TOKEN_EVERY,
+                   grant_limit=xp.GRANT_LIMIT)
+        return render_template("class_xp.html", **ctx)
+    finally:
+        db.close()
+
+
+def _class_student(db, course, raw_id):
+    """The User for a student id the teacher's page sent, if they are on
+    this class's roster — the id is checked, not trusted, or any teacher
+    could give XP to anyone."""
+    try:
+        student_id = int(raw_id)
+    except (TypeError, ValueError):
+        return None
+    for _, u in _class_students(db, course):
+        if u is not None and u.id == student_id:
+            return u
+    return None
+
+
+@app.post("/api/class/<int:class_id>/xp")
+def class_give_xp(class_id):
+    """XP from the teacher, with a reason the student sees. Negative takes
+    XP back, which is the only undo there is."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        student = _class_student(db, course, data.get("student"))
+        if student is None:
+            return jsonify(error="That student isn't in this class."), 404
+        try:
+            amount = int(str(data.get("xp", "")).strip())
+        except ValueError:
+            return jsonify(error="XP has to be a whole number."), 400
+        if amount == 0 or abs(amount) > xp.GRANT_LIMIT:
+            return jsonify(error="XP has to be between -%d and %d, and not 0."
+                           % (xp.GRANT_LIMIT, xp.GRANT_LIMIT)), 400
+        reason = clean(data.get("reason"), 200) or "From your teacher"
+        if not xp.award(db, student.id, xp.grant_source(), amount, reason, APP_NAME,
+                        by_id=user.id):
+            return jsonify(error="That XP wasn't saved. Try again."), 500
+        db.refresh(student)
+        return jsonify(ok=True, **xp.summary(xp.total(db, student.id), student.tokens_used))
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/tokens")
+def class_use_token(class_id):
+    """Use one of a student's tokens: the count goes down by one. What it
+    bought is the teacher's to record, outside the app.
+
+    One UPDATE, conditional on there being a token left, so a double click
+    on two workers uses one token, not two."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        student = _class_student(db, course, (request.get_json(silent=True) or {})
+                                 .get("student"))
+        if student is None:
+            return jsonify(error="That student isn't in this class."), 404
+        earned = xp.tokens_earned(xp.total(db, student.id))
+        used = (db.query(accounts.User)
+                  .filter(accounts.User.id == student.id,
+                          accounts.User.tokens_used < earned)
+                  .update({"tokens_used": accounts.User.tokens_used + 1},
+                          synchronize_session=False))
+        db.commit()
+        db.refresh(student)
+        if not used:
+            return jsonify(error="They have no tokens left."), 409
+        return jsonify(ok=True, tokens=max(0, earned - student.tokens_used))
     finally:
         db.close()
 

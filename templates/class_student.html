@@ -116,7 +116,37 @@
       <p>Your teacher hasn't put anything in this class yet.</p>
     </div>
   {% endif %}
+
+  {#  The class's leaderboard (_board): its students by their whole XP,
+      first name and last initial, never an email. Not on the view-only
+      link — an administrator's page draws no student names it doesn't
+      need. #}
+  {% if board is defined and not visitor %}
+    <section class="xp-board" id="leaderboard">
+      <h2>Leaderboard</h2>
+      {% if board_hidden %}
+        <p class="dim small">You're hidden from the leaderboard. You still earn XP —
+          <a href="{{ url_for('my_classes') }}">change it on your home page</a>.</p>
+      {% endif %}
+      {% if board %}
+        <ol class="xp-board-list">
+          {% for b in board %}
+            <li class="{{ 'me' if b.me }} {{ 'top' if b.place <= 3 }}">
+              <span class="xp-place">{{ b.place }}</span>
+              <span class="avatar xp-board-avatar" data-avatar='{{ b.avatar|tojson }}'></span>
+              <span class="xp-board-name">{{ b.name }}{% if b.me %} <span class="dim small">(you)</span>{% endif %}</span>
+              <span class="xp-board-level dim small">Level {{ b.level }}</span>
+              <span class="xp-board-xp">{{ b.xp }} XP</span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="dim">Nobody is on it yet. Answer questions and run your programs to earn XP.</p>
+      {% endif %}
+    </section>
+  {% endif %}
 </main>
+<script src="{{ url_for('static', filename='avatar.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='embeds.js') }}"></script>
 <script>

@@ -360,7 +360,8 @@ check("  which lists the ones they're on the roster of",
 # on this page. It says what the list is, names each class's teacher, and
 # each card has an Open button.
 _mine = kid1.get("/classes").get_data(as_text=True)
-_card = _mine[_mine.find('href="/class/%d"' % C4):]
+# The card itself: the XP panel above it links to the class too.
+_card = _mine[_mine.find('class="enrolled-card" href="/class/%d"' % C4):]
 _card = _card[:_card.find("</a>")]
 check("  under a heading that says what they are",
       "Currently enrolled classes" in _mine and 'class="enrolled-card"' in _mine)

@@ -919,12 +919,25 @@
         "_pyide_run(_pyide_source, " + TIME_LIMIT_SECONDS + ")"
       );
       if (result === "ok") write("\n— finished —\n", "dim");
+      // Stopped while it waited for input() is a program that worked.
+      if (result === "ok" || result === "cancelled") reportRun();
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
       pullFilesFromPython();
       setBusy(false, "console");
     }
+  }
+
+  /* A run that worked, for XP (xp.js). Only a signed-in student's own
+     work: not a snapshot opened read-only, not a view-only link, and not a
+     teacher, who earns nothing. The server checks the rest. */
+  function reportRun() {
+    if (!window.PYIDE.signedIn || window.PYIDE.viewOnly || window.PYIDE.readonly ||
+        window.PYIDE.isTeacher || !window.PyIDEXP) return;
+    var files = dataFiles();
+    files[MAIN] = mainSource();
+    window.PyIDEXP.ran(files);
   }
 
   /* Which run the finally below belongs to.
@@ -992,6 +1005,7 @@
       );
       fitCanvas();             // kaypy(width=…, height=…) has set its size now
       if (status_ === "ok") {
+        reportRun();   // now: the await below may never settle (stopRun)
         await pyodide.runPythonAsync("await _pyide_drive_game()");
       }
     } catch (e) {
