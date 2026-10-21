@@ -55,6 +55,27 @@
     </section>
   {% endfor %}
 
+  {#  Tests: autograde.py has the format; test_autograde.py checks this
+      example parses, so the help can't drift from what is accepted. #}
+  <h2 id="tests">Tests — Check my work and Check all</h2>
+  <p>A <code>tests</code> block in an assignment's notes is checked against the student's code.
+    Students press <strong>Check my work</strong> as often as they like. On the assignment's
+    page, <strong>Check all</strong> runs what each student turned in, in your browser, and
+    only that result is added to their grade. One test per line; each is 1 point unless the
+    line ends with <code>(2 points)</code>.</p>
+  <pre class="help-src" id="tests-example">```tests
+input 3, 4 -&gt; prints 12              run it, typing 3 then 4; the output must contain 12
+input 5 -&gt; prints exactly Area? 25    …or be exactly this (prompts included)
+prints Hello                          run it with no input
+area(3, 4) == 12        (2 points)    call their function and compare
+uses for                              a for loop (also while, if, def, return, import math, len…)
+avoids sum                            the name sum appears nowhere
+defines area                          there is a def area
+# a line starting with # is a comment
+```</pre>
+  <p class="dim">"prints" ignores capitals and extra spaces. A program that runs longer than 5
+    seconds, or asks for more input than the test types, fails that test and says why.</p>
+
   <h2>Slides</h2>
   <p>A line with only <code>---</code> on it starts a new slide. A question can go on any slide.</p>
 

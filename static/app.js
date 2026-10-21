@@ -634,7 +634,7 @@
     relayout();
   }
 
-  function refreshMode() { paintMode(currentMode(mainSource())); }
+  function refreshMode() { paintMode(currentMode(mainSource())); refreshCheck(); }
 
   editor.on("change", function () { if (!running) refreshMode(); });
 
@@ -778,6 +778,7 @@
     runMode = isRunning ? mode : null;
     runBtn.disabled = isRunning;
     runLabel.textContent = isRunning ? "Running…" : "Run";
+    if (checkBtn) checkBtn.disabled = isRunning;
     paintStop();
   }
 
@@ -940,6 +941,66 @@
     window.PyIDEXP.ran(files);
   }
 
+  /* Check my work: the tests in the notes (autograde.js), run here on what
+     is in the editor now, as often as the student likes. It is feedback:
+     the result is kept for the teacher to see, but what counts is the
+     teacher's Check all on what was turned in — a check run in this
+     browser could be faked. Shown only when the notes have tests. */
+  var checkBtn = $("check");
+
+  function projectFiles() {
+    var files = dataFiles();
+    files[MAIN] = mainSource();
+    return files;
+  }
+
+  function testsHere() {
+    return window.PyIDETests ? window.PyIDETests.fromFiles(projectFiles()).tests : [];
+  }
+
+  function refreshCheck() {
+    if (checkBtn) checkBtn.hidden = !testsHere().length;
+  }
+
+  async function checkWork() {
+    if (running || !pyodide) return;
+    var files = projectFiles(), tests = testsHere();
+    if (!tests.length) return;
+    setBusy(true, "console");
+    stage.hidden = true;
+    showOutput();
+    relayout();
+    clearOutput();
+    write("Checking your code against " + tests.length + " test" +
+          (tests.length === 1 ? "" : "s") + "…\n", "dim");
+    await repaint();
+    try {
+      await ensureRequests(mainSource());
+      var got = await window.PyIDETests.run(pyodide, files, tests);
+      clearOutput();
+      got.results.forEach(function (r) {
+        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
+        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
+      });
+      var all = got.earned === got.possible;
+      write("\n" + got.earned + " of " + got.possible + " points" +
+            (all ? " — every test passes." : ".") + "\n");
+      write("This check is for you. What counts is your teacher's check of what " +
+            "you turn in.\n", "dim");
+      if (window.PYIDE.signedIn && window.PYIDE.assignmentSlug && !window.PYIDE.viewOnly) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: window.PYIDE.assignmentSlug, results: got.results })
+        }).catch(function () {});
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      pullFilesFromPython();
+      setBusy(false, "console");
+    }
+  }
+
   /* Which run the finally below belongs to.
    *
    * Stop now puts the toolbar back itself, so a game can be stopped and
@@ -1074,6 +1135,7 @@
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
+  if (checkBtn) checkBtn.addEventListener("click", checkWork);
 
   /* Re-bound after every canvas swap, because the listeners belong to the
      element and the element is replaced for each new game. */

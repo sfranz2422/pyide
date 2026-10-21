@@ -41,11 +41,11 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by fourteen of these: `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by fifteen of these: `test_charts.py`, `test_dungeon.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py`, `test_xp.py` and `test_keep_place.py`. They run
+`test_tabstops.py`, `test_xp.py`, `test_keep_place.py` and `test_autograde.py`. They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -329,6 +329,23 @@ to its student and the teachers of their classes, never cached, and is on
 no board; approving makes it their avatar (`"photo:<slug>"`), rejecting
 deletes it. They are not `images`, because `/img/<slug>` serves anyone with
 the address. The page crops and shrinks a photo to 400px before sending.
+
+**Tests: Check my work and Check all** (`autograde.py`,
+`static/autograde.js`, "Tests" in `app.py`, `/help/questions#tests`). A
+```` ```tests ```` block in an assignment's notes is checked against the
+student's code, one test per line: output (`input 3, 4 -> prints 12`), a
+function call (`area(3, 4) == 12`), or the code's shape (`uses for`,
+`avoids sum`, `defines area`). **They run in a browser, never on the
+server.** A student's Check my work runs in theirs — feedback, which could
+be faked, so it is kept (`TestResult`, kind "self") for the teacher to see
+and counts for nothing. The teacher's Check all runs every turned-in
+snapshot in the TEACHER's browser and posts kind "verified", which is added
+to the grade through `_earned` — every total goes through it, so Classroom,
+Skyward, My work, the class page and quests all include it. Points are
+summed from the lines posted, never a total a page claims. A verified result
+older than the last turn-in is shown stale (⟳). autograde.js reads a block
+exactly as autograde.py; `test_autograde.py` holds them together and runs
+the tests in the real Pyodide.
 
 ## Style
 
