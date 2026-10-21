@@ -4454,6 +4454,7 @@ def teacher_class(class_id):
         ctx = user_context(db)
         ctx.update(course=course, rows=rows, archived=archived, others=others,
                    roster=roster, classroom_connected=link is not None,
+                   photos_waiting=len(_pending_photos(db, course)),
                    classroom_on=classroom_configured(),
                    view_url=url_for("class_view", token=_view_token(db, course),
                                     _external=True, _scheme=_scheme()))
@@ -4591,6 +4592,7 @@ def student_class(class_id):
         ctx = user_context(db)
         ctx.update(course=course, rows=rows, preview=teacher,
                    board=_board(db, course, me=user),
+                   all_board=_all_classes_board(db, course.teacher_id, me=user),
                    latest_event=_latest_event(db, course),
                    board_hidden=bool(user.board_hidden) and not teacher,
                    attend_class=_attend(db, user, course, "Class page"))
@@ -4789,13 +4791,21 @@ def _class_students(db, course):
     return [(e, users.get(e.email)) for e in roster]
 
 
-def _board(db, course, me=None):
-    """A class's leaderboard: its signed-in students, ranked by their whole
-    XP (every class, every editor), first name and last initial only. Those
-    who hid themselves are left off — `me` included, whose page says so.
-    Equal XP is an equal place: two students on 40 are both second."""
-    people = [u for _, u in _class_students(db, course)
-              if u is not None and not u.board_hidden]
+def _board(db, courses, me=None):
+    """A leaderboard: the signed-in students of a class — or of several, for
+    a teacher's all-classes board — ranked by their whole XP (every class,
+    every editor), first name and last initial only. A student in two of
+    the classes is on it once. Those who hid themselves are left off — `me`
+    included, whose page says so. Equal XP is an equal place: two students
+    on 40 are both second."""
+    if not isinstance(courses, (list, tuple)):
+        courses = [courses]
+    people = {}
+    for course in courses:
+        for _, u in _class_students(db, course):
+            if u is not None and not u.board_hidden:
+                people[u.id] = u
+    people = list(people.values())
     have = xp.totals(db, [u.id for u in people])
     people.sort(key=lambda u: (-have.get(u.id, 0), xp.board_name(u).lower()))
     out, place, last = [], 0, None
@@ -4808,6 +4818,19 @@ def _board(db, course, me=None):
                     "level": level, "avatar": xp.avatar_of(u),
                     "me": me is not None and u.id == me.id})
     return out
+
+
+def _teacher_classes(db, teacher_id):
+    return (db.query(accounts.Course)
+              .filter_by(teacher_id=teacher_id, app=APP_NAME)
+              .order_by(accounts.Course.name, accounts.Course.id).all())
+
+
+def _all_classes_board(db, teacher_id, me=None):
+    """The board across all of a teacher's classes here, or None when they
+    have only the one — it would be the class's board again."""
+    courses = _teacher_classes(db, teacher_id)
+    return _board(db, courses, me=me) if len(courses) > 1 else None
 
 
 def _quests_done(db, user):
@@ -4853,20 +4876,32 @@ def _game_card(db, user):
     card["recent"] = [{"xp": a.xp, "reason": a.reason, "when": a.created_at}
                       for a in xp.recent(db, user.id)]
     card["ranks"] = []
-    for course in _my_classes(db, user):
-        board = _board(db, course, me=user)
-        mine = [row for row in board if row["me"]]
+    mine = _my_classes(db, user)
+    boards = [(c.name, _board(db, c, me=user),
+               url_for("student_class", class_id=c.id) + "#leaderboard") for c in mine]
+    # Then each of their teachers' all-classes boards: Programming 1 against
+    # both Intro periods. Named for the teacher only when there are two.
+    teachers = sorted({c.teacher_id for c in mine})
+    for tid in teachers:
+        board = _all_classes_board(db, tid, me=user)
+        if board is not None:
+            first = next(c for c in mine if c.teacher_id == tid)
+            who = db.query(accounts.User).filter_by(id=tid).first()
+            title = "All classes" + (" — " + who.display_name() if len(teachers) > 1 and who else "")
+            boards.append((title, board, url_for("student_class", class_id=first.id) + "#all-classes"))
+    for name, board, link in boards:
+        me_row = [row for row in board if row["me"]]
         # The top five, and the student's own row under them when they are
         # further down — the board they care about is where they are.
         top = board[:5]
-        card["ranks"].append({"name": course.name, "of": len(board),
-                              "place": mine[0]["place"] if mine else None,
+        card["ranks"].append({"name": name, "of": len(board),
+                              "place": me_row[0]["place"] if me_row else None,
                               "top": top,
-                              "me_row": mine[0] if mine and mine[0] not in top else None,
-                              "url": url_for("student_class", class_id=course.id) + "#leaderboard"})
+                              "me_row": me_row[0] if me_row and me_row[0] not in top else None,
+                              "url": link})
+    card["quests"] = _open_quests(db, user)
     # Roughly how long until a Run pays again. Only roughly: the time is
     # counted as they work (_sign_out_idle_student), not by the clock.
-    card["quests"] = _open_quests(db, user)
     card["run_minutes"] = max(0, (xp.RUN_EVERY_SECONDS - session.get("busy", 0)) // 60)
     card["run_xp"] = xp.RUN_XP
     return card
@@ -4939,8 +4974,12 @@ def avatar_page():
             return redirect(url_for("login", next=request.path))
         level = xp.level_of(xp.total(db, user.id))
         ctx = user_context(db)
+        approved, pending = _photo(db, user, "approved"), _photo(db, user, "pending")
         ctx.update(avatar=xp.avatar_of(user), level=level,
                    pictures=xp.avatars_for_page(),
+                   can_upload=not accounts.is_teacher(user.email),
+                   photo=("photo:" + approved.slug) if approved else "",
+                   pending=("photo:" + pending.slug) if pending else "",
                    back=url_for("teacher_home" if accounts.is_teacher(user.email)
                                 else "my_classes"))
         return render_template("avatar.html", **ctx)
@@ -4956,13 +4995,158 @@ def save_avatar():
         if user is None:
             return jsonify(error="Sign in first."), 401
         level = xp.level_of(xp.total(db, user.id))
-        avatar, why = xp.clean_avatar((request.get_json(silent=True) or {}).get("avatar"),
-                                      level)
+        wanted = (request.get_json(silent=True) or {}).get("avatar")
+        if wanted == "photo":
+            # Their own photo: only the one a teacher approved.
+            approved = _photo(db, user, "approved")
+            if approved is None:
+                return jsonify(error="Your photo hasn't been approved yet."), 400
+            user.avatar = "photo:" + approved.slug
+            db.commit()
+            return jsonify(ok=True, avatar=user.avatar)
+        avatar, why = xp.clean_avatar(wanted, level)
         if why:
             return jsonify(error=why), 400
         user.avatar = avatar
         db.commit()
         return jsonify(ok=True, avatar=avatar)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Students' own photos, approved by a teacher first
+# --------------------------------------------------------------------------
+# A student uploads a picture to be their avatar. Until a teacher of one of
+# their classes approves it, only that student and those teachers can see
+# it; then it is their avatar on every board. accounts.StudentPhoto says why
+# it is not an ordinary Image.
+
+#: The page shrinks a photo to 400px square before sending it, which comes
+#: to well under this; it is a cap on what a page that didn't could send.
+PHOTO_MAX_BYTES = 600 * 1024
+
+
+def _photo(db, user, status):
+    return (db.query(accounts.StudentPhoto)
+              .filter_by(user_id=user.id, status=status, app=APP_NAME)
+              .order_by(accounts.StudentPhoto.id.desc()).first())
+
+
+def _teaches(db, teacher, student):
+    """Whether `student` is on the roster of one of `teacher`'s classes —
+    which is who may see and decide on their photo."""
+    if teacher is None or student is None or not accounts.is_teacher(teacher.email):
+        return False
+    return db.query(accounts.Enrollment.id).join(
+        accounts.Course, accounts.Course.id == accounts.Enrollment.class_id).filter(
+        accounts.Course.teacher_id == teacher.id, accounts.Course.app == APP_NAME,
+        accounts.Enrollment.email == (student.email or "").lower()).first() is not None
+
+
+@app.post("/api/me/photo")
+def upload_photo():
+    """A student's photo, sent for approval. Replaces one already waiting;
+    their current avatar stays until a teacher approves the new one."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in first."), 401
+        if accounts.is_teacher(user.email):
+            return jsonify(error="Only students upload photos."), 403
+        f = request.files.get("photo")
+        if f is None:
+            return jsonify(error="No picture was sent."), 400
+        data = f.read(PHOTO_MAX_BYTES + 1)
+        if len(data) > PHOTO_MAX_BYTES:
+            return jsonify(error="That picture is too big."), 413
+        kind = _image_type(data)
+        if kind is None:
+            return jsonify(error="That isn't a PNG, JPEG, GIF or WebP picture."), 400
+        (db.query(accounts.StudentPhoto)
+           .filter_by(user_id=user.id, status="pending", app=APP_NAME)
+           .delete(synchronize_session=False))
+        photo = accounts.StudentPhoto(slug=accounts.new_id(db, accounts.StudentPhoto),
+                                      user_id=user.id, app=APP_NAME, content_type=kind,
+                                      data=data, size=len(data), status="pending")
+        db.add(photo)
+        db.commit()
+        return jsonify(ok=True, pending="photo:" + photo.slug)
+    finally:
+        db.close()
+
+
+@app.get("/photo/<slug>")
+def serve_photo(slug):
+    """A student's photo. Approved: to anyone, like the set's pictures — it
+    is on a leaderboard. Waiting: to the student and their teachers only,
+    and never cached, so a rejected one doesn't linger in a browser."""
+    db = SessionLocal()
+    try:
+        photo = db.query(accounts.StudentPhoto).filter_by(
+            slug=clean(slug, 16), app=APP_NAME).first()
+        if photo is None:
+            abort(404)
+        if photo.status != "approved":
+            viewer = current_user(db)
+            owner = db.query(accounts.User).filter_by(id=photo.user_id).first()
+            if viewer is None or not (viewer.id == photo.user_id or _teaches(db, viewer, owner)):
+                abort(404)
+        resp = Response(photo.data, mimetype=photo.content_type)
+        resp.headers["Cache-Control"] = ("public, max-age=31536000, immutable"
+                                         if photo.status == "approved" else "no-store")
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        return resp
+    finally:
+        db.close()
+
+
+def _pending_photos(db, course):
+    """[{id, slug, name}] of photos waiting from this class's students."""
+    people = {u.id: u for _, u in _class_students(db, course) if u is not None}
+    if not people:
+        return []
+    rows = (db.query(accounts.StudentPhoto)
+              .filter(accounts.StudentPhoto.user_id.in_(list(people)),
+                      accounts.StudentPhoto.status == "pending",
+                      accounts.StudentPhoto.app == APP_NAME)
+              .order_by(accounts.StudentPhoto.created_at))
+    return [{"id": p.id, "url": url_for("serve_photo", slug=p.slug),
+             "name": people[p.user_id].display_name()} for p in rows]
+
+
+@app.post("/api/class/<int:class_id>/photo/<int:photo_id>/<decision>")
+def decide_photo(class_id, photo_id, decision):
+    """Approve or reject a waiting photo from a student in this class.
+    Approving makes it their avatar at once (they asked for it by
+    uploading) and replaces any photo approved before; rejecting deletes
+    it, picture and all."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        if decision not in ("approve", "reject"):
+            abort(404)
+        photo = db.query(accounts.StudentPhoto).filter_by(
+            id=photo_id, status="pending", app=APP_NAME).first()
+        student = (_class_student(db, course, photo.user_id) if photo is not None else None)
+        if photo is None or student is None:
+            return jsonify(error="That photo isn't waiting any more."), 404
+        if decision == "reject":
+            db.delete(photo)
+            db.commit()
+            return jsonify(ok=True)
+        (db.query(accounts.StudentPhoto)
+           .filter_by(user_id=student.id, status="approved", app=APP_NAME)
+           .delete(synchronize_session=False))
+        photo.status = "approved"
+        photo.decided_by, photo.decided_at = user.id, accounts.now()
+        student.avatar = "photo:" + photo.slug
+        db.commit()
+        return jsonify(ok=True)
     finally:
         db.close()
 
@@ -5023,6 +5207,7 @@ def class_xp(class_id):
         ctx = user_context(db)
         ctx.update(course=course, students=students, token_every=xp.TOKEN_EVERY,
                    grant_limit=xp.GRANT_LIMIT, behaviors=xp.BEHAVIORS,
+                   photos=_pending_photos(db, course),
                    events=[_event_out(db, e) for e in _event_rows(db, course)])
         return render_template("class_xp.html", **ctx)
     finally:

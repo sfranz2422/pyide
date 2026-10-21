@@ -40,6 +40,25 @@
     <span id="state" class="dim small" role="status"></span>
   </div>
   <div class="avatar-grid" id="pictures">
+    {#  Their own photo: chosen like any picture once approved; while one
+        waits, they see it here and nobody else sees it anywhere. #}
+    {% if can_upload %}
+      <div class="avatar-upload">
+        {% if photo %}
+          <button type="button" class="avatar-option" data-id="photo"
+                  aria-pressed="{{ 'true' if avatar == photo else 'false' }}">
+            <span class="avatar" data-avatar="{{ photo }}"></span><span>My photo</span>
+          </button>
+        {% endif %}
+        {% if pending %}<span class="avatar" data-avatar="{{ pending }}" title="Waiting for approval"></span>{% endif %}
+        <div class="avatar-upload-text">
+          <strong>Use your own picture</strong>
+          <p class="dim small" id="photo-note">{% if pending %}Waiting for your teacher to approve it. Until then, everyone else sees your current avatar.{% else %}Your teacher approves it before anyone else can see it. Keep it school-appropriate.{% endif %}</p>
+          <p><label class="btn">Upload a picture<input type="file" id="photo-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
+            <span id="photo-state" class="dim small" role="status"></span></p>
+        </div>
+      </div>
+    {% endif %}
     {% for p in pictures %}
       <button type="button" class="avatar-option" data-id="{{ p.id }}"
               aria-pressed="{{ 'true' if p.id == avatar else 'false' }}"
@@ -59,16 +78,48 @@
   var state = document.getElementById("state");
   var preview = document.getElementById("preview");
   var buttons = document.querySelectorAll("#pictures .avatar-option");
+  {% if photo %}if (chosen === {{ photo|tojson }}) chosen = "photo";{% endif %}
   Array.prototype.forEach.call(buttons, function (b) {
     b.addEventListener("click", function () {
       chosen = b.dataset.id;
-      preview.innerHTML = window.PyIDEAvatar.html(chosen);
+      preview.innerHTML = window.PyIDEAvatar.html(chosen === "photo" ? {{ (photo or "")|tojson }} : chosen);
       Array.prototype.forEach.call(buttons, function (o) {
         o.setAttribute("aria-pressed", o === b ? "true" : "false");
       });
       state.textContent = "";
     });
   });
+  /* A photo is cut to the middle square and shrunk to 400px here, before
+     it is sent: phones take 4000px pictures, and the server caps what it
+     will keep (PHOTO_MAX_BYTES). */
+  var file = document.getElementById("photo-file");
+  if (file) file.addEventListener("change", function () {
+    var f = file.files[0], st = document.getElementById("photo-state");
+    if (!f) return;
+    st.textContent = "Sending…";
+    var img = new Image();
+    img.onload = function () {
+      var side = Math.min(img.width, img.height), c = document.createElement("canvas");
+      c.width = c.height = 400;
+      c.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2,
+                                   side, side, 0, 0, 400, 400);
+      URL.revokeObjectURL(img.src);
+      c.toBlob(function (blob) {
+        var form = new FormData();
+        form.append("photo", blob, "photo.jpg");
+        fetch("/api/me/photo", { method: "POST", body: form })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (out) {
+            if (!out.ok) { st.textContent = out.d.error || "That didn't send."; return; }
+            location.reload();
+          })
+          .catch(function () { st.textContent = "That didn't send. Try again."; });
+      }, "image/jpeg", 0.85);
+    };
+    img.onerror = function () { st.textContent = "That file isn't a picture this browser can open."; };
+    img.src = URL.createObjectURL(f);
+  });
+
   document.getElementById("save").addEventListener("click", function () {
     if (!chosen) { state.textContent = "Pick a picture first."; return; }
     state.textContent = "Saving…";

@@ -45,6 +45,26 @@
     <button id="event-btn" class="btn btn-primary xp-event-btn" type="button">🎲 Random event</button>
   </div>
 
+  {#  Photos students uploaded, waiting for you. Nobody else sees one until
+      it is approved; rejecting deletes it. #}
+  {% if photos %}
+    <section class="xp-photos" id="photos">
+      <h2>Pictures to approve</h2>
+      <ul class="xp-photo-list">
+        {% for p in photos %}
+          <li data-photo="{{ p.id }}">
+            <img src="{{ p.url }}" alt="Uploaded by {{ p.name }}">
+            <span class="small">{{ p.name }}</span>
+            <span class="btns">
+              <button class="btn btn-primary js-photo" data-decision="approve" type="button">Approve</button>
+              <button class="btn js-photo" data-decision="reject" type="button">Reject</button>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
   {% if students %}
   <form id="give" class="xp-givebar">
     <select id="give-preset" class="field" aria-label="Reason">
@@ -205,6 +225,18 @@
         else { tokens.textContent = out.d.tokens; }
         use.disabled = !(out.ok ? out.d.tokens : +tokens.textContent);
       }).catch(function () { use.disabled = false; alert("That didn't save. Try again."); });
+    });
+  });
+
+  // ---- Photos waiting for approval
+  document.querySelectorAll(".js-photo").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var li = b.closest("li"), decision = b.dataset.decision;
+      if (decision === "reject" && !confirm("Reject and delete this picture?")) return;
+      post("/photo/" + li.dataset.photo + "/" + decision).then(function (out) {
+        if (!out.ok) { alert(out.d.error || "That didn't work."); return; }
+        location.reload();
+      }).catch(function () { alert("That didn't work. Try again."); });
     });
   });
 

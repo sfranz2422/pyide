@@ -318,6 +318,18 @@ that student having the `bonus:<assignment id>` award (`_quests_done`). The
 class page marks quests, and a student's home page lists their open ones
 (`_open_quests`: not hidden, archived or closed).
 
+**Leaderboards** come in two sizes: a class's own, and — when its teacher
+has more than one class here — all of that teacher's classes together
+(`_all_classes_board`), so Programming 1 sees both Intro periods. A
+student's home page shows the top five of each, plus their own row.
+
+**Students' own photos need the teacher's approval first**
+(`accounts.StudentPhoto`, `/photo/<slug>`). A waiting photo is served only
+to its student and the teachers of their classes, never cached, and is on
+no board; approving makes it their avatar (`"photo:<slug>"`), rejecting
+deletes it. They are not `images`, because `/img/<slug>` serves anyone with
+the address. The page crops and shrinks a photo to 400px before sending.
+
 ## Style
 
 Comments explain *why*, especially where the reason is a bug that has already

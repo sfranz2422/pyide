@@ -642,6 +642,112 @@ check("a student below the top five sees their own row under it",
       "xp-board-gap" in board and board.find("xp-board-gap") < board.find("Zed Z.")
       and "You're #6 of 6" in page, total(ZED))
 
+# -------------------------------------------------------- all classes board
+print("\nAll classes")
+
+page = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+check("a teacher with one class has no all-classes board", 'id="all-classes"' not in page)
+CLASS2 = teacher.post("/api/class", json={"name": "Programming 1"}).get_json()["id"]
+add(accounts.Enrollment(class_id=CLASS2, email="out@school.org", name="Out Sider"))
+add(accounts.Enrollment(class_id=CLASS2, email="amy@school.org", name="Amy Adams"))
+OTHERS = other.post("/api/class", json={"name": "Someone else's"}).get_json()["id"]
+STRANGER = add_user("s9", "far@school.org", "Far Away", "Far", "Away")
+add(accounts.Enrollment(class_id=OTHERS, email="far@school.org", name="Far Away"))
+add(accounts.Enrollment(class_id=OTHERS, email="amy@school.org", name="Amy Adams"))
+page = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+board = page[page.find('id="leaderboard"'):page.find('id="all-classes"')]
+every = page[page.find('id="all-classes"'):]
+check("the class's own board has only its class", "Out S." not in board and "Amy A." in board)
+check("  the all-classes board has every class of that teacher's",
+      'id="all-classes"' in page and "Out S." in every and "Amy A." in every)
+check("  and nobody from another teacher's class", "Far A." not in every)
+check("  a student in two of the classes is on it once", every.count("Amy A.") == 1)
+home = amy.get("/classes").get_data(as_text=True)
+check("the home page has an all-classes board too, linked to the full one",
+      "All classes" in home and "#all-classes" in home)
+check("  named for the teacher when a student has two teachers",
+      "All classes — Mr Franz" in home, "")
+
+# ------------------------------------------------------------- own photos
+print("\nStudents' own photos")
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 200
+
+
+def upload(c, data=PNG):
+    return c.post("/api/me/photo", data={"photo": (__import__("io").BytesIO(data), "p.png")},
+                  content_type="multipart/form-data")
+
+
+before_avatar = saved_avatar(BEN)
+r = upload(ben)
+check("a student uploads a photo", r.status_code == 200, r.get_json())
+slug = r.get_json()["pending"].split(":")[1]
+check("  it isn't their avatar yet", saved_avatar(BEN) == before_avatar)
+check("  they can see it", ben.get("/photo/" + slug).status_code == 200)
+check("  their teacher can", teacher.get("/photo/" + slug).status_code == 200)
+check("  a classmate can't", amy.get("/photo/" + slug).status_code == 404)
+check("  nor anyone signed out", client().get("/photo/" + slug).status_code == 404)
+check("  nor a teacher who doesn't teach them", other.get("/photo/" + slug).status_code == 404)
+check("  and it's not on any board", ("photo:" + slug) not in amy.get(
+    "/class/%d" % CLASS).get_data(as_text=True))
+page = teacher.get("/teacher/class/%d/xp" % CLASS).get_data(as_text=True)
+check("the teacher's XP page has it to approve", "Pictures to approve" in page
+      and "/photo/" + slug in page)
+check("  and the class page says one is waiting",
+      "1 to approve" in teacher.get("/teacher/class/%d" % CLASS).get_data(as_text=True))
+check("not a picture is refused", upload(ben, b"<svg onload=alert(1)>").status_code == 400)
+check("too big is refused", upload(ben, PNG + b"\0" * (P.PHOTO_MAX_BYTES + 1)).status_code == 413)
+check("a teacher can't upload one", upload(teacher).status_code == 403)
+check("a student can't choose a photo nobody approved",
+      ben.post("/api/me/avatar", json={"avatar": "photo"}).status_code == 400)
+
+db = P.SessionLocal()
+PID = db.query(accounts.StudentPhoto).filter_by(slug=slug).first().id
+db.close()
+check("another teacher can't approve it",
+      other.post("/api/class/%d/photo/%d/approve" % (CLASS, PID)).status_code in (403, 404))
+check("  nor can a student", ben.post("/api/class/%d/photo/%d/approve" % (CLASS, PID)).status_code == 403)
+check("  nor through a class of the teacher's the student isn't in",
+      teacher.post("/api/class/%d/photo/%d/approve" % (CLASS2, PID)).status_code == 404
+      and saved_avatar(BEN) == before_avatar)
+r = teacher.post("/api/class/%d/photo/%d/approve" % (CLASS, PID))
+check("approving makes it their avatar", r.status_code == 200
+      and saved_avatar(BEN) == "photo:" + slug)
+check("  on the board", ('data-avatar="photo:%s"' % slug) in amy.get(
+    "/class/%d" % CLASS).get_data(as_text=True))
+check("  and anyone can see it now", client().get("/photo/" + slug).status_code == 200)
+
+r = upload(ben)
+new_slug = r.get_json()["pending"].split(":")[1]
+check("a second upload waits too, the approved one staying",
+      saved_avatar(BEN) == "photo:" + slug and amy.get("/photo/" + new_slug).status_code == 404)
+db = P.SessionLocal()
+PID2 = db.query(accounts.StudentPhoto).filter_by(slug=new_slug).first().id
+db.close()
+teacher.post("/api/class/%d/photo/%d/reject" % (CLASS, PID2))
+check("rejecting deletes it", ben.get("/photo/" + new_slug).status_code == 404
+      and saved_avatar(BEN) == "photo:" + slug)
+ben.post("/api/me/avatar", json={"avatar": "fox"})
+r = ben.post("/api/me/avatar", json={"avatar": "photo"})
+check("a student can go back to their approved photo", r.status_code == 200
+      and saved_avatar(BEN) == "photo:" + slug)
+db = P.SessionLocal()
+u = db.get(accounts.User, BEN)
+u.avatar = "photo:../../etc"
+check("a malformed photo avatar is the silhouette", xp.avatar_of(u) == "")
+db.rollback()
+db.close()
+if node:
+    res = subprocess.run([node, "-e", "global.window={};require(%s);process.stdout.write("
+                          "JSON.stringify([window.PyIDEAvatar.html('photo:abc1234'),"
+                          "window.PyIDEAvatar.html('photo:../x')]))" % json.dumps(
+                              os.path.join(PYIDE, "static", "avatar.js"))],
+                         capture_output=True, text=True)
+    good, bad = (json.loads(res.stdout) if res.stdout else ["", ""])
+    check("avatar.js shows an approved photo from /photo/",
+          'src="/photo/abc1234"' in good and bad.startswith("<svg"), res.stderr[-200:])
+
 # --------------------------------------------------------------- database
 print("\nAn older database")
 

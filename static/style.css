@@ -2530,6 +2530,9 @@ a:not([class]):hover { color: var(--accent-hover); }
 
 /* A class's leaderboard. */
 .xp-board { margin-top: 28px; max-width: 720px; }
+.xp-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 0 24px;
+  max-width: 1300px; }
+.xp-boards .xp-board { max-width: none; }
 .xp-board-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line);
   border-radius: 10px; overflow: hidden; background: var(--bg-panel); }
 .xp-board-list li { display: flex; align-items: center; gap: 12px; padding: 8px 14px;
@@ -2650,3 +2653,20 @@ label.xp-who { cursor: pointer; }
 .xp-home-board .xp-board-list { background: var(--bg); }
 .xp-board-gap { justify-content: center; color: var(--muted); padding: 2px 0 !important; }
 .xp-home-board-all { display: inline-block; margin-top: 10px; }
+
+/* Students' own photos: uploading one, and the teacher approving it. */
+.avatar-upload { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 14px 16px; border: 1px dashed var(--hover-line); border-radius: 14px; }
+.avatar-upload .avatar { width: 96px; height: 96px; }
+.avatar-upload-text { flex: 1; min-width: 220px; }
+.avatar-upload-text p { margin: 4px 0 0; }
+.xp-photos { margin: 18px 0; padding: 14px 16px; border: 1px solid var(--amber); border-radius: 10px;
+  background: var(--bg-panel); }
+.xp-photos h2 { margin: 0 0 10px; }
+.xp-photo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px; }
+.xp-photo-list li { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 150px;
+  text-align: center; }
+.xp-photo-list img { width: 140px; height: 140px; object-fit: cover; border-radius: 22%; }
+.xp-photo-list .btns { display: flex; gap: 6px; }
+.count-pill { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
+  background: var(--amber); color: #1a1200; font-size: 11px; font-weight: 700; }

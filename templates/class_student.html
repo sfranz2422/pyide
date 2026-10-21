@@ -140,22 +140,29 @@
       link — an administrator's page draws no student names it doesn't
       need. #}
   {% if board is defined and not visitor %}
-    <section class="xp-board" id="leaderboard">
-      <h2>Leaderboard</h2>
-      {% if board_hidden %}
-        <p class="dim small">You're hidden from the leaderboard. You still earn XP —
-          <a href="{{ url_for('my_classes') }}">change it on your home page</a>.</p>
+    <div class="xp-boards">
+      <section class="xp-board" id="leaderboard">
+        <h2>Leaderboard</h2>
+        {% if board_hidden %}
+          <p class="dim small">You're hidden from the leaderboards. You still earn XP —
+            <a href="{{ url_for('my_classes') }}">change it on your home page</a>.</p>
+        {% endif %}
+        {% if board %}
+          <ol class="xp-board-list">{% for b in board %}{% include "_board_row.html" %}{% endfor %}</ol>
+        {% else %}
+          <p class="dim">Nobody is on it yet. Answer questions and run your programs to earn XP.</p>
+        {% endif %}
+      </section>
+      {#  Everyone in all of this teacher's classes here (_all_classes_board):
+          Programming 1 against both Intro periods. Not shown when the
+          teacher has only this class — it would be the same board. #}
+      {% if all_board %}
+        <section class="xp-board" id="all-classes">
+          <h2>All classes</h2>
+          <ol class="xp-board-list">{% for b in all_board %}{% include "_board_row.html" %}{% endfor %}</ol>
+        </section>
       {% endif %}
-      {% if board %}
-        <ol class="xp-board-list">
-          {% for b in board %}
-            {% include "_board_row.html" %}
-          {% endfor %}
-        </ol>
-      {% else %}
-        <p class="dim">Nobody is on it yet. Answer questions and run your programs to earn XP.</p>
-      {% endif %}
-    </section>
+    </div>
   {% endif %}
 </main>
 <script src="{{ url_for('static', filename='avatar.js') }}"></script>
