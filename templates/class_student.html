@@ -102,6 +102,8 @@
               <a class="card-title" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) if visitor else r.open_url }}"
                  {% if r.turned_in %}title="What you turned in"{% endif %}>{{ r.title }}</a>
               <span class="card-badges">
+                {% if r.quest_xp %}<span class="badge badge-quest {{ 'done' if r.quest_done }}"
+                  title="{{ 'Quest XP earned' if r.quest_done else 'Full marks earn the XP' }}">{{ "✓ Quest complete" if r.quest_done else "⚔️ Quest · +%d XP" % r.quest_xp }}</span>{% endif %}
                 {% if r.on_air %}<span class="live-pill">● Live now</span>{% endif %}
                 {% if r.grade %}<span class="badge badge-grade">{{ r.grade }}{% if r.out_of %} / {{ r.out_of }}{% endif %}</span>{% endif %}
                 {% if r.turned_in %}<span class="badge badge-done">✓ Turned in</span>{% endif %}
@@ -147,13 +149,7 @@
       {% if board %}
         <ol class="xp-board-list">
           {% for b in board %}
-            <li class="{{ 'me' if b.me }} {{ 'top' if b.place <= 3 }}">
-              <span class="xp-place">{{ b.place }}</span>
-              <span class="avatar xp-board-avatar" data-avatar="{{ b.avatar }}"></span>
-              <span class="xp-board-name">{{ b.name }}{% if b.me %} <span class="dim small">(you)</span>{% endif %}</span>
-              <span class="xp-board-level dim small">Level {{ b.level }}</span>
-              <span class="xp-board-xp">{{ b.xp }} XP</span>
-            </li>
+            {% include "_board_row.html" %}
           {% endfor %}
         </ol>
       {% else %}

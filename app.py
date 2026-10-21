@@ -4325,10 +4325,12 @@ def _class_rows(db, course, user=None, student=False):
                              accounts.LiveSession.id) if ids else []):
         lessons[live.assignment_id] = live          # the newest wins
     subs = {}
+    quests_done = set()
     if student and user is not None and ids:
         subs = {s.assignment_id: s for s in db.query(accounts.Submission)
                 .filter(accounts.Submission.student_id == user.id,
                         accounts.Submission.assignment_id.in_(ids))}
+        quests_done = _quests_done(db, user)
     # Where each was posted in Google Classroom, for the teacher's tag. From
     # the posts PyIDE made (ClassroomPost), not asked of Google: the page
     # should not wait on it, and a post deleted there is found and forgotten
@@ -4395,6 +4397,8 @@ def _class_rows(db, course, user=None, student=False):
                "on_air": bool(live and not live.ended),
                "show_live": bool(r.show_live),
                "out_of": a.out_of or "", "count": counts.get(a.id, 0),
+               # A quest: an assignment with an XP reward for full marks.
+               "quest_xp": a.xp_bonus or 0,
                "waiting": waiting.get(a.id, 0),
                # None when it isn't in Classroom: there is nowhere to send.
                "unsent": unsent.get(a.id, 0) if a.id in sent_to else None,
@@ -4413,6 +4417,7 @@ def _class_rows(db, course, user=None, student=False):
             row.update(
                 turned_in=bool(sub),
                 grade=_score_text(total),
+                quest_done=a.id in quests_done,
                 # What they turned in, frozen — the teacher asked for this
                 # to be what the title opens. A lesson's turn-in has no
                 # snapshot; its link is the lesson.
@@ -4805,6 +4810,40 @@ def _board(db, course, me=None):
     return out
 
 
+def _quests_done(db, user):
+    """The ids of the assignments whose quest reward this student has had —
+    which is what "complete" means: the bonus is paid exactly once, on full
+    marks (_full_marks_xp)."""
+    done = set()
+    for (src,) in db.query(accounts.XpAward.source).filter(
+            accounts.XpAward.user_id == user.id, accounts.XpAward.source.like("bonus:%")):
+        try:
+            done.add(int(src.split(":", 1)[1]))
+        except ValueError:
+            pass
+    return done
+
+
+def _open_quests(db, user):
+    """Quests in a student's classes they haven't completed: shown on, not
+    hidden, not archived, not closed — what they could still go and earn."""
+    courses = {c.id: c for c in _my_classes(db, user)}
+    if not courses:
+        return []
+    done = _quests_done(db, user)
+    rows = (db.query(accounts.Assignment, accounts.ClassItem)
+              .join(accounts.ClassItem, accounts.ClassItem.assignment_id == accounts.Assignment.id)
+              .filter(accounts.ClassItem.class_id.in_(list(courses)),
+                      accounts.ClassItem.hidden == 0,
+                      accounts.Assignment.archived == 0,
+                      accounts.Assignment.closed == 0,
+                      accounts.Assignment.xp_bonus > 0)
+              .order_by(accounts.Assignment.xp_bonus.desc(), accounts.Assignment.title))
+    return [{"title": a.title, "xp": a.xp_bonus, "class": courses[item.class_id].name,
+             "url": url_for("open_assignment", slug=a.slug)}
+            for a, item in rows if a.id not in done]
+
+
 def _game_card(db, user):
     """Everything about one student's XP, for their home page."""
     total = xp.total(db, user.id)
@@ -4816,12 +4855,18 @@ def _game_card(db, user):
     card["ranks"] = []
     for course in _my_classes(db, user):
         board = _board(db, course, me=user)
-        mine = [row["place"] for row in board if row["me"]]
+        mine = [row for row in board if row["me"]]
+        # The top five, and the student's own row under them when they are
+        # further down — the board they care about is where they are.
+        top = board[:5]
         card["ranks"].append({"name": course.name, "of": len(board),
-                              "place": mine[0] if mine else None,
-                              "url": url_for("student_class", class_id=course.id)})
+                              "place": mine[0]["place"] if mine else None,
+                              "top": top,
+                              "me_row": mine[0] if mine and mine[0] not in top else None,
+                              "url": url_for("student_class", class_id=course.id) + "#leaderboard"})
     # Roughly how long until a Run pays again. Only roughly: the time is
     # counted as they work (_sign_out_idle_student), not by the clock.
+    card["quests"] = _open_quests(db, user)
     card["run_minutes"] = max(0, (xp.RUN_EVERY_SECONDS - session.get("busy", 0)) // 60)
     card["run_xp"] = xp.RUN_XP
     return card

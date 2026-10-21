@@ -113,14 +113,15 @@
       <span id="out-of-state" class="dim small"></span>
     </div>
     <p class="dim small">Leave it empty for an assignment you don't grade.</p>
-    {#  XP for full marks (_full_marks_xp): paid once to each student who
-        reaches Out of — or, ungraded, gets every question's points.
-        Setting it pays those already there. #}
+    {#  A quest: XP for full marks (_full_marks_xp), paid once to each
+        student who reaches Out of — or, ungraded, gets every question's
+        points. Setting it pays those already there. Students see it marked
+        as a quest on the class page and listed on their home page. #}
     <div class="grade-line">
-      <label for="xp-bonus">XP bonus</label>
+      <label for="xp-bonus">⚔️ Quest reward</label>
       <input id="xp-bonus" class="field out-of" type="number" min="0" max="1000"
              value="{{ assignment.xp_bonus or '' }}" placeholder="0">
-      <span>XP for full marks</span>
+      <span>XP for full marks. Any amount makes this a quest; 0 makes it an ordinary assignment.</span>
       <button id="xp-bonus-save" class="btn">Save</button>
       <span id="xp-bonus-state" class="dim small" role="status"></span>
     </div>

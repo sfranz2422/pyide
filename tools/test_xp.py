@@ -309,7 +309,8 @@ with c.session_transaction() as s:
 # ------------------------------------------------------------- teacher's XP
 print("\nGiving XP and using tokens")
 
-r = teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 990,
+# Up to exactly 1000, whatever the runs above paid: two tokens' worth.
+r = teacher.post("/api/class/%d/xp" % CLASS, json={"student": CAL, "xp": 1000 - total(CAL),
                                                    "reason": "Helped a classmate"})
 check("the teacher gives XP to a student in the class", r.status_code == 200
       and r.get_json()["xp"] == 1000 and r.get_json()["tokens"] == 2, r.get_json())
@@ -401,10 +402,34 @@ check("their level, XP and tokens", "Level 6" in page and "1000 XP" in page
       and "<strong>0</strong> tokens" in page, "")
 check("  their badges, earned and not", 'class="have" title="Thousand Club' in page
       and 'class="locked" title="Liftoff' in page)
-check("  their place in each class", "#1 of 3 in P4 Intro" in page)
+board = page[page.find("xp-home-board"):]
+check("  each class's leaderboard, top first, and their place in it",
+      "You're #1 of 3" in page and "P4 Intro" in board
+      and 0 < board.find("Cal C.") < board.find("Amy A.") < board.find("Ben B."))
 check("  and their avatar, to change", "data-avatar=" in page and "/me/avatar" in page)
 check("a teacher has no XP panel", "xp-card" not in teacher.get(
     "/classes", follow_redirects=True).get_data(as_text=True))
+
+# ------------------------------------------------------------------ quests
+print("\nQuests")
+
+# Loops carries a 50 XP reward (set above), which Amy and Ben have had.
+page = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+check("a quest someone completed says so on their class page", "✓ Quest complete" in page)
+page = cal.get("/class/%d" % CLASS).get_data(as_text=True)
+check("  and one they haven't shows its reward", "⚔️ Quest · +50 XP" in page)
+check("an open quest is listed on their home page",
+      "+50 XP" in cal.get("/classes").get_data(as_text=True).split("xp-quests")[-1])
+check("  and a completed one isn't", "xp-quests" not in amy.get("/classes").get_data(as_text=True))
+check("the teacher's class page marks the quest",
+      "⚔️ quest +50" in teacher.get("/teacher/class/%d" % CLASS).get_data(as_text=True))
+db = P.SessionLocal()
+db.query(accounts.ClassItem).filter_by(class_id=CLASS).update({"hidden": 1})
+db.commit()
+check("a hidden quest isn't listed", "xp-quests" not in cal.get("/classes").get_data(as_text=True))
+db.query(accounts.ClassItem).filter_by(class_id=CLASS).update({"hidden": 0})
+db.commit()
+db.close()
 
 # ---------------------------------------------------------------- avatars
 print("\nAvatars")
@@ -604,6 +629,18 @@ check("My XP lists every reason, rewards and penalties",
       and "Question in Loops" in page)
 check("  and only their own", "Helped a classmate" not in page)
 check("the home page links to it", "/me/xp" in amy.get("/classes").get_data(as_text=True))
+
+# Six on the board, Zed last: his home page shows the top five, a gap, and
+# his own row — the place he is, not only the places he isn't.
+for i in (1, 2):
+    uid = add_user("x%d" % i, "extra%d@school.org" % i, "Extra Student%d" % i, "Extra", "S%d" % i)
+    add(accounts.Enrollment(class_id=CLASS, email="extra%d@school.org" % i, name="Extra %d" % i))
+    xp.award(P.SessionLocal(), uid, "test:extra", 500, "", "pyide")
+page = zed.get("/classes").get_data(as_text=True)
+board = page[page.find("xp-home-board"):]
+check("a student below the top five sees their own row under it",
+      "xp-board-gap" in board and board.find("xp-board-gap") < board.find("Zed Z.")
+      and "You're #6 of 6" in page, total(ZED))
 
 # --------------------------------------------------------------- database
 print("\nAn older database")

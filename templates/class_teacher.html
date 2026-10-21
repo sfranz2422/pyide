@@ -200,6 +200,7 @@
                 {#  What it is — the three kinds the Add form makes — and whether
                     it was posted to Google Classroom (and to which, on hover). #}
                 <span class="kind-tag">{{ "lesson" if r.kind == 'lesson' else "code" }}</span>
+                {% if r.quest_xp %}<span class="kind-tag kind-quest" title="Full marks earn {{ r.quest_xp }} XP">⚔️ quest +{{ r.quest_xp }}</span>{% endif %}
                 {% if r.posted %}
                   <span class="kind-tag tag-classroom" title="Posted to {{ r.posted | join(', ') }}">✓ Classroom</span>
                 {% else %}

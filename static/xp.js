@@ -8,7 +8,7 @@
  * what Render's firewall blocks (see the memory on saves).
  *
  * Fire and forget. A run must never wait on this or fail because of it, so
- * every error is swallowed — the cost of losing one is 5 XP.
+ * every error is swallowed — the cost of losing one is a run's XP.
  */
 window.PyIDEXP = (function () {
   "use strict";

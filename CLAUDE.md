@@ -312,6 +312,12 @@ deleted. The class page shows the last event for a day, a hidden student as
 "A classmate"; `/me/xp` is a student's every award and its reason. Events
 move XP only, never tokens, because tokens become real points.
 
+**Quests** are assignments with an `xp_bonus` ("Quest reward" on the
+assignment page), paid once on full marks. "Complete" is not stored: it is
+that student having the `bonus:<assignment id>` award (`_quests_done`). The
+class page marks quests, and a student's home page lists their open ones
+(`_open_quests`: not hidden, archived or closed).
+
 ## Style
 
 Comments explain *why*, especially where the reason is a bug that has already

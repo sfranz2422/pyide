@@ -2628,3 +2628,25 @@ label.xp-who { cursor: pointer; }
 .xp-all { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .xp-history { max-width: 860px; }
 .xp-table td.num, .xp-table th.num { text-align: right; white-space: nowrap; }
+
+/* Quests, and the leaderboards on a student's home page. */
+.badge-quest { color: var(--amber); border-color: var(--amber); }
+.badge-quest.done { color: #2f9e6b; border-color: #2f9e6b; }
+.kind-quest { color: var(--amber); }
+.xp-sub { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  margin: 16px 0 8px; }
+.xp-quests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.xp-quests a { display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.xp-quests a:hover { border-color: var(--amber); }
+.xp-quest-xp { flex: none; font-family: var(--mono); font-weight: 600; color: var(--amber); }
+.xp-home-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px; margin: 0 0 28px; }
+.xp-home-board { border: 1px solid var(--line); border-radius: 10px; background: var(--bg-panel);
+  padding: 14px 16px; }
+.xp-home-board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  margin-bottom: 10px; }
+.xp-home-board-head h2 { margin: 0; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.xp-home-board .xp-board-list { background: var(--bg); }
+.xp-board-gap { justify-content: center; color: var(--muted); padding: 2px 0 !important; }
+.xp-home-board-all { display: inline-block; margin-top: 10px; }
