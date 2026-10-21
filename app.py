@@ -8,6 +8,7 @@ there is no sandboxing or CPU cost per student run.
 
 import json
 import os
+import random
 import re
 import secrets
 import time
@@ -4585,6 +4586,7 @@ def student_class(class_id):
         ctx = user_context(db)
         ctx.update(course=course, rows=rows, preview=teacher,
                    board=_board(db, course, me=user),
+                   latest_event=_latest_event(db, course),
                    board_hidden=bool(user.board_hidden) and not teacher,
                    attend_class=_attend(db, user, course, "Class page"))
         return render_template("class_student.html", **ctx)
@@ -4975,7 +4977,8 @@ def class_xp(class_id):
             students.append(row)
         ctx = user_context(db)
         ctx.update(course=course, students=students, token_every=xp.TOKEN_EVERY,
-                   grant_limit=xp.GRANT_LIMIT)
+                   grant_limit=xp.GRANT_LIMIT, behaviors=xp.BEHAVIORS,
+                   events=[_event_out(db, e) for e in _event_rows(db, course)])
         return render_template("class_xp.html", **ctx)
     finally:
         db.close()
@@ -4997,17 +5000,29 @@ def _class_student(db, course, raw_id):
 
 @app.post("/api/class/<int:class_id>/xp")
 def class_give_xp(class_id):
-    """XP from the teacher, with a reason the student sees. Negative takes
-    XP back, which is the only undo there is."""
+    """XP from the teacher, with a reason each student sees, to one student
+    (`student`) or several at once (`students`). Negative is a penalty —
+    and takes back a grant made by mistake — but never below 0 XP
+    (xp.penalty_for): a student it would move by nothing is left out and
+    named in `skipped`."""
     db = SessionLocal()
     try:
         user, course, bounce = _own_class(db, class_id)
         if bounce:
             return bounce
         data = request.get_json(silent=True) or {}
-        student = _class_student(db, course, data.get("student"))
-        if student is None:
-            return jsonify(error="That student isn't in this class."), 404
+        wanted = data.get("students")
+        if not isinstance(wanted, list):
+            wanted = [data.get("student")]
+        students = []
+        for raw in wanted[:200]:
+            student = _class_student(db, course, raw)
+            if student is None:
+                return jsonify(error="That student isn't in this class."), 404
+            if student not in students:
+                students.append(student)
+        if not students:
+            return jsonify(error="Choose a student first."), 400
         try:
             amount = int(str(data.get("xp", "")).strip())
         except ValueError:
@@ -5016,11 +5031,141 @@ def class_give_xp(class_id):
             return jsonify(error="XP has to be between -%d and %d, and not 0."
                            % (xp.GRANT_LIMIT, xp.GRANT_LIMIT)), 400
         reason = clean(data.get("reason"), 200) or "From your teacher"
-        if not xp.award(db, student.id, xp.grant_source(), amount, reason, APP_NAME,
-                        by_id=user.id):
-            return jsonify(error="That XP wasn't saved. Try again."), 500
-        db.refresh(student)
-        return jsonify(ok=True, **xp.summary(xp.total(db, student.id), student.tokens_used))
+        have = xp.totals(db, [u.id for u in students])
+        out, skipped = {}, []
+        for student in students:
+            moved = xp.penalty_for(amount, have.get(student.id, 0))
+            if not moved:
+                skipped.append(xp.board_name(student))
+            elif not xp.award(db, student.id, xp.grant_source(), moved, reason, APP_NAME,
+                              by_id=user.id):
+                return jsonify(error="That XP wasn't saved. Try again."), 500
+            db.refresh(student)
+            out[student.id] = xp.summary(xp.total(db, student.id), student.tokens_used)
+        reply = {"ok": True, "students": out, "skipped": skipped}
+        if len(students) == 1:
+            reply.update(out[students[0].id])
+        return jsonify(reply)
+    finally:
+        db.close()
+
+
+def _event_rows(db, course, limit=10):
+    return (db.query(accounts.ClassEvent)
+              .filter_by(class_id=course.id, app=APP_NAME)
+              .order_by(accounts.ClassEvent.created_at.desc(), accounts.ClassEvent.id.desc())
+              .limit(limit).all())
+
+
+def _event_hits(db, event_row, show_hidden=True):
+    """[{name, xp}] for who an event moved. A student hidden from the
+    leaderboard is "A classmate" on the students' page — hiding means not
+    being named to the class."""
+    rows = (db.query(accounts.XpAward)
+              .filter(accounts.XpAward.source.like("event:%d:%%" % event_row.id)).all())
+    users = {u.id: u for u in db.query(accounts.User).filter(
+        accounts.User.id.in_([r.user_id for r in rows] or [0]))}
+    hits = []
+    for r in rows:
+        u = users.get(r.user_id)
+        name = xp.board_name(u) if u is not None else "A classmate"
+        if u is not None and u.board_hidden and not show_hidden:
+            name = "A classmate"
+        hits.append({"name": name, "xp": r.xp})
+    hits.sort(key=lambda h: h["name"].lower())
+    return hits
+
+
+def _event_out(db, row, show_hidden=True):
+    icon = next((e["icon"] for e in xp.EVENTS if e["id"] == row.kind), "\U0001F3B2")
+    return {"id": row.id, "title": row.title, "text": row.text, "icon": icon,
+            "when": _utc_iso(row.created_at), "undone": bool(row.undone),
+            "hits": _event_hits(db, row, show_hidden)}
+
+
+_rng = random.SystemRandom()
+
+
+@app.post("/api/class/<int:class_id>/event")
+def class_event(class_id):
+    """Draw a random event (xp.EVENTS) and apply it to the class's
+    signed-in students. Applied at once — the teacher presses it in front
+    of the class, the way Classcraft's was — and Undo takes it back."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        people = [u for _, u in _class_students(db, course) if u is not None]
+        if not people:
+            return jsonify(error="No one in this class has signed in yet."), 400
+        have = xp.totals(db, [u.id for u in people])
+        event = xp.pick_event(_rng)
+        row = accounts.ClassEvent(class_id=course.id, app=APP_NAME, kind=event["id"],
+                                  title=event["title"], text=event["text"], by_id=user.id)
+        db.add(row)
+        db.commit()
+        for u in xp.event_targets(event, people, have, _rng):
+            moved = xp.penalty_for(event["xp"], have.get(u.id, 0))
+            xp.award(db, u.id, "event:%d:%d" % (row.id, u.id), moved,
+                     "Random event: " + event["title"], APP_NAME, by_id=user.id)
+        return jsonify(ok=True, event=_event_out(db, row))
+    finally:
+        db.close()
+
+
+def _latest_event(db, course):
+    """The class's last random event, for the top of its page — for a day
+    after it happened, and not once undone."""
+    rows = _event_rows(db, course, limit=1)
+    if not rows or rows[0].undone:
+        return None
+    t = rows[0].created_at
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    if accounts.now() - t > timedelta(days=1):
+        return None
+    return _event_out(db, rows[0], show_hidden=False)
+
+
+@app.post("/api/class/<int:class_id>/event/<int:event_id>/undo")
+def class_event_undo(class_id, event_id):
+    """Take an event back: its XP rows go, and the event is marked undone.
+    The one place XP rows are deleted rather than added to — an offsetting
+    "-15 Undone" in every student's history would be noise about nothing."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        row = db.query(accounts.ClassEvent).filter_by(
+            id=event_id, class_id=course.id, app=APP_NAME).first()
+        if row is None:
+            return jsonify(error="No such event."), 404
+        (db.query(accounts.XpAward)
+           .filter(accounts.XpAward.source.like("event:%d:%%" % row.id))
+           .delete(synchronize_session=False))
+        row.undone = 1
+        db.commit()
+        return jsonify(ok=True)
+    finally:
+        db.close()
+
+
+@app.get("/me/xp")
+def my_xp():
+    """Every piece of XP this student has had, newest first, with why."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return redirect(url_for("login", next=request.path))
+        rows = (db.query(accounts.XpAward).filter_by(user_id=user.id)
+                  .order_by(accounts.XpAward.created_at.desc(), accounts.XpAward.id.desc())
+                  .limit(1000).all())
+        ctx = user_context(db)
+        ctx.update(rows=rows, game=xp.summary(xp.total(db, user.id), user.tokens_used))
+        return render_template("my_xp.html", **ctx)
     finally:
         db.close()
 

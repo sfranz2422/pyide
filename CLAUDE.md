@@ -299,8 +299,18 @@ upload or text, checked by `xp.clean_avatar` against the level that unlocks
 it. Adding one is a file and a line in `AVATARS`, in all three repos;
 `test_xp.py` fails on a picture without its file or a file without its
 line. (A parts builder drawn in SVG came first and was replaced: it could
-not reach the look the teacher wanted.) The spinner is phase 2 and not
-designed yet.
+not reach the look the teacher wanted.)
+
+**Rewards, penalties and random events** (`xp.BEHAVIORS`, `xp.EVENTS`; the
+XP & tokens page). The teacher ticks students and picks a programming-themed
+reason, or types one; a random event (Classcraft's, renamed for code) is
+applied the moment it is drawn and shown big for the projector. **XP never
+goes below 0** (`xp.penalty_for`): a penalty takes only what a student has.
+An event's XP is `XpAward` rows sourced `event:<ClassEvent id>:<user id>`,
+which is how Undo removes exactly those — the one place award rows are
+deleted. The class page shows the last event for a day, a hidden student as
+"A classmate"; `/me/xp` is a student's every award and its reason. Events
+move XP only, never tokens, because tokens become real points.
 
 ## Style
 

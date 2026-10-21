@@ -55,6 +55,22 @@
     {% if course.banner %}<div class="md banner-body" data-md="{{ course.banner }}">{{ course.banner }}</div>{% endif %}
   </section>
 
+  {#  The class's last random event, for a day (_latest_event): what
+      happened and to whom. A student hidden from the leaderboard is "A
+      classmate" here too. #}
+  {% if latest_event and not visitor %}
+    <section class="xp-latest-event">
+      <span class="xp-event-icon" aria-hidden="true">{{ latest_event.icon }}</span>
+      <div>
+        <strong>{{ latest_event.title }}</strong>
+        <p>{{ latest_event.text }}</p>
+        {% if latest_event.hits %}
+          <p class="small xp-hits">{% for h in latest_event.hits %}<span class="{{ 'xp-plus' if h.xp > 0 else 'xp-minus' }}">{{ h.name }} {{ "%+d"|format(h.xp) }}</span>{% endfor %}</p>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
   {#  The class's page as the teacher arranged it: a group is a heading with
       its own words under it; an assignment is a card — its name (which opens
       what they last turned in, or their copy), where they stand, the

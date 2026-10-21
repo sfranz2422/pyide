@@ -474,6 +474,137 @@ if node:
 else:
     check("node is available to run avatar.js", False, "brew install node")
 
+# ------------------------------------------------- rewards and random events
+print("\nRewards, penalties and random events")
+
+ZED = add_user("s5", "zed@school.org", "Zed Zero", "Zed", "Zero")
+add(accounts.Enrollment(class_id=CLASS, email="zed@school.org", name="Zed Zero"))
+zed = client(ZED)
+before = {u: total(u) for u in (AMY, BEN, CAL, ZED)}
+r = teacher.post("/api/class/%d/xp" % CLASS, json={"students": [AMY, BEN], "xp": 10,
+                                                   "reason": "Helped debug a teammate's code"})
+check("a reward goes to every ticked student", r.status_code == 200
+      and total(AMY) == before[AMY] + 10 and total(BEN) == before[BEN] + 10
+      and total(CAL) == before[CAL], r.get_json())
+r = teacher.post("/api/class/%d/xp" % CLASS, json={"students": [ZED, AMY], "xp": -5,
+                                                   "reason": "Late to class"})
+check("a penalty never takes anyone below 0: Zed has none, and is named",
+      r.status_code == 200 and total(ZED) == 0 and total(AMY) == before[AMY] + 5
+      and r.get_json()["skipped"] == ["Zed Z."], r.get_json())
+xp.award(P.SessionLocal(), ZED, "test:three", 3, "", "pyide")
+teacher.post("/api/class/%d/xp" % CLASS, json={"students": [ZED], "xp": -5, "reason": "Late"})
+check("  a student on 3 XP loses 3, not 5", total(ZED) == 0, total(ZED))
+check("someone from outside the class can't be ticked",
+      teacher.post("/api/class/%d/xp" % CLASS, json={"students": [AMY, OUT], "xp": 5})
+      .status_code == 404 and total(OUT) == 0)
+
+import random                                                 # noqa: E402
+EVENT = {e["id"]: e for e in xp.EVENTS}
+
+
+def draw(event_id, seed=1):
+    """Press Random event with the draw fixed to one event."""
+    real_pick, real_rng = xp.pick_event, P._rng
+    xp.pick_event = lambda rng: EVENT[event_id]
+    P._rng = random.Random(seed)
+    try:
+        return teacher.post("/api/class/%d/event" % CLASS)
+    finally:
+        xp.pick_event, P._rng = real_pick, real_rng
+
+
+def totals_now():
+    return {u: total(u) for u in (AMY, BEN, CAL, ZED)}
+
+
+was = totals_now()
+r = draw("first-try")
+now_ = totals_now()
+check("an everyone event moves every signed-in student in the class",
+      r.status_code == 200 and all(now_[u] == was[u] + 5 for u in was)
+      and total(OUT) == 0, (was, now_))
+ev = r.get_json()["event"]
+check("  and says who, by first name and last initial",
+      len(ev["hits"]) == 4 and {"Amy A.", "Ben B.", "Cal C.", "Zed Z."} ==
+      {h["name"] for h in ev["hits"]}, ev["hits"])
+
+was = totals_now()
+draw("mentor")
+now_ = totals_now()
+low = min(was, key=lambda u: was[u])
+check("the least-XP event finds the student with the least",
+      now_[low] == was[low] + 15 and sum(now_.values()) == sum(was.values()) + 15,
+      (low, was, now_))
+was = totals_now()
+draw("off-by-one")
+now_ = totals_now()
+top = max(was, key=lambda u: was[u])
+check("the most-XP event finds the student with the most",
+      now_[top] == was[top] - 10 and sum(now_.values()) == sum(was.values()) - 10)
+was = totals_now()
+draw("merge-conflict")
+now_ = totals_now()
+check("a some-students event moves exactly that many",
+      sum(1 for u in was if now_[u] != was[u]) == 2, (was, now_))
+was = totals_now()
+draw("rubber-duck")
+check("a one-student event moves one", sum(1 for u, v in totals_now().items()
+                                          if v != was[u]) == 1)
+
+# Zed back to 0, then everyone loses 5: Zed loses nothing and isn't a hit.
+db = P.SessionLocal()
+for a in db.query(accounts.XpAward).filter_by(user_id=ZED):
+    db.delete(a)
+db.commit()
+db.close()
+was = totals_now()
+r = draw("prod-bug")
+check("an everyone penalty takes nothing from a student with none",
+      total(ZED) == 0 and all(totals_now()[u] == was[u] - 5 for u in (AMY, BEN, CAL))
+      and "Zed Z." not in {h["name"] for h in r.get_json()["event"]["hits"]})
+BUG = r.get_json()["event"]["id"]
+
+page = teacher.get("/teacher/class/%d/xp" % CLASS).get_data(as_text=True)
+check("the XP page lists the events, newest first, with Undo",
+      page.find("Unexpected bug in production") < page.find("Rubber duck debugging")
+      and "js-undo" in page)
+check("  and the reasons to pick from", "Helped debug a teammate&#39;s code" in page
+      or "Helped debug a teammate's code" in page)
+
+cal.post("/api/me/board", json={"hidden": True})
+page = amy.get("/class/%d" % CLASS).get_data(as_text=True)
+check("the class page shows the latest event", "Unexpected bug in production" in page
+      and "xp-latest-event" in page)
+check("  naming a hidden student only as a classmate",
+      "A classmate -5" in page and "Cal C." not in page.split('id="leaderboard"')[0])
+cal.post("/api/me/board", json={"hidden": False})
+
+was = totals_now()
+r = teacher.post("/api/class/%d/event/%d/undo" % (CLASS, BUG))
+check("Undo gives the event's XP back", r.status_code == 200
+      and all(totals_now()[u] == was[u] + 5 for u in (AMY, BEN, CAL)), totals_now())
+check("  and the class page stops showing it",
+      "Unexpected bug in production" not in amy.get("/class/%d" % CLASS).get_data(as_text=True))
+check("  and only that event's XP went", totals_now()[AMY] > 0 and awards(AMY, "event:"))
+
+check("another teacher can't set off an event in this class",
+      other.post("/api/class/%d/event" % CLASS).status_code in (403, 404))
+check("  nor can a student", amy.post("/api/class/%d/event" % CLASS).status_code == 403)
+check("  nor undo one", amy.post("/api/class/%d/event/%d/undo" % (CLASS, BUG)).status_code == 403
+      and other.post("/api/class/%d/event/%d/undo" % (CLASS, BUG)).status_code in (403, 404))
+
+rng = random.Random(4)
+seen = {xp.pick_event(rng)["id"] for _ in range(2000)}
+check("every event can be drawn", seen == set(xp.EVENT_IDS), sorted(set(xp.EVENT_IDS) - seen))
+
+page = amy.get("/me/xp").get_data(as_text=True)
+check("My XP lists every reason, rewards and penalties",
+      "Helped debug a teammate" in page and "Late to class" in page
+      and "Random event: It compiled on the first try!" in page
+      and "Question in Loops" in page)
+check("  and only their own", "Helped a classmate" not in page)
+check("the home page links to it", "/me/xp" in amy.get("/classes").get_data(as_text=True))
+
 # --------------------------------------------------------------- database
 print("\nAn older database")
 

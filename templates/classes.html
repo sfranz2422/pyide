@@ -79,7 +79,7 @@
         {% endfor %}
       </ul>
       {% if game.recent %}
-        <h2>Recent XP</h2>
+        <h2>Recent XP <a class="xp-all small" href="{{ url_for('my_xp') }}">See all</a></h2>
         <ul class="xp-recent">
           {% for a in game.recent %}
             <li><strong class="{{ 'xp-minus' if a.xp < 0 else 'xp-plus' }}">{{ "%+d"|format(a.xp) }}</strong> {{ a.reason }}
