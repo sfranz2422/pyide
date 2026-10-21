@@ -21,8 +21,9 @@ is shown to the class. This pins:
     Use takes one token and never goes below none;
   * a leaderboard has only its class, first name and last initial, never an
     email, in order, equal XP an equal place, and nobody who hid;
-  * the home page shows it all, and avatars keep to unlocked parts —
-    and avatar.js can draw every part xp.py lists (needs node).
+  * the home page shows it all; an avatar is a picture on xp.AVATARS,
+    unlocked, with its file — and avatar.js turns nothing else into markup
+    (needs node).
 """
 import json
 import os
@@ -408,54 +409,68 @@ check("a teacher has no XP panel", "xp-card" not in teacher.get(
 # ---------------------------------------------------------------- avatars
 print("\nAvatars")
 
-r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR, hat="beanie")})
 def saved_avatar(uid):
     db = P.SessionLocal()
     try:
-        return json.loads(db.get(accounts.User, uid).avatar or "{}")
+        return db.get(accounts.User, uid).avatar
     finally:
         db.close()
 
 
-check("an unlocked part is saved", r.status_code == 200
-      and saved_avatar(AMY).get("hat") == "beanie", r.get_json())
-r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR, hat="crown")})
-check("a part above their level is refused", r.status_code == 400
-      and "level 10" in r.get_json()["error"], r.get_json())
-r = amy.post("/api/me/avatar", json={"avatar": dict(xp.DEFAULT_AVATAR,
-                                                    hat="<script>")})
-check("a part that doesn't exist is refused", r.status_code == 400)
-r = amy.post("/api/me/avatar", json={"avatar": "nope"})
-check("  and so is something that isn't an avatar", r.status_code == 400)
+# Amy is level 2: the mech (level 2) is hers, the wizard (level 3) is not.
+r = amy.post("/api/me/avatar", json={"avatar": "mech"})
+check("an unlocked picture is saved", r.status_code == 200
+      and saved_avatar(AMY) == "mech", r.get_json())
+r = amy.post("/api/me/avatar", json={"avatar": "wizard"})
+check("a picture above their level is refused", r.status_code == 400
+      and "level 3" in r.get_json()["error"] and saved_avatar(AMY) == "mech",
+      r.get_json())
+for bad in ("../../app.py", '"><script>', "", None, {"pic": "fox"}):
+    r = amy.post("/api/me/avatar", json={"avatar": bad})
+    check("  and one that isn't on the list: %r" % (bad,), r.status_code == 400
+          and saved_avatar(AMY) == "mech")
 db = P.SessionLocal()
 u = db.get(accounts.User, AMY)
-u.avatar = '{"hat": "<script>", "skin": "s4"}'
-check("a bad saved avatar draws as the default's parts, keeping the good ones",
-      xp.avatar_of(u)["hat"] == "none" and xp.avatar_of(u)["skin"] == "s4")
+u.avatar = '{"hat": "crown", "skin": "s4"}'
+check("an avatar from the old parts builder shows as the silhouette",
+      xp.avatar_of(u) == xp.DEFAULT_AVATAR == "")
 db.rollback()
 db.close()
-check("the avatar page shows the parts", "Wizard hat" in amy.get("/me/avatar")
-      .get_data(as_text=True))
+page = amy.get("/me/avatar").get_data(as_text=True)
+check("the avatar page shows every picture, locked ones marked",
+      all(('data-id="%s"' % i) in page for i in xp.AVATAR_IDS)
+      and "Unlocks at level 3" in page)
+check("the leaderboard shows the picture",
+      'data-avatar="mech"' in amy.get("/class/%d" % CLASS).get_data(as_text=True))
+
+# Every picture on the list has its file, and every file is on the list: a
+# missing file is a broken image on every board that student is on.
+folder = os.path.join(PYIDE, "static", "avatars")
+files = sorted(f[:-5] for f in os.listdir(folder) if f.endswith(".webp"))
+check("every picture has its file", not set(xp.AVATAR_IDS) - set(files),
+      sorted(set(xp.AVATAR_IDS) - set(files)))
+check("  and every file is a picture on the list", not set(files) - set(xp.AVATAR_IDS),
+      sorted(set(files) - set(xp.AVATAR_IDS)))
+check("  each one small enough for a leaderboard of thirty",
+      all(os.path.getsize(os.path.join(folder, f + ".webp")) < 80 * 1024 for f in files))
 
 node = shutil.which("node")
 if node:
     script = ("global.window = {}; require(%s);"
               "const A = window.PyIDEAvatar;"
-              "const out = {drawable: A.drawable, svg: A.svg(%s)};"
-              "process.stdout.write(JSON.stringify(out));") % (
-        json.dumps(os.path.join(PYIDE, "static", "avatar.js")),
-        json.dumps(dict(xp.DEFAULT_AVATAR, background="galaxy", hat="crown")))
+              "process.stdout.write(JSON.stringify([A.html('fox'), A.html('\\\"><img onerror=x>'),"
+              " A.html(''), A.html('../app')]));") % json.dumps(
+        os.path.join(PYIDE, "static", "avatar.js"))
     res = subprocess.run([node, "-e", script], capture_output=True, text=True)
     try:
-        got = json.loads(res.stdout)
+        fox, evil, empty, up = json.loads(res.stdout)
     except ValueError:
-        got = {}
-    check("node ran avatar.js", bool(got), res.stderr[-300:])
-    for kind, parts in xp.AVATAR_PARTS.items():
-        missing = [p[0] for p in parts if p[0] not in got.get("drawable", {}).get(kind, [])]
-        check("  avatar.js draws every %s" % kind, not missing, missing)
-    check("  and draws an SVG", got.get("svg", "").startswith("<svg")
-          and "linearGradient" in got.get("svg", ""))
+        fox = evil = empty = up = ""
+    check("node ran avatar.js", bool(fox), res.stderr[-300:])
+    check("  a picture's id becomes its file", 'src="/static/avatars/fox.webp"' in fox)
+    check("  an id that isn't one becomes the silhouette, never markup",
+          evil.startswith("<svg") and "onerror" not in evil
+          and up.startswith("<svg") and empty.startswith("<svg"), evil[:60])
 else:
     check("node is available to run avatar.js", False, "brew install node")
 

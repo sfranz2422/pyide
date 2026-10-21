@@ -292,11 +292,15 @@ which is the whole defence. A game reports when its setup has run, before
 A class's leaderboard (`_board`) shows its roster's signed-in students by
 their whole XP, **first name and last initial only** (`xp.board_name`),
 never an email, and not on the view-only link. Students can hide and still
-earn. Their home page (`/classes`) shows all of it. An avatar is part ids
-only (no uploads, no text), cleaned by `xp.clean_avatar` against the level
-that unlocks each part; `test_xp.py` checks `avatar.js` can draw every id
-`xp.py` lists, since a missing one draws as nothing. The spinner is phase 2
-and not designed yet.
+earn. Their home page (`/classes`) shows all of it. An avatar is one
+picture from `xp.AVATARS` — `static/avatars/<id>.webp`, painted portraits
+the teacher made with Gemini, cropped square and shrunk to 400px — never an
+upload or text, checked by `xp.clean_avatar` against the level that unlocks
+it. Adding one is a file and a line in `AVATARS`, in all three repos;
+`test_xp.py` fails on a picture without its file or a file without its
+line. (A parts builder drawn in SVG came first and was replaced: it could
+not reach the look the teacher wanted.) The spinner is phase 2 and not
+designed yet.
 
 ## Style
 

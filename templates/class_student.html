@@ -133,7 +133,7 @@
           {% for b in board %}
             <li class="{{ 'me' if b.me }} {{ 'top' if b.place <= 3 }}">
               <span class="xp-place">{{ b.place }}</span>
-              <span class="avatar xp-board-avatar" data-avatar-view="bust" data-avatar='{{ b.avatar|tojson }}'></span>
+              <span class="avatar xp-board-avatar" data-avatar="{{ b.avatar }}"></span>
               <span class="xp-board-name">{{ b.name }}{% if b.me %} <span class="dim small">(you)</span>{% endif %}</span>
               <span class="xp-board-level dim small">Level {{ b.level }}</span>
               <span class="xp-board-xp">{{ b.xp }} XP</span>

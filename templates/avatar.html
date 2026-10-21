@@ -28,114 +28,49 @@
   </div>
 </header>
 
-{#  Built from parts, never uploaded or typed (xp.py says why). A part above
-    the student's level shows locked, with the level it opens at; the server
-    refuses it too, so the lock is not only in this page. #}
+{#  One picture from a fixed set (xp.AVATARS); nothing uploaded, nothing
+    typed. A picture above the student's level shows locked, with the level
+    it opens at; the server refuses it too, so the lock is not only in this
+    page. #}
 <main class="sheet avatar-editor">
   <div class="avatar-preview">
-    <span class="avatar" id="preview"></span>
-    <p class="dim small">Level {{ level }}. More parts unlock as you level up.</p>
+    <span class="avatar" id="preview" data-avatar="{{ avatar }}"></span>
+    <p class="dim small">Level {{ level }}. More pictures unlock as you level up.</p>
     <button id="save" class="btn btn-primary">Save avatar</button>
     <span id="state" class="dim small" role="status"></span>
   </div>
-  <div id="parts" class="avatar-parts"></div>
+  <div class="avatar-grid" id="pictures">
+    {% for p in pictures %}
+      <button type="button" class="avatar-option" data-id="{{ p.id }}"
+              aria-pressed="{{ 'true' if p.id == avatar else 'false' }}"
+              {% if p.level > level %}disabled title="Unlocks at level {{ p.level }}"{% endif %}>
+        <span class="avatar" data-avatar="{{ p.id }}"></span>
+        <span>{{ p.label }}</span>
+        {% if p.level > level %}<span class="avatar-lock">🔒 Level {{ p.level }}</span>{% endif %}
+      </button>
+    {% endfor %}
+  </div>
 </main>
 
 <script src="{{ url_for('static', filename='avatar.js') }}"></script>
 <script>
 (function () {
-  var parts = {{ parts|tojson }};
-  var level = {{ level|tojson }};
   var chosen = {{ avatar|tojson }};
-  var NAMES = { style: "Character or picture", icon: "Picture", skin: "Skin", face: "Face",
-                hair: "Hair", hair_color: "Hair color", beard: "Beard", eyes: "Eyes",
-                mouth: "Mouth", marks: "Face marks", glasses: "Glasses", mask: "Mask",
-                hat: "Head", outfit: "Outfit", effect: "Magic", background: "Background" };
-  // Close-ups for the small buttons: a mouth is a few pixels of a whole
-  // portrait. avatar.js's svg() knows the views.
-  var VIEW = { eyes: "face", mouth: "face", marks: "face", glasses: "face", mask: "face",
-               beard: "face", face: "face", skin: "face", hair: "head", hair_color: "head",
-               hat: "head" };
-  // Which kinds belong to which style; the background is both's.
-  function shown(kind) {
-    if (kind === "style" || kind === "background") return true;
-    return (kind === "icon") === (chosen.style === "icon");
-  }
-  var box = document.getElementById("parts");
   var state = document.getElementById("state");
-
-  function paint() {
-    document.getElementById("preview").innerHTML = window.PyIDEAvatar.svg(chosen);
-    box.querySelectorAll("button[data-kind]").forEach(function (b) {
-      b.setAttribute("aria-pressed", chosen[b.dataset.kind] === b.dataset.id ? "true" : "false");
-    });
-    box.querySelectorAll("fieldset[data-kind]").forEach(function (f) {
-      f.hidden = !shown(f.dataset.kind);
-    });
-  }
-
-  parts.forEach(function (entry) {
-    var kind = entry.kind;
-    var group = document.createElement("fieldset");
-    group.className = "avatar-kind";
-    group.dataset.kind = kind;
-    var legend = document.createElement("legend");
-    legend.textContent = NAMES[kind] || kind;
-    group.appendChild(legend);
-    entry.options.forEach(function (p) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "avatar-option";
-      b.dataset.kind = kind;
-      b.dataset.id = p.id;
-      // A small picture of the avatar with just this part changed, so a
-      // student sees what they are choosing rather than reading a word.
-      var pic = document.createElement("span");
-      pic.className = "avatar";
-      pic.innerHTML = window.PyIDEAvatar.svg(lookWith(kind, p.id), VIEW[kind]);
-      var label = document.createElement("span");
-      label.textContent = p.label;
-      b.appendChild(pic);
-      b.appendChild(label);
-      if (p.level > level) {
-        b.disabled = true;
-        b.title = "Unlocks at level " + p.level;
-        var lock = document.createElement("span");
-        lock.className = "avatar-lock";
-        lock.textContent = "🔒 " + p.level;
-        b.appendChild(lock);
-      }
-      b.addEventListener("click", function () {
-        chosen[kind] = p.id;
-        state.textContent = "";
-        paint();
-        refreshPictures();
+  var preview = document.getElementById("preview");
+  var buttons = document.querySelectorAll("#pictures .avatar-option");
+  Array.prototype.forEach.call(buttons, function (b) {
+    b.addEventListener("click", function () {
+      chosen = b.dataset.id;
+      preview.innerHTML = window.PyIDEAvatar.html(chosen);
+      Array.prototype.forEach.call(buttons, function (o) {
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
       });
-      group.appendChild(b);
+      state.textContent = "";
     });
-    box.appendChild(group);
   });
-
-  // The small pictures follow the current choice: after picking a skin
-  // tone, every hat is shown on that face. Hair is shown bare-headed, or
-  // under a cap every hairstyle looks the same.
-  function lookWith(kind, id) {
-    var look = Object.assign({}, chosen);
-    look[kind] = id;
-    if (kind === "hair" || kind === "hair_color") look.hat = "none";
-    // Without this a Picture button would show the character, and the
-    // Character button the picture.
-    if (kind === "icon") look.style = "icon";
-    return look;
-  }
-  function refreshPictures() {
-    box.querySelectorAll("button[data-kind]").forEach(function (b) {
-      b.querySelector(".avatar").innerHTML =
-        window.PyIDEAvatar.svg(lookWith(b.dataset.kind, b.dataset.id), VIEW[b.dataset.kind]);
-    });
-  }
-
   document.getElementById("save").addEventListener("click", function () {
+    if (!chosen) { state.textContent = "Pick a picture first."; return; }
     state.textContent = "Saving…";
     fetch("/api/me/avatar", { method: "POST", headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ avatar: chosen }) })
@@ -145,8 +80,6 @@
       })
       .catch(function () { state.textContent = "That didn't save. Try again."; });
   });
-
-  paint();
 })();
 </script>
 {% include "_idle.html" %}

@@ -4893,7 +4893,7 @@ def avatar_page():
         level = xp.level_of(xp.total(db, user.id))
         ctx = user_context(db)
         ctx.update(avatar=xp.avatar_of(user), level=level,
-                   parts=xp.parts_for_page(),
+                   pictures=xp.avatars_for_page(),
                    back=url_for("teacher_home" if accounts.is_teacher(user.email)
                                 else "my_classes"))
         return render_template("avatar.html", **ctx)
@@ -4913,7 +4913,7 @@ def save_avatar():
                                       level)
         if why:
             return jsonify(error=why), 400
-        user.avatar = json.dumps(avatar, sort_keys=True)
+        user.avatar = avatar
         db.commit()
         return jsonify(ok=True, avatar=avatar)
     finally:

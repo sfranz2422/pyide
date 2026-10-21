@@ -46,7 +46,7 @@
       from their awards (_game_card) — nothing here is stored as shown. #}
   <section class="xp-card" aria-label="Your XP">
     <a class="xp-avatar avatar" href="{{ url_for('avatar_page') }}" title="Change your avatar"
-       data-avatar='{{ game.avatar|tojson }}'></a>
+       data-avatar="{{ game.avatar }}"></a>
     <div class="xp-main">
       <div class="xp-head">
         <span class="xp-level">Level {{ game.level }}</span>
