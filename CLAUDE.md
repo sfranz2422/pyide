@@ -45,7 +45,7 @@ failing one, so a red suite cannot scroll past unnoticed — a bare
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py` and `test_xp.py`. They run
+`test_tabstops.py`, `test_xp.py` and `test_keep_place.py`. They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
