@@ -251,9 +251,27 @@
                                      signedIn: window.PYIDE.signedIn,
                                      viewOnly: window.PYIDE.viewOnly });
 
-  function showOutput() {
+  /* A STUDENT SEES BOTH: the output and the notes, the notes under it, as
+     on the live page. They took turns, and a student told to check after
+     every step lost the step's slide each time they pressed Run or Check my
+     work, and lost the results each time they went back to the slide. The
+     notes button shows and hides the pane instead. Whoever is writing the
+     notes keeps the turns: their .md opens in the editor (Edit source), and
+     the teacher's editor has "Class sees" under it while live. */
+  function notesBeside() { return !window.PYIDE.authoring; }
+  var notesOpen = "";        // which notes are up, while notesBeside()
+
+  function hideNotes() {
     notesView.hidden = true;
+    notesOpen = "";
+    renderTabs();
+    relayout();
+  }
+
+  function showOutput() {
     outputView.hidden = false;
+    if (notesBeside()) return;
+    notesView.hidden = true;
     /* Whatever put the output up — Run, the syntax card, a game — the notes
        are no longer on show, so the editor must stop saying they are.
        Otherwise their button stayed lit after a Run, and the first press
@@ -273,7 +291,7 @@
 
   function showNotes(name) {
     notesName.textContent = name;
-    outputView.hidden = true;
+    if (!notesBeside()) outputView.hidden = true;
     notesView.hidden = false;
     notesSlides.show(docs[name].getValue());
   }
@@ -338,6 +356,14 @@
   function switchTo(name) {
     if (!docs[name]) return;
 
+    if (window.PyIDENotes.isMarkdown(name) && notesBeside()) {
+      notesOpen = name;      // the editor and `active` stay on the code
+      showNotes(name);
+      renderTabs();
+      relayout();
+      return;
+    }
+
     if (window.PyIDENotes.isMarkdown(name)) {
       active = name;
       mdSourceOpen = false;
@@ -385,13 +411,16 @@
       var b = document.createElement("button");
       b.type = "button";
       b.className = "btn notes-btn";
-      var on = name === active;
+      var on = notesBeside() ? notesOpen === name : name === active;
       b.setAttribute("aria-pressed", String(on));
       b.textContent = name.replace(/\.(md|markdown)$/i, "");
-      b.title = on ? "Back to the output" : "Show " + name;
+      b.title = on ? (notesBeside() ? "Hide " + name : "Back to the output") : "Show " + name;
       b.addEventListener("click", function () {
-        // A second press goes back to the output, so it works as a toggle.
-        if (active === name) switchTo(lastCodeFile);
+        // A second press hides them (or, taking turns, goes back to the output).
+        if (notesBeside()) {
+          if (notesOpen === name) hideNotes();
+          else switchTo(name);
+        } else if (active === name) switchTo(lastCodeFile);
         else switchTo(name);
       });
       notesBar.appendChild(b);
@@ -998,6 +1027,16 @@
     if (checkBtn) checkBtn.hidden = !testsHere().length;
   }
 
+  /* Check my work's results open at the slide the student is reading — the
+     step they just did — rather than at the end of a long list. That slide's
+     heading, or the last one before it when it has no tests of its own. */
+  function scrollToSlide(heads) {
+    if (!heads.length || notesView.hidden || notesSlides.count() < 2) return;
+    var on = notesSlides.at() + 1, pick = heads[0];
+    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
+    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
+  }
+
   async function checkWork() {
     if (running || !pyodide) return;
     var files = projectFiles(), tests = testsHere();
@@ -1017,10 +1056,12 @@
       /* Under the slide each test is on (places): students check after
          every step, and want the step they're on. */
       var where = window.PyIDETests.places(files, window.PyIDENotes) || [], last = null;
+      var heads = [];
       got.results.forEach(function (r, i) {
         var w = where[i];
         if (w && w !== last) {
           write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
+          heads.push({ slide: w.slide, el: outputEl.lastChild });
           last = w;
         }
         write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
@@ -1031,6 +1072,7 @@
             (all ? " — every test passes." : ".") + "\n");
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
+      scrollToSlide(heads);
       if (window.PYIDE.signedIn && window.PYIDE.assignmentSlug && !window.PYIDE.viewOnly) {
         fetch("/api/tests/self", {
           method: "POST", headers: { "Content-Type": "application/json" },

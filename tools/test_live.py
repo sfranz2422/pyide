@@ -1329,7 +1329,7 @@ _editor_page = open(os.path.join(PYIDE, "templates", "index.html")).read()
 _app_js = open(os.path.join(PYIDE, "static", "app.js")).read()
 _ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>', _editor_page)
 check("the editor has handles too",
-      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-stage"]
+      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-output", "editor-stage"]
       and ("y", "editor-class", ' data-size="next"') in _ed_splits
       and -1 < _editor_page.find("split.js") < _editor_page.find("filename='app.js'"),
       _ed_splits)

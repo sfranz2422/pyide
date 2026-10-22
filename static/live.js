@@ -1475,6 +1475,16 @@
     if (checkBtn) checkBtn.hidden = !liveTests().length;
   }
 
+  /* The results open at the slide the student is reading — the step they
+     just did — not at the end of the list: that slide's heading, or the
+     last one before it when it has no tests of its own. */
+  function scrollToSlide(heads) {
+    if (!heads.length || !notesView || notesView.hidden || !notesSlides || notesSlides.count() < 2) return;
+    var on = notesSlides.at() + 1, pick = heads[0];
+    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
+    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
+  }
+
   async function checkWork() {
     var tests = liveTests();
     if (running || !pyodide || !tests.length) return;
@@ -1492,11 +1502,12 @@
       var got = await window.PyIDETests.run(pyodide, files, tests);
       clearOutput();
       // Under the slide each test is on, as in the editor.
-      var where = window.PyIDETests.places(notesFiles, window.PyIDENotes) || [], last = null;
+      var where = window.PyIDETests.places(notesFiles, window.PyIDENotes) || [], last = null, heads = [];
       got.results.forEach(function (r, i) {
         var w = where[i];
         if (w && w !== last) {
           write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
+          heads.push({ slide: w.slide, el: outputEl.lastChild });
           last = w;
         }
         write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
@@ -1506,6 +1517,7 @@
             (got.earned === got.possible ? " — every test passes." : ".") + "\n");
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
+      scrollToSlide(heads);
       if (L.signedIn && L.assignment) {
         fetch("/api/tests/self", {
           method: "POST", headers: { "Content-Type": "application/json" },

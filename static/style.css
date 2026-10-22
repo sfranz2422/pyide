@@ -1782,6 +1782,9 @@ a.needs-grading:hover { filter: brightness(1.1); }
   border-top: 1px solid var(--line);
 }
 .pane-right #output-view { flex: 1 1 0; }
+/* A student's notes under the output share the column evenly (app.js,
+   notesBeside); an auto basis would let a long slide take it all. */
+.pane-right #notes-view { flex: 1 1 0; }
 .pane-right .class-view[hidden] { display: none; }
 
 /* A GAME TAKES ITS SHARE, NOT THE COLUMN. The canvas is 800x600 scaled to
