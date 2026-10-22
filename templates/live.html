@@ -88,6 +88,9 @@
         <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
       </button>
       <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+      {#  Check my work: the tests in the teacher's notes, run on the
+          student's own code (autograde.js). Only while the notes have tests. #}
+      <button id="check" class="btn btn-check" hidden title="Run your teacher's tests on your code">✔ Check my work</button>
       {#  The editor's New tab button: THEIR game, in a tab of its own, on
           /play exactly as the editor sends it. Shown once their code is a
           game. #}
@@ -390,6 +393,7 @@
 <script src="{{ url_for('static', filename='game.js') }}"></script>
 <script src="{{ url_for('static', filename='sprites.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
+<script src="{{ url_for('static', filename='autograde.js') }}"></script>
 <script src="{{ url_for('static', filename='syntax.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='sighint.js') }}"></script>

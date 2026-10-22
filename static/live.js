@@ -34,6 +34,11 @@
   // below can repaint them; on the join card and the host's page they stay
   // undefined and the switch only changes the page around them.
   var mirror, mine;
+  /* The theme from the shop, read BEFORE themeSwitch(). It was read further
+     down, after the switch had already run with it undefined and painted
+     plain light/dark over it — so a bought theme never once showed on this
+     page, and nothing said so. */
+  var named = window.PyIDEXP ? window.PyIDEXP.namedTheme() : "";
   themeSwitch();
 
   if (!L.joined || L.isHost) {
@@ -46,6 +51,8 @@
   var outputEl = $("output");
   var stage = $("stage");
   var runBtn = $("run");
+  var checkBtn = $("check");
+  var liveNotes = "";        // the teacher's notes, for Check my work's tests
   var runLabel = $("run-label");
   var stopBtn = $("stop");
   var stateChip = $("live-state");
@@ -95,7 +102,7 @@
   }
 
   // A theme bought in the shop has its own CodeMirror colours (xp.js).
-  var named = window.PyIDEXP ? window.PyIDEXP.namedTheme() : "";
+  // `named` is read at the top, before themeSwitch() needs it.
   function cmTheme() {
     if (named) return "pyide-" + named;
     return isDark() ? "material-darker" : "default";
@@ -936,6 +943,10 @@
   }
 
   function showNotes(data) {
+    if (typeof data.notes === "string" && data.notes !== liveNotes) {
+      liveNotes = data.notes;
+      refreshCheck();
+    }
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
     notesView.hidden = !data.notes.trim();
@@ -1330,6 +1341,7 @@
     running = on;
     runMode = on ? mode : null;
     runBtn.hidden = on;
+    if (checkBtn) checkBtn.disabled = on || !pyodide;
     paintStop();
   }
 
@@ -1343,6 +1355,7 @@
       clearOutput();
       write("Python is ready. Type along, then press Run.\n", "dim");
       runBtn.disabled = false;
+      if (checkBtn) checkBtn.disabled = false;
       runLabel.textContent = "Run";
     } catch (e) {
       write("Python could not load. Check your connection and refresh.\n"
@@ -1446,6 +1459,66 @@
     }
 
     await runGame(source, false);
+  }
+
+  /* Check my work, as in the editor: the tests in the teacher's notes as
+     they are now (they come whole with every push), run on THEIR code —
+     never the mirror's, or the teacher's program would pass for them. The
+     result is feedback, kept for the teacher when the lesson is for an
+     assignment, and counts for nothing; Check all on what they turn in is
+     what counts. */
+  function liveTests() {
+    return window.PyIDETests && liveNotes ? window.PyIDETests.parse(liveNotes).tests : [];
+  }
+
+  function refreshCheck() {
+    if (checkBtn) checkBtn.hidden = !liveTests().length;
+  }
+
+  async function checkWork() {
+    var tests = liveTests();
+    if (running || !pyodide || !tests.length) return;
+    var files = dataFiles(), notesFiles = { "notes.md": liveNotes };
+    files[MAIN] = mainSource();
+    syntaxCard.clear();
+    openConsole(true);
+    setBusy(true, "console");
+    stage.hidden = true;
+    document.body.classList.remove("is-game");
+    clearOutput();
+    write("Checking your code against " + tests.length + " test" +
+          (tests.length === 1 ? "" : "s") + "…\n", "dim");
+    try {
+      var got = await window.PyIDETests.run(pyodide, files, tests);
+      clearOutput();
+      // Under the slide each test is on, as in the editor.
+      var where = window.PyIDETests.places(notesFiles, window.PyIDENotes) || [], last = null;
+      got.results.forEach(function (r, i) {
+        var w = where[i];
+        if (w && w !== last) {
+          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
+          last = w;
+        }
+        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
+        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
+      });
+      write("\n" + got.earned + " of " + got.possible + " points" +
+            (got.earned === got.possible ? " — every test passes." : ".") + "\n");
+      write("This check is for you. What counts is your teacher's check of what " +
+            "you turn in.\n", "dim");
+      if (L.signedIn && L.assignment) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: L.assignment, results: got.results })
+        }).catch(function () {});
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      pullFilesFromPython();
+      setBusy(false);
+      mine.focus();
+    }
   }
 
   /* A run of their own code that worked, for XP (xp.js); the server
@@ -1581,6 +1654,7 @@
   }
 
   runBtn.addEventListener("click", run);
+  if (checkBtn) checkBtn.addEventListener("click", checkWork);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
 
@@ -1647,19 +1721,45 @@
       }
     }
 
-    if (named) {
+    function showNamed() {
+      [mirror, mine].forEach(function (ed) {
+        if (ed) { ed.setOption("theme", "pyide-" + named); ed.refresh(); }
+      });
       glyph.textContent = "🎨";
-      btn.title = "Your theme — click for ordinary light or dark";
+      btn.title = "Your theme — click for light, then dark, then back";
       btn.setAttribute("aria-label", btn.title);
+    }
+    // In dark, the next click brings their theme back (xp.js), so say so.
+    function hintBack() {
+      if (named || current() !== "dark" || !window.PyIDEXP || !window.PyIDEXP.lastTheme()) return;
+      glyph.textContent = "🎨";
+      btn.title = "Back to your theme";
+      btn.setAttribute("aria-label", btn.title);
+    }
+
+    if (named) {
+      showNamed();
     } else {
       apply(current(), false);
+      hintBack();
     }
+    /* Theme -> light -> dark -> theme (xp.js says why). */
     btn.addEventListener("click", function () {
       if (named) {
         named = "";
         window.PyIDEXP.clearTheme();
+        apply("light", true);
+        return;
+      }
+      if (current() === "dark" && window.PyIDEXP && window.PyIDEXP.lastTheme()) {
+        window.PyIDEXP.restoreTheme().then(function (t) {
+          if (t) { named = t; showNamed(); }
+          else apply("light", true);
+        });
+        return;
       }
       apply(current() === "light" ? "dark" : "light", true);
+      hintBack();
     });
 
     // Follow the computer's setting as it changes, until a choice is made.
