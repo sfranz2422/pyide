@@ -338,7 +338,7 @@ function call (`area(3, 4) == 12`), or the code's shape (`uses for`,
 `avoids sum`, `defines area`). **They run in a browser, never on the
 server.** A student's Check my work runs in theirs — feedback, which could
 be faked, so it is kept (`TestResult`, kind "self") for the teacher to see
-and counts for nothing. The teacher's Check all runs every turned-in
+and counts toward no grade. Each test it finds passing for the first time pays `SELF_TEST_XP` (2), once per test ever (`_self_tests_xp`, source `selftest:<assignment>:<label hash>`), and only for a label the notes really have, so a faked check takes at most that times the tests there are. The teacher's Check all runs every turned-in
 snapshot in the TEACHER's browser and posts kind "verified", which is added
 to the grade through `_earned` — every total goes through it, so Classroom,
 Skyward, My work, the class page and quests all include it. Points are
@@ -348,8 +348,8 @@ exactly as autograde.py; `test_autograde.py` holds them together and runs
 the tests in the real Pyodide. Each test the teacher's check finds passing also pays
 `XP_PER_POINT` XP a point, once per test (`_tests_xp`, source
 `test:<assignment>:<label hash>`), so checking again never pays twice and
-fixed code is paid only for what now passes; a student's own check pays
-nothing.
+fixed code is paid only for what now passes. That is on top of the small
+amount a student's own check pays.
 
 **The token shop** ("The token shop" in `app.py`; `accounts.ShopItem`,
 `ShopRequest`; `/teacher/shop`). What tokens buy: one shop per teacher,
