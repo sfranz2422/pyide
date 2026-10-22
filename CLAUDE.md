@@ -41,11 +41,11 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by fifteen of these: `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by seventeen of these: `test_attendance.py`, `test_charts.py`, `test_dungeon.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py`, `test_xp.py`, `test_keep_place.py` and `test_autograde.py`. They run
+`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py` and `test_autograde.py`. They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -373,6 +373,38 @@ stops being theirs stops showing. Each theme is a `[data-theme]` block, a
 `.cm-s-pyide-<id>` CodeMirror theme and a shop swatch, generated from one
 palette; `test_editor_themes.py` (the same in all three) fails on a theme
 missing any of them, since a missing block sells a theme that does nothing.
+
+**An assignment's notes follow the teacher's edits** (`_current_notes`,
+`_keep_notes` in `app.py`). A draft copies the assignment's files, notes
+included, but every page that shows a student their draft swaps in the
+assignment's notes as they are now. Saving never writes notes into a draft:
+the automatic turn-in compares the draft with what was handed in, so new notes
+there would turn everyone's work in again over a typo. Every `.md` counts as
+notes. `test_notes_follow.py` pins it.
+
+**Signed out after two idle hours** (`_sign_out_idle_student` in `app.py`,
+`templates/_idle.html`). Students only: signing a teacher out would end their
+live lesson. Polls (any GET to `/api/`) must never count as activity, or an
+open tab keeps itself signed in forever, which is the bug this exists for.
+The page sends a beat to `/api/alive` at most every 5 minutes while it is
+used, and gives up 2 minutes before the server does, so it always notices
+first. A new page a student works on needs `{% include "_idle.html" %}`.
+Time up, it goes straight to Google's sign-in and back to the page — no card.
+Chrome reopens yesterday's tabs from its cache without asking the server, so
+signed-in pages are `no-store`, the page GETs `/api/alive` (not activity) as
+it opens and on focus, and an idle student opening a page is redirected to
+`/login?next=` rather than shown it signed out.
+
+**Attendance** (`accounts.Visit`, table `class_visits`;
+`/teacher/class/<id>/attendance`). One row per sitting: made when a
+signed-in student opens the class's page, one of its assignments or its live
+lesson (`_attend`), kept open by the beat, and split by a 20-minute gap.
+Times are UTC, and the page groups them into days in the teacher's browser.
+
+**Slide themes** (`notes.js` `takeTheme`, `.slide-theme-*` in `style.css`).
+`theme: <name>` as the notes' first line. Only a name from `THEMES`
+becomes a class; style is never read from notes. The line is taken out
+inside `slides()`, so no slide count can differ between teacher and student.
 
 ## Style
 
