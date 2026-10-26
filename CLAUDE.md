@@ -272,9 +272,10 @@ all worked out from the total and never stored; `users.tokens_used` is the
 only token state, lowered by Use with a conditional UPDATE. **Nothing here
 touches a grade** — the teacher trades tokens for points by hand.
 
-One total per *person*, across every class and all three apps, so **`xp.py`
+One total per *person*, across every class and all four apps, so **`xp.py`
 and `avatar.js` are shared like `accounts.py`**: change them here and copy
-them to WebIDE and FlaskIDE. XP is rows in `xp_awards`, never updated, and
+them to WebIDE and FlaskIDE — and `xp.py` to GameIDE's `backend/` too
+(GameIDE is React, so it has its own avatar component, not avatar.js). XP is rows in `xp_awards`, never updated, and
 the unique `(user_id, source)` is what stops anything paying twice — a
 double click, two workers, a page sent twice. `xp.award` commits on its own
 and is called *after* the thing it pays for is committed.
