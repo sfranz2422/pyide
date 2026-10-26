@@ -418,6 +418,16 @@ Times are UTC, and the page groups them into days in the teacher's browser.
 becomes a class; style is never read from notes. The line is taken out
 inside `slides()`, so no slide count can differ between teacher and student.
 
+**The class pages look like GameIDE's** (`static/site_look.css`, the same
+in all three). The teacher's and students' pages — dashboard, class,
+assignment, XP & tokens, shop, attendance, material, a student's classes,
+My work, their XP and avatar — load it after `style.css`; the editors never
+do. It sets colours only for the default looks (no `data-theme`, or
+`dark`/`light`), so **a student's bought theme still wins** there: a colour
+written outright anywhere else in it would quietly paint over every theme
+sold. `test_site_look.py` (the same in all three) fails on that, on a page
+that stops loading it, and on an editor that starts.
+
 ## Style
 
 Comments explain *why*, especially where the reason is a bug that has already
