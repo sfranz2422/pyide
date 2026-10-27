@@ -193,6 +193,9 @@ for (const name of Object.keys(programs)) {
 // by "prints the AREA is 12".
 out.casing = await window.PyIDETests.run(py, { "main.py": "print('The area is  12')" },
   window.PyIDETests.parse("```tests\nprints the AREA is 12\nprints exactly The area is 12\n```").tests);
+// Operators: a student's print(3+4) failed `uses +` while plainly using it.
+out.ops = await window.PyIDETests.run(py, { "main.py": "print(3+4)\nif 2 == 2 and True:\n    x = 'a-b'\n" },
+  window.PyIDETests.parse("```tests\nuses +\nuses ==\nuses and\nuses -\navoids *\n```").tests);
 process.stdout.write(JSON.stringify(out));
 """ % {"pyodide": json.dumps(PYODIDE), "runtime": json.dumps(RUNTIME),
        "autograde": json.dumps(AUTOGRADE), "notes": json.dumps(NOTES),
@@ -205,7 +208,7 @@ try:
     ran = json.loads(out.stdout)
 except ValueError:
     ran = {}
-check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 1, out.stderr[-400:])
+check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 2, out.stderr[-400:])
 
 
 def lines(name):
@@ -255,6 +258,10 @@ check("prints ignores case and extra spaces", c[0].get("ok"), c[0])
 check("  but prints exactly doesn't", c[1].get("ok") is False, c[1])
 check("uses import math sees the import", lines("right")["Uses import math"]["ok"]
       and not lines("unreadable")["Uses import math"]["ok"])
+ops = [x.get("ok") for x in ran.get("ops", {}).get("results", [])]
+check("uses + sees 3+4, == and and too — operators, read from the code's tree",
+      ops[:3] == [True, True, True], ran.get("ops"))
+check("  a - inside a string isn't a minus, and avoids * holds", ops[3:] == [False, True], ran.get("ops"))
 
 # ---------------------------------------------------------------- server
 print("\nThe server")
