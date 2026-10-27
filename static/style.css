@@ -330,6 +330,7 @@ html, body {
 .split:has(> .pane-notes:not([hidden])) > .pane-right { flex-basis: 30%; }
 .split:not(:has(> .pane-notes:not([hidden]))) > .pane-right { flex-grow: 1 !important; }
 .pane-notes > .pane-head { flex-wrap: wrap; gap: 4px 10px; }
+.pane-notes > .pane-head .notes-close { margin-left: auto; }
 .pane-notes > .notes-body { flex: 1 1 0; min-height: 0; overflow-y: auto; }
 
 .pane-head {

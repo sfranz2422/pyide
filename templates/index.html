@@ -299,7 +299,6 @@
   <section id="notes-view" class="pane pane-notes" hidden>
       <div class="pane-head">
         <span id="notes-name">Notes</span>
-        <button id="notes-close" class="linkbtn" type="button" title="Hide the notes (the notes button shows them again)">Hide</button>
         {% if authoring %}
           <a class="linkbtn" href="{{ url_for('help_questions') }}" target="_blank" rel="noopener"
              title="How to write ```quiz questions in these notes">Question formats</a>
@@ -317,6 +316,7 @@
           {% endif %}
           <button id="notes-edit" class="linkbtn">Edit source</button>
         {% endif %}
+        <button id="notes-close" class="linkbtn notes-close" type="button" title="Hide the notes (the notes button shows them again)">Hide</button>
       </div>
       <div id="notes-body" class="notes-body prose"></div>
     </section>
