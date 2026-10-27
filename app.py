@@ -7270,6 +7270,14 @@ QUESTION_EXAMPLES = [
      "the line.",
      "type: bug\nWhich line stops this program from running?\n~~~python\n"
      "for n in range(3)\n    print(n)\n~~~\nbug: 1"),
+    ("predict", "Predict the output",
+     "type: predict, the code in a ~~~ fence, and answer: with what it prints. Students "
+     "type their prediction and get one try, marked like a short answer: capitals, "
+     "spaces and line breaks don't count, so 0 2 4 matches three lines of 0, 2 and 4. "
+     "Once they've answered, Run it shows what it really prints. In your preview, Run it "
+     "and Copy as the answer: line save you working the output out.",
+     "type: predict\nWhat will this print?\n~~~python\nfor i in range(3):\n    print(i * 2)\n~~~\n"
+     "answer: 0 2 4\npoints: 2"),
     ("sort", "Sort into groups",
      "type: sort, then a group: line for each group with its items under it, "
      "each after - . Students get every item in a tray, shuffled, and put each "
