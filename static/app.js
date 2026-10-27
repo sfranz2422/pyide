@@ -1088,6 +1088,18 @@
       await window.IDENotesChecks.check();
       return;
     }
+    // No card on screen: the notes, opened at the slide that needs them (checks_in_notes.js).
+    if (window.IDENotesChecks && notesBeside()) {
+      var notes = notesOpen || fileNames().filter(window.PyIDENotes.isMarkdown)[0];
+      var shown = await window.IDENotesChecks.checkInNotes({
+        markdown: function () { return notes ? docs[notes].getValue() : null; },
+        open: function () { if (notesView.hidden || notesOpen !== notes) switchTo(notes); },
+        slides: window.PyIDENotes.slides,
+        tests: function (text) { return window.PyIDETests.parse(text).tests; },
+        viewer: notesSlides
+      });
+      if (shown !== false) return;
+    }
     stage.hidden = true;
     showOutput();
     relayout();
