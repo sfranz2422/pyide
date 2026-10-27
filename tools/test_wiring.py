@@ -379,13 +379,16 @@ check("  and taken out of the tab strip for them",
       re.search(r"function renderTabs\(\) \{[\s\S]{0,200}"
                 r"return !\(notesAsButtons\(\) && window\.PyIDENotes\.isMarkdown\(name\)\);",
                 _app_js) is not None)
-check("  a second press goes back to the output",
-      "if (active === name) switchTo(lastCodeFile);" in _app_js)
-
-
-check("  and whatever shows the output closes the notes properly",
-      re.search(r"function showOutput\(\) \{[^}]*?if \(window\.PyIDENotes\.isMarkdown\(active\) && !mdSourceOpen\) \{\s*"
+# The notes are a column of their own (index.html): a press shows them, a
+# second press hides them, and so does the column's own Hide button.
+check("  a second press hides them",
+      "var on = !notesView.hidden && (" in _app_js and "if (on) hideNotes();" in _app_js)
+check("  and the column's Hide button does too",
+      'id="notes-close"' in template_text
+      and 'notesClose.addEventListener("click", hideNotes)' in _app_js)
+check("  and hiding them takes the light off their tab, unless the source is open",
+      re.search(r"function hideNotes\(\) \{[^}]*?if \(window\.PyIDENotes\.isMarkdown\(active\) && !mdSourceOpen\) "
                 r"active = lastCodeFile;\s*renderTabs\(\);", _app_js) is not None,
-      "after a Run the button stayed lit and took two presses to show the notes")
+      "a hidden column's tab stayed lit, and took two presses to show the notes")
 
 done()

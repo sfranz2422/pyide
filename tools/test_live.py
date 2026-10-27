@@ -1322,14 +1322,14 @@ check("  and the game is fitted again once it has set its own size",
       -1 < _game_fn.find("_pyide_run_game(") < _game_fn.find("fitCanvas();", _game_fn.find("_pyide_run_game("))
       < _game_fn.find("_pyide_drive_game()"),
       "kaypy(width=…) changes the canvas after the first fit")
-# The editor has them too: beside the code, under a game, and above the
-# teacher's "Class sees" — which is sized from above, because the output and
-# the instructions take turns being the pane before it.
+# The editor has them too: beside the code, beside the output (the notes are
+# a column of their own), under a game, and above the teacher's "Class sees"
+# — which is sized from above, because the game may or may not be shown.
 _editor_page = open(os.path.join(PYIDE, "templates", "index.html")).read()
 _app_js = open(os.path.join(PYIDE, "static", "app.js")).read()
 _ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>', _editor_page)
 check("the editor has handles too",
-      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-output", "editor-stage"]
+      sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-right", "editor-stage"]
       and ("y", "editor-class", ' data-size="next"') in _ed_splits
       and -1 < _editor_page.find("split.js") < _editor_page.find("filename='app.js'"),
       _ed_splits)

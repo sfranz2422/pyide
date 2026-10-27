@@ -489,14 +489,15 @@ for page in ("app.js", "live.js"):
 appjs = open(os.path.join(ROOT, "static", "app.js")).read()
 fn = appjs[appjs.find("function showOutput() {"):]
 fn = fn[:fn.find("\n  }\n")]
-guard, hide = fn.find("if (notesBeside()"), fn.find("hidden = true")
-check("the editor keeps a student's notes up when it shows the output",
-      "function notesBeside() { return !window.PYIDE.authoring; }" in appjs
-      and guard >= 0 and (hide < 0 or guard < hide), fn[:160])
+# The notes are a column of their own: showing the output never hides them,
+# for anyone — a student checking their work, or the teacher writing.
+check("the editor keeps the notes up when it shows the output",
+      fn and "notesView.hidden" not in fn and "hideNotes" not in fn, fn[:160])
 editor_html = open(os.path.join(ROOT, "templates", "index.html")).read()
-cut = editor_html.find('<div id="notes-view"')
-check("  with a handle between them",
-      'data-split="editor-output"' in editor_html[max(0, cut - 400):cut])
+cut = editor_html.find('<section id="notes-view" class="pane pane-notes"')
+check("  in a column beside the output's, with a handle between them",
+      cut > editor_html.find('<section class="pane pane-right">') > 0
+      and 'data-split="editor-right"' in editor_html[max(0, cut - 120):cut])
 
 print()
 failed = results.count(False)
