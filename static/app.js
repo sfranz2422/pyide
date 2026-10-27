@@ -291,7 +291,10 @@
   var notesSlides = window.PyIDENotes.slideView(notesBody, {
     animate: function () { return !window.PYIDE.readonly && !liveCode; },
     skip: function () { return !!window.PYIDE.authoring; },
-    key: (window.PYIDE.authoring ? "author:" : "") + (window.PYIDE.assignmentSlug || location.pathname)
+    key: (window.PYIDE.authoring ? "author:" : "") + (window.PYIDE.assignmentSlug || location.pathname),
+    // `locked: yes` holds the next slide until its checks pass — for a
+    // student working, never the teacher writing them, nor while live.
+    locked: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; }
   });
 
   function showNotes(name) {
@@ -1038,21 +1041,64 @@
     outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
   }
 
-  async function checkWork() {
-    if (running || !pyodide) return;
+  /* The run itself: every test in the notes, on what is in the editor
+     now. Whoever asked shows the results — the notes' tests cards
+     (checks_in_notes.js), or the console — and the student's result is
+     kept for the teacher here, either way. Null when it can't run now. */
+  async function runChecks() {
+    if (running || !pyodide) return null;
     var files = projectFiles(), tests = testsHere();
-    if (!tests.length) return;
+    if (!tests.length) return null;
     setBusy(true, "console");
+    try {
+      await ensureRequests(mainSource());
+      var got = await window.PyIDETests.run(pyodide, files, tests);
+      keepSelfCheck(got);
+      return got;
+    } finally {
+      pullFilesFromPython();
+      setBusy(false, "console");
+    }
+  }
+
+  function keepSelfCheck(got) {
+    if (!(window.PYIDE.signedIn && window.PYIDE.assignmentSlug && !window.PYIDE.viewOnly)) return;
+    fetch("/api/tests/self", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignment: window.PYIDE.assignmentSlug, results: got.results })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        // A little XP for each test passing for the first time (app.py, _self_tests_xp).
+        if (d && d.xp > 0 && window.PyIDEXP) {
+          window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
+        }
+      })
+      .catch(function () {});
+  }
+  // The notes' own ✔ Check my work, on each tests card.
+  if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
+
+  /* The ✔ Check my work at the top. With a tests card on screen, the
+     results go there, beside the step they're about — the console no longer
+     opens over the notes. Without one (the notes put away, or a slide with
+     no tests on it), they go to the console, under the slide each is on. */
+  async function checkWork() {
+    if (running || !pyodide || !testsHere().length) return;
+    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
+      await window.IDENotesChecks.check();
+      return;
+    }
     stage.hidden = true;
     showOutput();
     relayout();
     clearOutput();
+    var tests = testsHere(), files = projectFiles();
     write("Checking your code against " + tests.length + " test" +
           (tests.length === 1 ? "" : "s") + "…\n", "dim");
     await repaint();
     try {
-      await ensureRequests(mainSource());
-      var got = await window.PyIDETests.run(pyodide, files, tests);
+      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runChecks();
+      if (!got) return;
       clearOutput();
       /* Under the slide each test is on (places): students check after
          every step, and want the step they're on. */
@@ -1074,24 +1120,8 @@
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
       scrollToSlide(heads);
-      if (window.PYIDE.signedIn && window.PYIDE.assignmentSlug && !window.PYIDE.viewOnly) {
-        fetch("/api/tests/self", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignment: window.PYIDE.assignmentSlug, results: got.results })
-        }).then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
-            if (d && d.xp > 0 && window.PyIDEXP) {
-              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
-            }
-          })
-          .catch(function () {});
-      }
     } catch (e) {
       write(String(e) + "\n", "err");
-    } finally {
-      pullFilesFromPython();
-      setBusy(false, "console");
     }
   }
 

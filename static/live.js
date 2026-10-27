@@ -1485,21 +1485,59 @@
     outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
   }
 
+  /* The run itself, on THEIR code. Whoever asked shows the results — the
+     notes' tests cards (checks_in_notes.js), or the console. Null when it
+     can't run now. */
+  async function runLiveChecks() {
+    var tests = liveTests();
+    if (running || !pyodide || !tests.length) return null;
+    var files = dataFiles();
+    files[MAIN] = mainSource();
+    setBusy(true, "console");
+    try {
+      var got = await window.PyIDETests.run(pyodide, files, tests);
+      if (L.signedIn && L.assignment) {
+        fetch("/api/tests/self", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignment: L.assignment, results: got.results })
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
+            if (d && d.xp > 0 && window.PyIDEXP) {
+              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
+            }
+          })
+          .catch(function () {});
+      }
+      return got;
+    } finally {
+      pullFilesFromPython();
+      setBusy(false);
+    }
+  }
+  if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
+
+  /* The ✔ Check my work above their editor: into the notes' card when one
+     is on screen, as the card's own button does; the console otherwise. */
   async function checkWork() {
     var tests = liveTests();
     if (running || !pyodide || !tests.length) return;
-    var files = dataFiles(), notesFiles = { "notes.md": liveNotes };
-    files[MAIN] = mainSource();
+    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
+      await window.IDENotesChecks.check();
+      mine.focus();
+      return;
+    }
+    var notesFiles = { "notes.md": liveNotes };
     syntaxCard.clear();
     openConsole(true);
-    setBusy(true, "console");
     stage.hidden = true;
     document.body.classList.remove("is-game");
     clearOutput();
     write("Checking your code against " + tests.length + " test" +
           (tests.length === 1 ? "" : "s") + "…\n", "dim");
     try {
-      var got = await window.PyIDETests.run(pyodide, files, tests);
+      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runLiveChecks();
+      if (!got) return;
       clearOutput();
       // Under the slide each test is on, as in the editor.
       var where = window.PyIDETests.places(notesFiles, window.PyIDENotes) || [], last = null, heads = [];
@@ -1518,24 +1556,9 @@
       write("This check is for you. What counts is your teacher's check of what " +
             "you turn in.\n", "dim");
       scrollToSlide(heads);
-      if (L.signedIn && L.assignment) {
-        fetch("/api/tests/self", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignment: L.assignment, results: got.results })
-        }).then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            // A little XP for each test passing for the first time (app.py, _self_tests_xp).
-            if (d && d.xp > 0 && window.PyIDEXP) {
-              window.PyIDEXP.toast("+" + d.xp + " XP · new tests passing");
-            }
-          })
-          .catch(function () {});
-      }
     } catch (e) {
       write(String(e) + "\n", "err");
     } finally {
-      pullFilesFromPython();
-      setBusy(false);
       mine.focus();
     }
   }
