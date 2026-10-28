@@ -51,7 +51,6 @@
   var outputEl = $("output");
   var stage = $("stage");
   var runBtn = $("run");
-  var checkBtn = $("check");
   var liveNotes = "";        // the teacher's notes, for Check my work's tests
   var runLabel = $("run-label");
   var stopBtn = $("stop");
@@ -945,7 +944,6 @@
   function showNotes(data) {
     if (typeof data.notes === "string" && data.notes !== liveNotes) {
       liveNotes = data.notes;
-      refreshCheck();
     }
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
@@ -1341,7 +1339,6 @@
     running = on;
     runMode = on ? mode : null;
     runBtn.hidden = on;
-    if (checkBtn) checkBtn.disabled = on || !pyodide;
     paintStop();
   }
 
@@ -1355,7 +1352,6 @@
       clearOutput();
       write("Python is ready. Type along, then press Run.\n", "dim");
       runBtn.disabled = false;
-      if (checkBtn) checkBtn.disabled = false;
       runLabel.textContent = "Run";
     } catch (e) {
       write("Python could not load. Check your connection and refresh.\n"
@@ -1466,28 +1462,14 @@
      never the mirror's, or the teacher's program would pass for them. The
      result is feedback, kept for the teacher when the lesson is for an
      assignment, and counts for nothing; Check all on what they turn in is
-     what counts. */
+     what counts. Only from the ✔ on the notes' tests cards: the button
+     above their editor is gone, so they check beside the step. */
   function liveTests() {
     return window.PyIDETests && liveNotes ? window.PyIDETests.parse(liveNotes).tests : [];
   }
 
-  function refreshCheck() {
-    if (checkBtn) checkBtn.hidden = !liveTests().length;
-  }
-
-  /* The results open at the slide the student is reading — the step they
-     just did — not at the end of the list: that slide's heading, or the
-     last one before it when it has no tests of its own. */
-  function scrollToSlide(heads) {
-    if (!heads.length || !notesView || notesView.hidden || !notesSlides || notesSlides.count() < 2) return;
-    var on = notesSlides.at() + 1, pick = heads[0];
-    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
-    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
-  }
-
-  /* The run itself, on THEIR code. Whoever asked shows the results — the
-     notes' tests cards (checks_in_notes.js), or the console. Null when it
-     can't run now. */
+  /* The run itself, on THEIR code. The notes' tests cards
+     (checks_in_notes.js) show the results. Null when it can't run now. */
   async function runLiveChecks() {
     var tests = liveTests();
     if (running || !pyodide || !tests.length) return null;
@@ -1516,63 +1498,6 @@
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
-
-  /* The ✔ Check my work above their editor: into the notes' card when one
-     is on screen, as the card's own button does; the console otherwise. */
-  async function checkWork() {
-    var tests = liveTests();
-    if (running || !pyodide || !tests.length) return;
-    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
-      await window.IDENotesChecks.check();
-      mine.focus();
-      return;
-    }
-    // No card on screen: the notes turned to the slide that needs them (checks_in_notes.js).
-    if (window.IDENotesChecks && notesSlides) {
-      var shown = await window.IDENotesChecks.checkInNotes({
-        markdown: function () { return liveNotes; },
-        open: function () {},
-        slides: window.PyIDENotes.slides,
-        tests: function (text) { return window.PyIDETests.parse(text).tests; },
-        viewer: notesSlides
-      });
-      if (shown !== false) return;
-    }
-    var notesFiles = { "notes.md": liveNotes };
-    syntaxCard.clear();
-    openConsole(true);
-    stage.hidden = true;
-    document.body.classList.remove("is-game");
-    clearOutput();
-    write("Checking your code against " + tests.length + " test" +
-          (tests.length === 1 ? "" : "s") + "…\n", "dim");
-    try {
-      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runLiveChecks();
-      if (!got) return;
-      clearOutput();
-      // Under the slide each test is on, as in the editor.
-      var where = window.PyIDETests.places(notesFiles, window.PyIDENotes) || [], last = null, heads = [];
-      got.results.forEach(function (r, i) {
-        var w = where[i];
-        if (w && w !== last) {
-          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
-          heads.push({ slide: w.slide, el: outputEl.lastChild });
-          last = w;
-        }
-        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
-        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
-      });
-      write("\n" + got.earned + " of " + got.possible + " points" +
-            (got.earned === got.possible ? " — every test passes." : ".") + "\n");
-      write("This check is for you. What counts is your teacher's check of what " +
-            "you turn in.\n", "dim");
-      scrollToSlide(heads);
-    } catch (e) {
-      write(String(e) + "\n", "err");
-    } finally {
-      mine.focus();
-    }
-  }
 
   /* A run of their own code that worked, for XP (xp.js); the server
      decides whether it pays. */
@@ -1707,7 +1632,6 @@
   }
 
   runBtn.addEventListener("click", run);
-  if (checkBtn) checkBtn.addEventListener("click", checkWork);
   stopBtn.addEventListener("click", stopRun);
   $("clear").addEventListener("click", clearOutput);
 

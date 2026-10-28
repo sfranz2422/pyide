@@ -703,7 +703,7 @@
     relayout();
   }
 
-  function refreshMode() { paintMode(currentMode(mainSource())); refreshCheck(); }
+  function refreshMode() { paintMode(currentMode(mainSource())); }
 
   editor.on("change", function () { if (!running) refreshMode(); });
 
@@ -847,7 +847,6 @@
     runMode = isRunning ? mode : null;
     runBtn.disabled = isRunning;
     runLabel.textContent = isRunning ? "Running…" : "Run";
-    if (checkBtn) checkBtn.disabled = isRunning;
     paintStop();
   }
 
@@ -1011,12 +1010,13 @@
   }
 
   /* Check my work: the tests in the notes (autograde.js), run here on what
-     is in the editor now, as often as the student likes. It is feedback:
-     the result is kept for the teacher to see, but what counts is the
-     teacher's Check all on what was turned in — a check run in this
-     browser could be faked. Shown only when the notes have tests. */
-  var checkBtn = $("check");
-
+     is in the editor now, as often as the student likes, from the ✔ on each
+     tests card in the notes (checks_in_notes.js). There is no button at the
+     top any more: the cards show the results beside the step they're about,
+     and the teacher wanted students checking there. It is feedback: the
+     result is kept for the teacher to see, but what counts is the teacher's
+     Check all on what was turned in — a check run in this browser could be
+     faked. */
   function projectFiles() {
     var files = dataFiles();
     files[MAIN] = mainSource();
@@ -1027,24 +1027,10 @@
     return window.PyIDETests ? window.PyIDETests.fromFiles(projectFiles()).tests : [];
   }
 
-  function refreshCheck() {
-    if (checkBtn) checkBtn.hidden = !testsHere().length;
-  }
-
-  /* Check my work's results open at the slide the student is reading — the
-     step they just did — rather than at the end of a long list. That slide's
-     heading, or the last one before it when it has no tests of its own. */
-  function scrollToSlide(heads) {
-    if (!heads.length || notesView.hidden || notesSlides.count() < 2) return;
-    var on = notesSlides.at() + 1, pick = heads[0];
-    heads.forEach(function (h) { if (h.slide <= on) pick = h; });
-    outputEl.scrollTop += pick.el.getBoundingClientRect().top - outputEl.getBoundingClientRect().top;
-  }
-
   /* The run itself: every test in the notes, on what is in the editor
-     now. Whoever asked shows the results — the notes' tests cards
-     (checks_in_notes.js), or the console — and the student's result is
-     kept for the teacher here, either way. Null when it can't run now. */
+     now. The notes' tests cards (checks_in_notes.js) show the results;
+     the student's result is kept for the teacher here. Null when it can't
+     run now. */
   async function runChecks() {
     if (running || !pyodide) return null;
     var files = projectFiles(), tests = testsHere();
@@ -1077,65 +1063,6 @@
   }
   // The notes' own ✔ Check my work, on each tests card.
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
-
-  /* The ✔ Check my work at the top. With a tests card on screen, the
-     results go there, beside the step they're about — the console no longer
-     opens over the notes. Without one (the notes put away, or a slide with
-     no tests on it), they go to the console, under the slide each is on. */
-  async function checkWork() {
-    if (running || !pyodide || !testsHere().length) return;
-    if (window.IDENotesChecks && window.IDENotesChecks.onScreen()) {
-      await window.IDENotesChecks.check();
-      return;
-    }
-    // No card on screen: the notes, opened at the slide that needs them (checks_in_notes.js).
-    if (window.IDENotesChecks && notesBeside()) {
-      var notes = notesOpen || fileNames().filter(window.PyIDENotes.isMarkdown)[0];
-      var shown = await window.IDENotesChecks.checkInNotes({
-        markdown: function () { return notes ? docs[notes].getValue() : null; },
-        open: function () { if (notesView.hidden || notesOpen !== notes) switchTo(notes); },
-        slides: window.PyIDENotes.slides,
-        tests: function (text) { return window.PyIDETests.parse(text).tests; },
-        viewer: notesSlides
-      });
-      if (shown !== false) return;
-    }
-    stage.hidden = true;
-    showOutput();
-    relayout();
-    clearOutput();
-    var tests = testsHere(), files = projectFiles();
-    write("Checking your code against " + tests.length + " test" +
-          (tests.length === 1 ? "" : "s") + "…\n", "dim");
-    await repaint();
-    try {
-      var got = window.IDENotesChecks ? await window.IDENotesChecks.check() : await runChecks();
-      if (!got) return;
-      clearOutput();
-      /* Under the slide each test is on (places): students check after
-         every step, and want the step they're on. */
-      var where = window.PyIDETests.places(files, window.PyIDENotes) || [], last = null;
-      var heads = [];
-      got.results.forEach(function (r, i) {
-        var w = where[i];
-        if (w && w !== last) {
-          write((i ? "\n" : "") + "Slide " + w.slide + (w.title ? " — " + w.title : "") + "\n", "slide-head");
-          heads.push({ slide: w.slide, el: outputEl.lastChild });
-          last = w;
-        }
-        write((r.ok ? "✓ " : "✗ ") + r.label + "\n", r.ok ? "" : "err");
-        if (!r.ok && r.detail) write("    " + r.detail + "\n", "dim");
-      });
-      var all = got.earned === got.possible;
-      write("\n" + got.earned + " of " + got.possible + " points" +
-            (all ? " — every test passes." : ".") + "\n");
-      write("This check is for you. What counts is your teacher's check of what " +
-            "you turn in.\n", "dim");
-      scrollToSlide(heads);
-    } catch (e) {
-      write(String(e) + "\n", "err");
-    }
-  }
 
   /* Which run the finally below belongs to.
    *
@@ -1271,7 +1198,6 @@
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stopRun);
-  if (checkBtn) checkBtn.addEventListener("click", checkWork);
 
   /* Re-bound after every canvas swap, because the listeners belong to the
      element and the element is replaced for each new game. */
