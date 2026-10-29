@@ -261,8 +261,9 @@ app_js = (ROOT / "static" / "app.js").read_text()
 demo_js = (ROOT / "static" / "demo.js").read_text()
 app_py = (ROOT / "app.py").read_text()
 check("the editor has the New tab button", 'id="run-tab"' in index_html)
-check("  shown only in game mode",
-      "runTabBtn.hidden = !isGame" in app_js and 'id="run-tab" class="btn" type="button" hidden' in index_html)
+# A block world (mcpi) plays in a new tab too, as a game does.
+check("  shown only for a game or a block world",
+      'runTabBtn.hidden = !(isGame || mode === "world")' in app_js and 'id="run-tab" class="btn" type="button" hidden' in index_html)
 check("  which opens /play in one named tab",
       'window.open("/play", "pyide-play")' in app_js)
 _key = re.search(r'var PLAY_KEY = "([^"]+)"', app_js)
