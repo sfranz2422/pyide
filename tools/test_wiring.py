@@ -346,11 +346,17 @@ check("/play renders", _r.status_code == 200 and b"play: true" in _r.data, _r.st
 # got every assignment page in dark.
 import glob as _glob
 _tpl_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+# The library's pages (library.html, library_edit.html) are the same file in
+# all three editors, so they read the key from library.init's page hook —
+# which must then say this editor's key.
 _missing = [os.path.basename(t) for t in sorted(_glob.glob(os.path.join(_tpl_dir, "*.html")))
             if "filename='style.css'" in open(t).read()
-            and 'localStorage.getItem("pyide-theme")' not in open(t).read()]
+            and 'localStorage.getItem("pyide-theme")' not in open(t).read()
+            and "localStorage.getItem({{ theme_key|tojson }})" not in open(t).read()]
 check("every page with the app's stylesheet follows the editor's theme",
       not _missing, ", ".join(_missing))
+check("  the library's pages are told this editor's key",
+      '"theme_key": "pyide-theme"' in open(os.path.join(str(ROOT), "app.py")).read())
 
 
 # Notes are a button for anyone reading notes they did not write, not a tab:
