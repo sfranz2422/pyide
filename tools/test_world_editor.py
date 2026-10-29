@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""The block world in the editor: the wiring, read from the source.
+
+    python3 tools/test_world_editor.py
+
+The world itself is tested in node (test_world_model.py) and in Pyodide
+(test_world_python.py). What's left is how the editor hands programs to it,
+and each piece of that fails without a sign when it's missing:
+
+  * the mode rule not knowing mcpi, so a world program runs as console code
+    and stops with "No module named mcpi"
+  * Run or Stop with no world branch, so Stop does nothing to a world program
+  * Escape stopping the program when the student only meant to let go of
+    the mouse
+  * world.mcpi showing as a tab (a student "tidies" it away, and their world
+    with it), or written into Python's files on every run
+  * the rescue keeping a big world and, its one storage slot full, the
+    student's code with it
+  * a block that can be placed but has no look (invisible), or a look for a
+    block that doesn't exist
+  * the world's styles swallowed by a broken comment, which put the hotbar
+    and chat at the bottom of the whole page — it happened while this was
+    being built
+"""
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+results = []
+
+
+def check(label, ok, detail=""):
+    results.append(bool(ok))
+    print("  %-4s %-70s %s" % ("ok" if ok else "FAIL", label, "" if ok else detail))
+
+
+def body(source, name):
+    """The text of `function name(` … up to the next top-level-ish function."""
+    m = re.search(r"(?:async )?function %s\(.*?\n  \}\n" % re.escape(name), source, re.S)
+    return m.group(0) if m else ""
+
+
+app = (ROOT / "static" / "app.js").read_text()
+template = (ROOT / "templates" / "index.html").read_text()
+world_js = (ROOT / "static" / "world.js").read_text()
+model_js = (ROOT / "static" / "world_model.js").read_text()
+block_py = (ROOT / "static" / "py" / "mcpi" / "block.py").read_text()
+css = (ROOT / "static" / "style.css").read_text()
+
+print("which programs are world programs")
+mode = re.search(r"function currentMode\(source\)\s*\{(.*?)\}", app, re.S)
+mode = mode.group(1) if mode else ""
+check("the mode rule knows mcpi", "looksLikeWorld" in mode, mode)
+check("…after kaypy, so a game stays a game", mode.find("looksLikeGame") < mode.find("looksLikeWorld"), mode)
+check("…and says so on the chip", '"World"' in body(app, "paintMode"))
+
+print("Run and Stop")
+run = body(app, "run")
+check("Run sends a world program to runWorld", 'mode === "world" ? runWorld(source)' in run, run[-300:])
+rw = body(app, "runWorld")
+check("runWorld runs it through _pyide_run_world, the source in a global",
+      "_pyide_run_world(_pyide_source" in rw and 'globals.set("_pyide_source", source)' in rw)
+check("…loads the mcpi package and the world first", "loadPackage(pyodide)" in rw and "showWorld()" in rw)
+check("…and keeps the world as the run ends", "await saveWorld()" in rw and "endRun()" in rw)
+stop = body(app, "stopRun")
+world_stop = stop[stop.find('runMode === "world"'):stop.find('runMode === "game"')]
+check("Stop asks a world program to stop", "requestStop()" in world_stop, world_stop[:200])
+check("…and puts the toolbar back if it never answers", "setTimeout" in world_stop and "runToken += 1" in world_stop)
+check("the Stop button shows for a world program", 'runMode === "world"' in body(app, "paintStop"))
+esc = re.search(r'if \(e\.key === "Escape" && running[^\n]*\n', app)
+check("Escape while the world holds the mouse doesn't stop the program",
+      esc is not None and "holdsEscape()" in esc.group(0), esc and esc.group(0))
+
+print("the world file")
+check("world.mcpi is no tab", "n !== WORLD_FILE" in body(app, "fileNames"))
+check("…never written into Python's files", "delete files[WORLD_FILE]" in body(app, "pushFilesToPython"))
+check("…nor read back as a new file", "name === WORLD_FILE" in body(app, "pullFilesFromPython"))
+rescue = app[app.find("readAll: function"):app.find("writeAll: function")]
+check("the rescue leaves a big world out, so the code is always kept", "WORLD_FILE" in rescue and "delete all[WORLD_FILE]" in rescue)
+tab = body(app, "runInNewTab")
+check("the new tab gets the program even when the world won't fit", "delete files[WORLD_FILE]" in tab)
+check("saving says so when the world isn't the open document", "account.noteEdit()" in body(app, "setWorldFile"))
+
+print("the page")
+scripts = re.findall(r"filename='([\w.]+\.js)'", template)
+check("the editor loads world_model.js, then world.js, after game.js",
+      "world_model.js" in scripts and "world.js" in scripts
+      and scripts.index("game.js") < scripts.index("world_model.js") < scripts.index("world.js"), scripts)
+check("…with a place for the world, a stage label and New world",
+      'id="world-view"' in template and 'id="stage-label"' in template and 'id="new-world"' in template)
+no_comments = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+rules = {m.group(1).strip() for m in re.finditer(r"(?:^|\})\s*([^{}]+?)\s*\{", no_comments)}
+missing = [sel for sel in (".world-root", ".world-bar", ".world-chat", ".world-view", "body.is-world #canvas")
+           if sel not in rules]
+check("the world's styles are rules the browser reads (no comment swallowing them)", not missing, missing)
+
+print("every block has a look, and every look a block")
+looks = world_js[world_js.find("var LOOKS = {"):world_js.find("var CLEAR")]
+look_ids = {int(n) for n in re.findall(r"\b(\d+):", looks)}
+blocks = model_js[model_js.find("var BLOCKS = {"):model_js.find("function kind(")]
+model_ids = {int(n) for n in re.findall(r"\b(\d+): \[", blocks)} - {0}
+py_ids = {int(n) for n in re.findall(r"^\w+ = Block\((\d+)\)", block_py, re.M)} - {0}
+check("world.js draws every block the world knows", model_ids <= look_ids, sorted(model_ids - look_ids))
+check("…and nothing the world doesn't", look_ids <= model_ids, sorted(look_ids - model_ids))
+check("mcpi's block list is the world's", py_ids == model_ids,
+      "only in block.py: %s; only in the world: %s" % (sorted(py_ids - model_ids), sorted(model_ids - py_ids)))
+
+bad = results.count(False)
+print("\n%d checks, %s" % (len(results), "%d FAILED" % bad if bad else "all ok"))
+sys.exit(1 if bad else 0)

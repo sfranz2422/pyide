@@ -244,9 +244,13 @@
 
   <section class="pane pane-right">
     <div id="stage" class="stage" hidden>
-      <div class="pane-head"><span>Game</span></div>
+      <div class="pane-head"><span id="stage-label">Game</span>
+        <button id="new-world" class="linkbtn" type="button" hidden
+                title="Start again on a new world. Everything built in this one goes.">New world</button></div>
       <div class="stage-frame">
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
+        {#  The block world (world.js), for a program that imports mcpi. #}
+        <div id="world-view" class="world-view" hidden></div>
       </div>
     </div>
     <div class="resizer resizer-y" data-split="editor-stage"></div>
@@ -437,6 +441,8 @@
 {# after runtime.js: an export carries that file's Python bootstrap inside it #}
 <script src="{{ url_for('static', filename='export.js') }}"></script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='world_model.js') }}"></script>
+<script src="{{ url_for('static', filename='world.js') }}"></script>
 <script src="{{ url_for('static', filename='sprites.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='snippets.js') }}"></script>

@@ -3404,7 +3404,20 @@ a.xp-tokens { color: var(--text); text-decoration: none; }
 @media (max-width: 900px) { .notes-write { height: auto; } .notes-write .editor-wrap { height: 50vh; } }
 
 /* ---------------------------------------------------------------- the block world
-   world.js draws into .world-root, a box that fills whatever holds it. The
+   In the editor's stage, for a program that imports mcpi: the world in
+   place of the game's canvas, as wide as the column. Its height is the
+   game's cap; dragged (is-sized), it fills the pane; on the new tab and a
+   shared link (is-demo), the page. */
+body.is-world #canvas { display: none; }
+body.is-world .stage-frame { padding: 0; }
+.world-view { width: 100%; height: 42vh; min-height: 240px; }
+.world-view[hidden] { display: none; }
+.stage.is-sized .world-view { height: 100%; min-height: 0; }
+body.is-demo.is-world .world-view { height: 100%; }
+.stage:fullscreen .world-view { height: 100vh; }
+.mode-world { color: var(--green); border-color: var(--green); }
+
+/* world.js draws into .world-root, a box that fills whatever holds it. The
    overlay sits on the 3D picture, so its colours are fixed rather than the
    theme's: white on a dark veil reads on sky, grass and stone alike. */
 .world-root { position: relative; width: 100%; height: 100%; min-height: 240px; overflow: hidden; background: #9cc9f2; border-radius: 6px; }

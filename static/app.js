@@ -231,6 +231,12 @@
      keeps its own CodeMirror document, so switching tabs preserves the caret
      and the undo history. */
   var MAIN = "main.py";
+  /* A program that imports mcpi builds in a world, and the world is kept
+     with the project as this file (world_model.js: its changes from the
+     terrain). It travels like any data file — saving, drafts, turn-ins,
+     the rescue, shares, the new tab — but it is no tab and never reaches
+     Python: nobody edits it as text, and it can be 1.4 MB. */
+  var WORLD_FILE = "world.mcpi";
   var PROJECT_DIR = "/project";
   var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
 
@@ -323,7 +329,7 @@
 
   function fileNames() {
     return [MAIN].concat(Object.keys(docs).filter(function (n) {
-      return n !== MAIN;
+      return n !== MAIN && n !== WORLD_FILE;
     }).sort());
   }
 
@@ -658,12 +664,24 @@
 
   function runInNewTab() {
     if (running) stopRun();
-    try {
+    var files = dataFiles(), handed = function (f) {
       localStorage.setItem(PLAY_KEY, JSON.stringify({
         code: mainSource(),
-        files: dataFiles(),
+        files: f,
         title: ($("title") && $("title").value) || "Game"
       }));
+    };
+    try {
+      try {
+        handed(files);
+      } catch (full) {
+        // A big world can be more than this browser lets one site keep.
+        // The program still goes; the new tab opens it on a fresh world.
+        if (!files[WORLD_FILE]) throw full;
+        delete files[WORLD_FILE];
+        handed(files);
+        write("\nThis world is too big to hand to a new tab, so it opens there on a new world.\n", "dim");
+      }
     } catch (e) {
       window.alert("This browser is blocking site storage, so the game "
                    + "cannot be handed to a new tab. Run it here instead.");
@@ -674,8 +692,9 @@
 
   if (runTabBtn) runTabBtn.addEventListener("click", runInNewTab);
 
+  // kaypy before mcpi: a program that somehow imports both stays the game it was.
   function currentMode(source) {
-    return window.PyIDEGame.looksLikeGame(source) ? "game" : "console";
+    return window.PyIDEGame.looksLikeGame(source) ? "game" : window.PyIDEWorldModel.looksLikeWorld(source) ? "world" : "console";
   }
 
   // Before paintMode, which runs straight away and shows or hides its button.
@@ -685,25 +704,116 @@
   });
 
   function paintMode(mode) {
-    modeTag.textContent = mode === "game" ? "Game" : "Console";
+    modeTag.textContent = mode === "game" ? "Game" : mode === "world" ? "World" : "Console";
     modeTag.className = "mode mode-" + mode;
     modeTag.title = mode === "game"
       ? "Your code imports kaypy, so Run opens a game window."
-      : "Run will run this in the console. Import kaypy to make it a game.";
-    document.body.classList.toggle("is-game", mode === "game");
+      : mode === "world"
+        ? "Your code imports mcpi, so Run builds in the block world."
+        : "Run will run this in the console. Import kaypy to make it a game.";
+    // A world lays out as a game does (a picture above, the output under it).
+    document.body.classList.toggle("is-game", mode === "game" || mode === "world");
+    document.body.classList.toggle("is-world", mode === "world");
 
     // Sprites are only meaningful to a game, so the button appears with one.
     // So is the engine's documentation: in console mode it would be a link
     // to the wrong manual.
     var isGame = mode === "game";
     spritePanel.showFor(isGame);
-    if (runTabBtn) runTabBtn.hidden = !isGame;
+    if (runTabBtn) runTabBtn.hidden = !(isGame || mode === "world");
     var docs = $("kaypy-docs");
     if (docs) docs.hidden = !isGame;
+    paintWorld(mode === "world");
     relayout();
   }
 
   function refreshMode() { paintMode(currentMode(mainSource())); }
+
+  // ---------------------------------------------------------- the block world
+  /* The world shows whenever the code is a world program — before any Run,
+     so a teacher opening a turned-in snapshot can fly round what was built.
+     paintMode calls this on every keystroke, so it does nothing unless the
+     mode changed or the world file did (a rescue, a starter, a reload). */
+  var worldView = $("world-view");
+  var stageLabel = $("stage-label");
+  var newWorldBtn = $("new-world");
+  var worldUp = false, worldShowing = null;
+
+  function worldText() { return docs[WORLD_FILE] ? docs[WORLD_FILE].getValue() : ""; }
+
+  function paintWorld(on) {
+    if (!worldView || !window.PyIDEWorld) return;
+    if (newWorldBtn) newWorldBtn.hidden = !on || !!window.PYIDE.readonly;
+    if (!on) {
+      if (worldUp) {
+        worldUp = false;
+        worldView.hidden = true;
+        window.PyIDEWorld.hide();
+        if (stageLabel) stageLabel.textContent = "Game";
+        if (!running) stage.hidden = true;
+      }
+      return;
+    }
+    if (worldUp && worldShowing === worldText()) return;
+    worldUp = true;
+    worldView.hidden = false;
+    stage.hidden = false;
+    if (stageLabel) stageLabel.textContent = "World";
+    showWorld().catch(function (e) {
+      write("The block world could not load. " + (e && e.message || e) + "\n", "err");
+    });
+  }
+
+  function showWorld() {
+    var text = worldText();
+    worldShowing = text;
+    return window.PyIDEWorld.load(text).then(function () {
+      return window.PyIDEWorld.ensureView(worldView);
+    }).then(function () { relayout(); });
+  }
+
+  /* The world into its file, when it changed (world.js compares the changes
+     themselves, so walking about, or a run that built nothing, saves
+     nothing and turns nothing in again). Never on a read-only snapshot. */
+  function saveWorld() {
+    if (!worldUp || window.PYIDE.readonly) return Promise.resolve();
+    return window.PyIDEWorld.save().then(function (r) {
+      if (r && r.text) setWorldFile(r.text);
+    }).catch(function (e) {
+      write("The world couldn't be saved. " + (e && e.message || e) + "\n", "err");
+    });
+  }
+  function setWorldFile(text) {
+    if (worldText() === text) return;
+    if (docs[WORLD_FILE]) docs[WORLD_FILE].setValue(text);
+    else docs[WORLD_FILE] = makeDoc(text);
+    worldShowing = text;
+    // Not the open document, so no change event tells anyone: say so here.
+    if (account) account.noteEdit();
+    if (rescue) rescue.noteEdit();
+  }
+
+  if (window.PyIDEWorld) {
+    // Blocks broken or placed by hand: kept a few seconds after the last
+    // one, and at once when the student lets go of the mouse.
+    var handTimer = null;
+    window.PyIDEWorld.onHandEdit(function (what) {
+      clearTimeout(handTimer);
+      if (what === "unlocked") saveWorld();
+      else handTimer = setTimeout(function () { if (!running) saveWorld(); }, 5000);
+    });
+    // Chat in the output too: it's where a student looks for what their program said.
+    window.PyIDEWorld.onChat(function (text) { write("<chat> " + text + "\n", "dim"); });
+  }
+  if (newWorldBtn) {
+    newWorldBtn.addEventListener("click", function () {
+      if (running) return;
+      if (!window.confirm("Start a new world? Everything built in this one goes.")) return;
+      window.PyIDEWorld.newWorld().then(function (r) {
+        if (r && r.text) setWorldFile(r.text);
+      });
+    });
+  }
 
   editor.on("change", function () { if (!running) refreshMode(); });
 
@@ -791,6 +901,7 @@
     if (!pyodide) return;
     pyodide.FS.mkdirTree(PROJECT_DIR);
     var files = dataFiles();
+    delete files[WORLD_FILE];      // the world's own; no program reads it
     Object.keys(files).forEach(function (name) {
       pyodide.FS.writeFile(PROJECT_DIR + "/" + name,
                            new TextEncoder().encode(files[name]));
@@ -804,7 +915,7 @@
     var appeared = [];
 
     entries.forEach(function (name) {
-      if (name === "." || name === ".." || name === MAIN) return;
+      if (name === "." || name === ".." || name === MAIN || name === WORLD_FILE) return;
       var path = PROJECT_DIR + "/" + name;
       try {
         if (pyodide.FS.isDir(pyodide.FS.stat(path).mode)) return;
@@ -839,7 +950,7 @@
      console program that is simply computing, where the time limit is what
      ends a runaway. */
   function paintStop() {
-    stopBtn.hidden = !(running && (runMode === "game" || consoleIO.isWaiting()));
+    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || consoleIO.isWaiting()));
   }
 
   function setBusy(isRunning, mode) {
@@ -955,7 +1066,7 @@
       syntaxCard.show(bad);
       return;
     }
-    return mode === "game" ? runGame(source) : runConsole(source);
+    return mode === "game" ? runGame(source) : mode === "world" ? runWorld(source) : runConsole(source);
   }
 
   async function runConsole(source) {
@@ -1144,8 +1255,81 @@
     }
   }
 
+  /* A program that drives the block world (it imports mcpi): it runs until
+     it ends or Stop, taking turns with the page so the world keeps moving
+     (mcpi/_pyide.py; _pyide_run_world in runtime.js). The world it built is
+     saved into the project as the run ends, and every 30 s while it runs. */
+  async function runWorld(source) {
+    var token = ++runToken;
+    setBusy(true, "world");
+    showOutput();
+    clearOutput();
+    await repaint();
+
+    try {
+      await ensureRequests(source);
+    } catch (e) {
+      setBusy(false);
+      return;
+    }
+    try {
+      await window.PyIDERuntime.loadImports(pyodide, source, dataFiles());
+      await showWorld();
+      await window.PyIDEWorld.loadPackage(pyodide);
+    } catch (e) {
+      write("The block world could not load.\n" + (e && e.message || e) + "\n", "err");
+      if (token === runToken) setBusy(false, "world");
+      return;
+    }
+    write("World running. Click the world to walk about in it, and the editor to type.\n", "dim");
+    pushFilesToPython();
+    consoleIO.setEnabled(true);
+    var id = window.PyIDEWorld.beginRun();
+    var keeper = setInterval(saveWorld, 30000);
+    try {
+      // Through a global, as on the console path, so quotes can't break the call.
+      pyodide.globals.set("_pyide_source", source);
+      var result = await pyodide.runPythonAsync("_pyide_run_world(_pyide_source, " + id + ")");
+      if (token === runToken) {
+        if (result === "ok") write("\n— finished —\n", "dim");
+        if (result === "stopped") write("\n— stopped —\n", "dim");
+        // Stopped is how a world program usually ends: it worked.
+        if (result === "ok" || result === "stopped" || result === "cancelled") reportRun();
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      clearInterval(keeper);
+      if (token === runToken) {
+        window.PyIDEWorld.endRun();
+        await saveWorld();
+        pullFilesFromPython();
+        setBusy(false, "world");
+      }
+    }
+  }
+
   function stopRun() {
     if (!running) return;
+    if (runMode === "world") {
+      if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
+      /* Asked, and heard at the program's next turn — within a frame. If it
+         doesn't come back by 1.5 s the toolbar is put back anyway (as for a
+         game, below: the user asked to stop, so the UI says stopped), and
+         the run token makes the late finally a no-op. */
+      window.PyIDEWorld.requestStop();
+      var token = runToken;
+      setTimeout(function () {
+        if (!running || runMode !== "world" || token !== runToken) return;
+        runToken += 1;
+        window.PyIDEWorld.endRun();
+        write("\n— stopped —\n", "dim");
+        setBusy(false);
+        saveWorld();
+        pullFilesFromPython();
+      }, 1500);
+      return;
+    }
     if (runMode === "game") {
       /* Ask, don't tear down: Stop clears the engine's `running` flag and the
          loop returns on its next frame.
@@ -1242,6 +1426,10 @@
     readAll: function () {
       var all = dataFiles();
       all[MAIN] = mainSource();
+      // The rescue keeps everything in one localStorage item, and a full one
+      // fails without a word — so a big world is left out, and the student's
+      // code is always what's kept.
+      if (all[WORLD_FILE] && all[WORLD_FILE].length > 400000) delete all[WORLD_FILE];
       return all;
     },
     writeAll: function (incoming) {
@@ -1526,7 +1714,9 @@
       e.preventDefault();
       run();
     }
-    if (e.key === "Escape" && running) stopRun();
+    // Escape also gives back the mouse the block world was holding; that
+    // press is the student letting go, not asking to stop their program.
+    if (e.key === "Escape" && running && !(window.PyIDEWorld && window.PyIDEWorld.holdsEscape())) stopRun();
   });
 
   // ------------------------------------------------------------ teach live
