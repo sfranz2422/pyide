@@ -3402,3 +3402,27 @@ a.xp-tokens { color: var(--text); text-decoration: none; }
 .notes-write { height: 560px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 8px; }
 .notes-preview-scroll { overflow: auto; padding: 4px 16px 16px; }
 @media (max-width: 900px) { .notes-write { height: auto; } .notes-write .editor-wrap { height: 50vh; } }
+
+/* ---------------------------------------------------------------- the block world
+   world.js draws into .world-root, a box that fills whatever holds it. The
+   overlay sits on the 3D picture, so its colours are fixed rather than the
+   theme's: white on a dark veil reads on sky, grass and stone alike. */
+.world-root { position: relative; width: 100%; height: 100%; min-height: 240px; overflow: hidden; background: #9cc9f2; border-radius: 6px; }
+.world-canvas { display: block; width: 100%; height: 100%; outline: none; cursor: pointer; }
+.world-canvas:focus-visible { box-shadow: inset 0 0 0 2px #ffd34d; }
+.world-cross { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none;
+  background: linear-gradient(#fff, #fff) center/2px 14px no-repeat, linear-gradient(#fff, #fff) center/14px 2px no-repeat; mix-blend-mode: difference; }
+.world-hint { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); padding: 4px 10px; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 12px; pointer-events: none; white-space: nowrap; }
+.world-note { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); max-width: 80%; padding: 6px 10px; border-radius: 4px;
+  background: rgba(120, 20, 20, 0.85); color: #fff; font-size: 12px; text-align: center; pointer-events: none; }
+.world-chat { position: absolute; left: 10px; bottom: 58px; max-width: 70%; pointer-events: none; font: 13px/1.35 ui-monospace, Menlo, monospace; }
+.world-chat div { color: #fff; background: rgba(0, 0, 0, 0.5); padding: 1px 6px; margin-top: 2px; width: fit-content; border-radius: 3px; }
+.world-say { position: absolute; left: 10px; right: 10px; bottom: 58px; padding: 6px 8px; border: 0; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.7); color: #fff; font: 13px ui-monospace, Menlo, monospace; }
+.world-bar { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; gap: 2px; padding: 3px;
+  background: rgba(0, 0, 0, 0.45); border-radius: 4px; }
+.world-slot { width: 34px; height: 34px; display: grid; place-items: center; border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 3px;
+  color: #fff; font-size: 18px; }
+.world-slot.on { border-color: #fff; }
+.world-slot canvas { width: 24px; height: 24px; image-rendering: pixelated; }
