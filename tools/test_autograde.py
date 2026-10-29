@@ -461,8 +461,10 @@ got, bad = autograde.parse(bare)
 check("the help page's example is all tests", len(got) == 7 and not bad, (len(got), bad))
 
 authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
-check("writing the notes, the teacher has a Tests link to the format",
-      'help/questions#tests"' in authoring and ">Tests</a>" in authoring)
+# Writing tests is the tutorial editor's now (the library's, PresMaker, + Tests):
+# the editor's link to the format came out (the teacher's call).
+check("writing the notes in the editor, the format link is gone: the tutorial editor has + Tests",
+      'help/questions#tests"' not in authoring)
 
 editor = amy.get("/p/" + DRAFTS[AMY]).get_data(as_text=True)
 # Ben fixes his code: the next check pays the tests that now pass, only.
