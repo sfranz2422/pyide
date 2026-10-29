@@ -295,9 +295,9 @@ check("on a demo page the editor's height cap is lifted",
 check("  the stage takes the column and the output is a strip",
       re.search(r"flex:\s*1 1 0", _rule("body.is-demo.is-game .stage")) is not None
       and re.search(r"flex:\s*0 0 \d+px", _rule("body.is-demo.is-game .pane-right #output-view")) is not None)
-check("there is a Full screen button, for games only",
+check("there is a Full screen button, for a game or a block world",
       'id="fullscreen" class="btn" type="button" hidden' in demo_html
-      and "fullBtn.hidden = !isGame" in demo_js)
+      and "fullBtn.hidden = !(isGame || isWorld)" in demo_js)
 check("  and it puts the stage, not the page, full screen",
       "stage.requestFullscreen()" in demo_js)
 check("the canvas is refitted on resize, full screen, and a new game size",

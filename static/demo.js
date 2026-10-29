@@ -24,6 +24,9 @@
   var runLabel = $("run-label");
   var stopBtn = $("stop");
   var stage = $("stage");
+  var worldView = $("world-view");
+  // The block world's file in a project (app.js keeps it; world.js reads it).
+  var WORLD_FILE = "world.mcpi";
   var canvas = $("canvas");
 
   // ----------------------------------------------------------------- output
@@ -227,7 +230,7 @@
   // Stop is offered for a game, and for a program sitting on an unanswered
   // input(); a console program that is merely computing has the time limit.
   function paintStop() {
-    stopBtn.hidden = !(running && (runMode === "game" || consoleIO.isWaiting()));
+    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || consoleIO.isWaiting()));
   }
 
   function setBusy(isRunning, mode) {
@@ -256,9 +259,64 @@
     }
 
     var isGame = window.PyIDEGame.looksLikeGame(loaded.code);
-    document.body.classList.toggle("is-game", isGame);
-    if (fullBtn) fullBtn.hidden = !isGame || !stage.requestFullscreen;
-    return isGame ? runGame(loaded) : runConsole(loaded);
+    var isWorld = !isGame && window.PyIDEWorldModel.looksLikeWorld(loaded.code);
+    // A world fills the page as a game does.
+    document.body.classList.toggle("is-game", isGame || isWorld);
+    document.body.classList.toggle("is-world", isWorld);
+    if (worldView) worldView.hidden = !isWorld;
+    if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : "Game";
+    if (fullBtn) fullBtn.hidden = !(isGame || isWorld) || !stage.requestFullscreen;
+    return isGame ? runGame(loaded) : isWorld ? runWorld(loaded) : runConsole(loaded);
+  }
+
+  /* A program that drives the block world, as in the editor (runWorld in
+     app.js), with two differences. Nothing is saved back: this page is a
+     copy to play with, and the world in the editor is the one that's kept,
+     which the first line of output says. And each Run builds on the world as
+     it is on this page, as on a Pi — world.js's load() only starts again
+     from the project's world when that file is not the one already here. */
+  async function runWorld(loaded) {
+    var token = ++runToken;
+    setBusy(true, "world");
+    clearOutput();
+    await repaint();
+    try {
+      await window.PyIDERuntime.loadImports(pyodide, loaded.code, loaded.files);
+      stage.hidden = false;
+      await window.PyIDEWorld.load(loaded.files[WORLD_FILE] || "");
+      await window.PyIDEWorld.ensureView(worldView);
+      await window.PyIDEWorld.loadPackage(pyodide);
+    } catch (e) {
+      write("The block world could not load.\n" + (e && e.message || e) + "\n", "err");
+      if (token === runToken) setBusy(false, "world");
+      return;
+    }
+    write("World running. Click the world to walk about in it. Nothing built here is kept: the world in the editor is.\n", "dim");
+    var files = {};
+    Object.keys(loaded.files).forEach(function (n) { if (n !== WORLD_FILE) files[n] = loaded.files[n]; });
+    pushFilesToPython(files);
+    consoleIO.setEnabled(true);
+    var id = window.PyIDEWorld.beginRun();
+    try {
+      // Through a global, never pasted, and quote_source False: an error says
+      // where it was without showing the hidden code.
+      pyodide.globals.set("_pyide_source", loaded.code);
+      var result = await pyodide.runPythonAsync("_pyide_run_world(_pyide_source, " + id + ", False)");
+      if (token === runToken) {
+        if (result === "ok") write("\n— finished —\n", "dim");
+        if (result === "stopped") write("\n— stopped —\n", "dim");
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      if (token === runToken && running) {
+        window.PyIDEWorld.endRun();
+        setBusy(false, "world");
+      }
+    }
+  }
+  if (window.PyIDEWorld) {
+    window.PyIDEWorld.onChat(function (text) { write("<chat> " + text + "\n", "dim"); });
   }
 
   async function runConsole(loaded) {
@@ -357,6 +415,19 @@
     // what ends it
     if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
     if (!pyodide) return;
+    if (runMode === "world") {
+      // Heard at the program's next turn; the buttons back after 1.5 s regardless.
+      window.PyIDEWorld.requestStop();
+      var token = runToken;
+      setTimeout(function () {
+        if (!running || runMode !== "world" || token !== runToken) return;
+        runToken += 1;
+        window.PyIDEWorld.endRun();
+        write("\n— stopped —\n", "dim");
+        setBusy(false, "world");
+      }, 1500);
+      return;
+    }
     if (runMode === "game") {
       window.PyIDEGame.stop(pyodide);
       write("\n— stopped —\n", "dim");
@@ -399,7 +470,10 @@
   window.addEventListener("resize", fitCanvas);
   document.addEventListener("fullscreenchange", function () {
     fitCanvas();
-    if (canvas) canvas.focus();     // the keys go to the game, full screen or not
+    // The keys go to what's playing, full screen or not: the game, or the world.
+    var world = document.body.classList.contains("is-world") && document.querySelector(".world-canvas");
+    if (world) world.focus();
+    else if (canvas) canvas.focus();
   });
   if (fullBtn) {
     fullBtn.addEventListener("click", function () {
@@ -431,6 +505,7 @@
       e.preventDefault();
       run();
     }
-    if (e.key === "Escape" && running) stopRun();
+    // Escape that lets go of the block world's mouse isn't a Stop.
+    if (e.key === "Escape" && running && !(window.PyIDEWorld && window.PyIDEWorld.holdsEscape())) stopRun();
   });
 })();

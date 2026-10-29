@@ -58,9 +58,11 @@
 <main class="demo-main">
   <section class="pane pane-right">
     <div id="stage" class="stage" hidden>
-      <div class="pane-head"><span>Game</span></div>
+      <div class="pane-head"><span id="stage-label">Game</span></div>
       <div class="stage-frame">
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
+        {#  The block world (world.js), for a program that imports mcpi. #}
+        <div id="world-view" class="world-view" hidden></div>
       </div>
     </div>
 
@@ -87,6 +89,8 @@
 </script>
 <script src="{{ url_for('static', filename='runtime.js') }}"></script>
 <script src="{{ url_for('static', filename='game.js') }}"></script>
+<script src="{{ url_for('static', filename='world_model.js') }}"></script>
+<script src="{{ url_for('static', filename='world.js') }}"></script>
 <script src="{{ url_for('static', filename='demo.js') }}"></script>
 </body>
 </html>

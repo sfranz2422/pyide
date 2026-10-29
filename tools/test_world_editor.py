@@ -95,6 +95,28 @@ missing = [sel for sel in (".world-root", ".world-bar", ".world-chat", ".world-v
            if sel not in rules]
 check("the world's styles are rules the browser reads (no comment swallowing them)", not missing, missing)
 
+print("the new tab and a hide-my-code link (demo.js)")
+demo = (ROOT / "static" / "demo.js").read_text()
+demo_html = (ROOT / "templates" / "demo.html").read_text()
+drun = body(demo, "run")
+check("they know a world program", "looksLikeWorld(loaded.code)" in drun and "runWorld(loaded)" in drun, drun[-400:])
+dw = body(demo, "runWorld")
+check("…run it without showing its code (quote_source False), through a global",
+      '"_pyide_run_world(_pyide_source, " + id + ", False)"' in dw and 'globals.set("_pyide_source", loaded.code)' in dw)
+check("…on the project's own world", "loaded.files[WORLD_FILE]" in dw and "loadPackage(pyodide)" in dw)
+check("…and never hand the world file to Python", "n !== WORLD_FILE" in dw)
+dstop = body(demo, "stopRun")
+check("Stop asks there too, and puts the buttons back if it's never answered",
+      "requestStop()" in dstop and "runToken += 1" in dstop)
+desc = re.search(r'if \(e\.key === "Escape" && running[^\n]*\n', demo)
+check("…and Escape that lets go of the mouse isn't a Stop", desc is not None and "holdsEscape()" in desc.group(0))
+dscripts = re.findall(r"filename='([\w.]+\.js)'", demo_html)
+check("the page loads world_model.js, then world.js, and has a place for the world",
+      "world_model.js" in dscripts and "world.js" in dscripts
+      and dscripts.index("world_model.js") < dscripts.index("world.js") < dscripts.index("demo.js")
+      and 'id="world-view"' in demo_html, dscripts)
+check("…and no New world: nothing built there is kept", 'id="new-world"' not in demo_html)
+
 print("every block has a look, and every look a block")
 looks = world_js[world_js.find("var LOOKS = {"):world_js.find("var CLEAR")]
 look_ids = {int(n) for n in re.findall(r"\b(\d+):", looks)}
