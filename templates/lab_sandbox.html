@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ lab_item.title if lab_item else "A+ lab · " + scenario.title if scenario else "A+ lab sandbox" }} — PyIDE</title>
+<title>{{ lab_item.title if lab_item else "A+ lab · Lab %d · %s" % (scenario.order, scenario.title) if scenario else "A+ lab sandbox" }} — PyIDE</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -26,7 +26,7 @@
     `lab_saves`). Otherwise what's done is kept in this browser. #}
 <header class="bar">
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ lab_item.title if lab_item else "A+ lab · " + scenario.title if scenario else "A+ lab · sandbox" }}</span></div>
+  <div class="meta"><span class="pagetitle">{{ lab_item.title if lab_item else "A+ lab · Lab %d · %s" % (scenario.order, scenario.title) if scenario else "A+ lab · sandbox" }}</span></div>
   <div class="actions">
     {% if lab_item %}
       {% if lab_saves %}

@@ -127,7 +127,7 @@ window.PyIDELabPage = (function () {
       ticket.textContent = "";
       var head = el("div", { class: "lab-ticket-head" }, [
         el("span", { class: "lab-ticket-area", text: sc.area }),
-        el("strong", { text: "Ticket: " + sc.title }),
+        el("strong", { text: "Lab " + sc.order + " · " + sc.title }),
         el("span", { class: "lab-ticket-score", id: "lab-score" }),
         el("button", { type: "button", class: "btn", id: "lab-ticket-toggle", "aria-expanded": "true", text: "Hide", onclick: function () {
           var open = ticket.classList.toggle("closed");

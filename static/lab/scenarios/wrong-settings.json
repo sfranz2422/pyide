@@ -1,6 +1,6 @@
 {
  "id": "wrong-settings",
- "order": 10,
+ "order": 11,
  "area": "Network",
  "title": "Someone changed the settings",
  "start": "windows",

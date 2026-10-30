@@ -1,6 +1,6 @@
 {
  "id": "no-display",
- "order": 6,
+ "order": 3,
  "area": "Hardware",
  "title": "It runs, but there's no picture",
  "start": "bench",

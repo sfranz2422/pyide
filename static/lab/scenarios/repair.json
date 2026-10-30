@@ -1,6 +1,6 @@
 {
  "id": "repair",
- "order": 11,
+ "order": 9,
  "area": "Windows",
  "title": "Crashes and odd errors",
  "start": "windows",

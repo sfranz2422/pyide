@@ -1,6 +1,6 @@
 {
  "id": "overheat",
- "order": 5,
+ "order": 6,
  "area": "Hardware",
  "title": "It shuts itself off",
  "start": "bench",

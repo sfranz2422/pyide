@@ -213,7 +213,7 @@
       {#  An A+ lab (lab_state_save): each task is marked on the server every
           time the student's machine changes, and turned in for them. #}
       <div class="tests-teacher" id="lab-teacher">
-        <p class="small"><strong>A+ lab: {{ lab.title }}</strong> ({{ lab.area }}, {{ "starts in Windows" if lab.start == "windows" else "starts on the bench" }}).
+        <p class="small"><strong>A+ lab {{ lab.order }}: {{ lab.title }}</strong> ({{ lab.area }}, {{ "starts in Windows" if lab.start == "windows" else "starts on the bench" }}).
           Each task is checked on the server as students work, and their work is turned in for them.</p>
         <ol class="small lab-teacher-tasks">
           {% for t in lab.tasks %}<li>{{ t.text }} <span class="dim">({{ t.points }} pt{{ "" if t.points == 1 else "s" }})</span></li>{% endfor %}

@@ -1,6 +1,6 @@
 {
  "id": "ram-upgrade",
- "order": 2,
+ "order": 1,
  "area": "Building",
  "title": "Add memory, the right way",
  "start": "bench",

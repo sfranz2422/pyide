@@ -243,6 +243,10 @@ def main():
         check("%s: the solution passes every task" % key, all(t["ok"] for t in py), [t["id"] for t in py if not t["ok"]])
         check("%s: …and the browser marks it the same" % key, py == sol["js"], {"py": py, "js": sol["js"]})
 
+    orders = sorted(LC.scenario(sid).get("order", 0) for sid in ids)
+    check("the labs are numbered 1 to %d in course order, no gaps, no two the same" % len(ids),
+          orders == list(range(1, len(ids) + 1)), orders)
+
     print("Each ticket's starter notes (the tutorial a new lab gets)")
     for sid in ids:
         path = os.path.join(LAB, "scenarios", sid + ".md")

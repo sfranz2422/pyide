@@ -1,6 +1,6 @@
 {
  "id": "new-drive",
- "order": 3,
+ "order": 2,
  "area": "Windows",
  "title": "Make a new drive usable",
  "start": "windows",

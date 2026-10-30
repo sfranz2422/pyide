@@ -322,7 +322,7 @@ try {
   // that holds the next slide until it's done.
   const notesSet = await ev(`(async () => {
     const items = (await (await fetch("/api/library")).json()).items;
-    const tut = items.find((i) => i.title === "It shuts itself off");
+    const tut = items.find((i) => i.title === "Lab 6 · It shuts itself off");
     const body = "locked: yes\\n# Step 1\\n\\nReseat the cooler.\\n\\n\u0060\u0060\u0060lab\\ncool\\n\u0060\u0060\u0060\\n\\n---\\n\\n# Done\\n\\nWell done.\\n";
     const r = await fetch("/api/library/" + tut.slug, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
     return r.ok;

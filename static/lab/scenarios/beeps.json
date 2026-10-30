@@ -1,6 +1,6 @@
 {
  "id": "beeps",
- "order": 4,
+ "order": 5,
  "area": "Hardware",
  "title": "Three beeps and a black screen",
  "start": "bench",

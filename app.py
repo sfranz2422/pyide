@@ -4656,7 +4656,7 @@ def class_new_assignment(class_id):
         sc = lab_checks.scenario(str(data.get("scenario") or "")) if lab else None
         if lab and sc is None:
             return jsonify(error="No such lab."), 400
-        title = clean(data.get("title"), 200) or (sc["title"] if sc else "Untitled lesson" if lesson
+        title = clean(data.get("title"), 200) or (lab_checks.numbered(sc) if sc else "Untitled lesson" if lesson
                                                   else "Untitled assignment")
         if lab:
             # An A+ lab: graded on the server as the student works, so it is
@@ -4690,7 +4690,7 @@ def class_new_assignment(class_id):
         db.commit()
         _store_quiz_keys(db, item.id, item.file_map().values())
         if lab and item.tutorial_id is None:
-            library.adopt(db, item, sc["title"])     # its own tutorial, to edit
+            library.adopt(db, item, lab_checks.numbered(sc))     # its own tutorial, to edit
         _place(db, course, item)
         return jsonify(slug=item.slug, url=url_for(
             "edit_lesson" if lesson else "teacher_assignment" if lab else "edit_assignment",
@@ -7940,6 +7940,23 @@ def lab_state_save(slug):
                        earned=result.earned, possible=result.possible)
     finally:
         db.close()
+
+
+@app.get("/help/lab")
+def help_lab():
+    """How A+ labs work, for the teacher writing a lab's notes: the labs in
+    course order, and each one's tasks by the id a ```lab card names them
+    with. Hints are left out (they're the answers); the tasks themselves are
+    what a student sees on the ticket anyway, so the page is open."""
+    rows = [lab_checks.scenario(sid) for sid in lab_checks.scenario_ids()]
+    rows.sort(key=lambda s: s.get("order", 99))
+    db = SessionLocal()
+    try:
+        ctx = user_context(db)
+    finally:
+        db.close()
+    ctx.update(rows=rows)
+    return render_template("help_lab.html", **ctx)
 
 
 @app.get("/lab/credits")

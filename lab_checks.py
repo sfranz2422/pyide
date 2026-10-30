@@ -44,6 +44,13 @@ def scenario_ids():
     return sorted(n[:-5] for n in os.listdir(folder) if n.endswith(".json"))
 
 
+def numbered(sc):
+    """"Lab 3 · Make a new drive usable": a ticket's name with its place in
+    the course (its "order"), so a class page shows the labs in order and a
+    teacher can't put them out of it by accident."""
+    return "Lab %d · %s" % (sc.get("order", 0), sc["title"])
+
+
 def scenario(sid):
     """A built-in scenario by its id, or None. The id is checked against the
     folder's own list, so it can't name a path."""

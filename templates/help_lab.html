@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A+ labs — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+</head>
+<body>
+
+{#  How A+ labs work, for a teacher (help_lab in app.py): the labs in course
+    order and each one's tasks by id, for the ```lab cards in its notes.
+    Hints are not shown here: they are the answers. #}
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">A+ labs</span></div>
+  <div class="actions">{% if is_teacher %}<a class="btn" href="{{ url_for('lab_scenarios') }}">Tickets</a>{% endif %}
+    <a class="btn" href="{{ url_for('lab_sandbox') }}">Sandbox</a></div>
+</header>
+
+<main class="sheet prose help-questions">
+  <h1>A+ labs</h1>
+  <p>A lab is a computer with something wrong with it, from a support ticket. Students fix it on a bench of
+    real parts and on a Windows-style screen with its tools and Command Prompt. Each task is checked on the
+    server as they work, their work is turned in for them, and the points go into the grade.</p>
+
+  <h2>Setting one</h2>
+  <ul>
+    <li>On a class page, <strong>Add to class → Lab (A+)</strong>, then <strong>Assign</strong> beside the ticket.
+      It goes on top of the class's page, named with its number: <em>Lab 3 · Make a new drive usable</em>.</li>
+    <li><strong>Try it</strong> first (on the tickets page, or <strong>Try it</strong> on the lab's own page): what you do there
+      is kept in your browser and turned in nowhere.</li>
+    <li>Labs are never taught live.</li>
+    <li><a href="{{ url_for('lab_sandbox') }}">The sandbox</a> is open to anyone, with every part and nothing checked.
+      <a href="{{ url_for('lab_sandbox') }}?start=windows">Start in Windows</a> skips the building, for practising the tools.</li>
+  </ul>
+
+  <h2>Its notes</h2>
+  <p>Every lab has notes beside it: a tutorial in your library, started from the ticket. Assign the same ticket
+    to another class and it shares the same tutorial, so you write it once. Questions in it count toward the lab's
+    grade, the same as any notes.</p>
+  <p>A <code>lab</code> block names some of the ticket's tasks, one a line, and shows as a card the student ticks
+    by fixing the computer:</p>
+  <pre class="help-src">```lab
+power
+monitor
+```</pre>
+  <p>With <code>locked: yes</code> as a line at the top of the notes, a slide with a card holds the next slide until
+    everything on its card is done: the way to walk a class through a ticket a step at a time.</p>
+
+  <h2 id="tasks">The labs, in course order</h2>
+  <p>Each one comes after the lessons it needs. The words in <code>code</code> are what a <code>lab</code> card names a task by.</p>
+  {% for s in rows %}
+  <section class="help-lab" id="lab-{{ s.order }}">
+    <h3>Lab {{ s.order }} · {{ s.title }}</h3>
+    <p class="dim">{{ s.area }} · {{ "starts in Windows" if s.start == "windows" else "starts on the bench" }} ·
+      {{ s.tasks|sum(attribute="points") }} points</p>
+    <p>{{ s.ticket }}</p>
+    <table class="help-table">
+      <thead><tr><th>Task id</th><th>Task</th><th>Points</th></tr></thead>
+      <tbody>
+        {% for t in s.tasks %}<tr><td><code>{{ t.id }}</code></td><td>{{ t.text }}</td><td>{{ t.points }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+</main>
+</body>
+</html>

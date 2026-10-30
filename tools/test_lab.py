@@ -29,6 +29,7 @@ around it, through the Flask test client:
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -127,6 +128,12 @@ def main():
     check("the teacher sees every ticket, each with Assign and their classes",
           page.count('class="ticket-card"') == len(P.lab_checks.scenario_ids()) and "js-assign" in page and "A+ P3" in page)
     check("…the class from Add to class chosen already", ('value="%d" selected' % cls) in page)
+    nums = [int(n) for n in re.findall(r"<h3>Lab (\d+) · ", page)]
+    check("…numbered, in course order", nums == list(range(1, len(nums) + 1)) and len(nums) == len(P.lab_checks.scenario_ids()), nums)
+    hp = nobody.get("/help/lab").get_data(as_text=True)
+    every = [(t["id"], t["hint"]) for sid in P.lab_checks.scenario_ids() for t in P.lab_checks.scenario(sid)["tasks"]]
+    check("/help/lab lists every lab's tasks by id, for the step cards", all("<code>%s</code>" % i in hp for i, _ in every))
+    check("…and none of the hints (they're the answers)", not any(h in hp for _, h in every))
     check("the teacher can try one", teacher.get("/lab/try/overheat").status_code == 200)
     check("the sandbox stays open to anyone", nobody.get("/lab/sandbox").status_code == 200)
 
@@ -137,7 +144,7 @@ def main():
     slug = out.get("slug")
     item = q(accounts.Assignment, slug=slug)[0]
     check("…kind lab, named after its ticket, out of its tasks' and its notes' questions' points (6 + 2)",
-          item.kind == "lab" and item.title == "It shuts itself off" and item.out_of == 8, (item.kind, item.title, item.out_of))
+          item.kind == "lab" and item.title == "Lab 6 · It shuts itself off" and item.out_of == 8, (item.kind, item.title, item.out_of))
     starter = open(os.path.join(ROOT, "static", "lab", "scenarios", "overheat.md")).read()
     check("…with the ticket's starter notes, as lab.md", item.file_map().get("lab.md") == starter)
     tut = q(accounts.LibraryItem, id=item.tutorial_id) if item.tutorial_id else []
@@ -153,7 +160,7 @@ def main():
     check("another teacher can't put one in this class", other.post("/api/class/%d/new" % cls, json={"kind": "lab", "scenario": "overheat"}).status_code in (403, 404))
 
     print("Its notes")
-    mine = [i for i in teacher.get("/api/library").get_json()["items"] if i["title"] == "It shuts itself off"]
+    mine = [i for i in teacher.get("/api/library").get_json()["items"] if i["title"] == "Lab 6 · It shuts itself off"]
     rewritten = starter.replace("## Heat, and how Windows remembers", "## Heat (Mr F's version)")
     r = teacher.post("/api/library/" + mine[0]["slug"], json={"body": rewritten}) if mine else None
     check("rewriting the tutorial in the library reaches both periods' labs",
@@ -174,7 +181,7 @@ def main():
     check("Edit goes to the results too (nothing to edit)", teacher.get("/teacher/%s/edit" % slug).headers.get("Location", "").endswith("/teacher/" + slug))
     res = teacher.get("/teacher/" + slug).get_data(as_text=True)
     check("the results page shows the ticket's tasks and Try it, and no live link",
-          "A+ lab: It shuts itself off" in res and "lab-try" in res and 'id="live-url"' not in res)
+          "A+ lab 6: It shuts itself off" in res and "lab-try" in res and 'id="live-url"' not in res)
 
     print("Saving and marking")
     save = lambda c, state: c.post("/api/lab/%s/state" % slug, json={"state": state})
