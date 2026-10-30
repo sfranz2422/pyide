@@ -1,0 +1,117 @@
+{
+ "id": "repair",
+ "order": 11,
+ "area": "Windows",
+ "title": "Crashes and odd errors",
+ "start": "windows",
+ "ticket": "This PC lost power during an update. Since then programs crash and Windows shows odd errors. Check the system files and the disk.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "os": {
+  "sysfiles": "corrupt",
+  "fsDirty": true
+ },
+ "tasks": [
+  {
+   "id": "sfc",
+   "text": "Windows' system files are repaired.",
+   "points": 3,
+   "hint": "sfc /scannow, in a Command Prompt run as administrator.",
+   "check": {
+    "path": "os.sysfiles",
+    "op": "==",
+    "value": "ok"
+   }
+  },
+  {
+   "id": "chkdsk",
+   "text": "The file system on C: is fixed.",
+   "points": 3,
+   "hint": "chkdsk C: /f can't run while Windows uses C:: say Y to schedule it, then restart.",
+   "check": {
+    "path": "os.fsDirty",
+    "op": "==",
+    "value": false
+   }
+  }
+ ]
+}

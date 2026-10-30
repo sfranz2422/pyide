@@ -1,0 +1,138 @@
+{
+ "id": "ram-upgrade",
+ "order": 2,
+ "area": "Building",
+ "title": "Add memory, the right way",
+ "start": "bench",
+ "ticket": "This PC has one 16 GB stick and feels slow. The customer bought a second, matching stick. Put it in so the memory runs in dual channel. The motherboard's manual says: with two sticks, use slots A2 and B2.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-1700-atx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-1700-12f"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-tower"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr5-16"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr5-16"
+  },
+  {
+   "uid": "r4",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "gpu",
+   "part": "gpu-75"
+  },
+  {
+   "uid": "os",
+   "part": "nvme-2tb",
+   "windows": true
+  },
+  {
+   "uid": "cool-s",
+   "part": "cooler-stock"
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "gpu",
+   "gpu"
+  ],
+  [
+   "m2",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8"
+ ],
+ "monitor": "gpu",
+ "tasks": [
+  {
+   "id": "32gb",
+   "text": "It starts with 32 GB of memory.",
+   "points": 4,
+   "hint": "The second stick is DDR5, like the first. The DDR4 one won't fit this board.",
+   "check": {
+    "all": [
+     {
+      "path": "boots",
+      "op": "==",
+      "value": true
+     },
+     {
+      "path": "memoryGb",
+      "op": "==",
+      "value": 32
+     }
+    ]
+   }
+  },
+  {
+   "id": "dual",
+   "text": "The two sticks are in A2 and B2, as the manual says, and it starts.",
+   "points": 4,
+   "hint": "The first stick is in A1. Take it out and put it in A2, then the new one in B2.",
+   "check": {
+    "all": [
+     {
+      "path": "boots",
+      "op": "==",
+      "value": true
+     },
+     {
+      "path": "dualChannel",
+      "op": "==",
+      "value": true
+     }
+    ]
+   }
+  }
+ ]
+}

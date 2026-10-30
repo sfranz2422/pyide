@@ -1,0 +1,123 @@
+{
+ "id": "no-display",
+ "order": 6,
+ "area": "Hardware",
+ "title": "It runs, but there's no picture",
+ "start": "bench",
+ "ticket": "A gaming PC came back from a repair shop. The fans spin, but the monitor says No Signal. The graphics card was taken out and put back.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-1700-atx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-1700-12f"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-tower"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr5-16"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "gpu",
+   "part": "gpu-180"
+  },
+  {
+   "uid": "os",
+   "part": "nvme-2tb",
+   "windows": true
+  },
+  {
+   "uid": "cpu-x",
+   "part": "cpu-am5-8"
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "gpu",
+   "gpu"
+  ],
+  [
+   "m2",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8"
+ ],
+ "monitor": "board",
+ "tasks": [
+  {
+   "id": "power",
+   "text": "The graphics card has its 8-pin power cable.",
+   "points": 2,
+   "hint": "1 long and 3 short beeps, and the VGA light: video. Check the card's spec card: does it need power from the PSU?",
+   "check": {
+    "path": "cables.gpu8",
+    "op": "==",
+    "value": true
+   }
+  },
+  {
+   "id": "monitor",
+   "text": "The monitor is plugged into the graphics card.",
+   "points": 2,
+   "hint": "This CPU is an F model: no graphics of its own, so the motherboard's video port shows nothing.",
+   "check": {
+    "path": "monitor",
+    "op": "==",
+    "value": "gpu"
+   }
+  },
+  {
+   "id": "boots",
+   "text": "It starts Windows, with a picture.",
+   "points": 4,
+   "hint": "Both of the above, then power on.",
+   "check": {
+    "path": "boots",
+    "op": "==",
+    "value": true
+   }
+  }
+ ]
+}

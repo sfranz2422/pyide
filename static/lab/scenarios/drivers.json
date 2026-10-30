@@ -1,0 +1,128 @@
+{
+ "id": "drivers",
+ "order": 7,
+ "area": "Windows",
+ "title": "No network, and no sound",
+ "start": "windows",
+ "ticket": "After Windows was reinstalled, this PC has no internet and no sound. The maker's drivers are in a folder on the desktop.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "os": {
+  "drivers.net": "missing",
+  "disabled.audio": true
+ },
+ "tasks": [
+  {
+   "id": "net",
+   "text": "The network adapter has its driver.",
+   "points": 3,
+   "hint": "Device Manager: the ⚠ under Other devices. Update driver: it can't search online without a network, so browse the computer.",
+   "check": {
+    "path": "os.drivers.net",
+    "op": "==",
+    "value": "ok"
+   }
+  },
+  {
+   "id": "audio",
+   "text": "The sound card is enabled.",
+   "points": 2,
+   "hint": "Device Manager: a ↓ means disabled.",
+   "check": {
+    "path": "os.disabled.audio",
+    "op": "!=",
+    "value": true
+   }
+  },
+  {
+   "id": "online",
+   "text": "It reaches the internet.",
+   "points": 2,
+   "hint": "With the driver in, it gets an address by itself. Check with ping example.com.",
+   "check": {
+    "path": "online",
+    "op": "==",
+    "value": true
+   }
+  }
+ ]
+}

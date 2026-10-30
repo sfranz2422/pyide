@@ -1,0 +1,122 @@
+{
+ "id": "wrong-settings",
+ "order": 10,
+ "area": "Network",
+ "title": "Someone changed the settings",
+ "start": "windows",
+ "ticket": "A student typed in network settings by hand, from a guide for a different network. Now this PC can't reach the internet. The router here is 192.168.1.1, and it's also the DNS server.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "os": {
+  "net.dhcp": false,
+  "net.ip": "192.168.1.80",
+  "net.mask": "255.255.255.0",
+  "net.gateway": "192.168.1.254",
+  "net.dns": [
+   "10.9.9.9"
+  ]
+ },
+ "tasks": [
+  {
+   "id": "online",
+   "text": "It reaches the internet by address.",
+   "points": 3,
+   "hint": "ping 192.168.1.1 works, ping 93.184.215.14 doesn't: the default gateway is wrong. tracert shows where it stops.",
+   "check": {
+    "path": "online",
+    "op": "==",
+    "value": true
+   }
+  },
+  {
+   "id": "dns",
+   "text": "Names work too (example.com).",
+   "points": 3,
+   "hint": "By address it works, by name it doesn't: DNS. nslookup example.com.",
+   "check": {
+    "path": "dnsWorks",
+    "op": "==",
+    "value": true
+   }
+  }
+ ]
+}

@@ -1,0 +1,117 @@
+{
+ "id": "overheat",
+ "order": 5,
+ "area": "Hardware",
+ "title": "It shuts itself off",
+ "start": "bench",
+ "ticket": "This PC works for a couple of minutes, then switches itself off with no warning. Last week someone cleaned the dust out of it. Find out why it turns off and fix it.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "set": {
+  "coolerSeated": false
+ },
+ "os": {
+  "uncleanShutdown": true
+ },
+ "tasks": [
+  {
+   "id": "cool",
+   "text": "The CPU cooler is seated properly, and the PC starts and stays on.",
+   "points": 6,
+   "hint": "Watch the CPU temperature (BIOS) on the bench while it runs, and look in Event Viewer for Kernel-Power 41. Tap the cooler: Reseat it.",
+   "check": {
+    "all": [
+     {
+      "path": "boots",
+      "op": "==",
+      "value": true
+     },
+     {
+      "path": "coolerOk",
+      "op": "==",
+      "value": true
+     }
+    ]
+   }
+  }
+ ]
+}

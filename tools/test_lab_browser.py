@@ -18,6 +18,9 @@ everything around it a student touches on /lab/sandbox:
     and Shut down
   * Start in Windows: ?start=windows opens on the desktop with a PC put
     together, and the button keeps a student's own build when it starts
+  * a ticket (/lab/try/…): its story and tasks, a hint, fixed on the bench
+    and ticked, kept over a reload; one that starts in Windows fixed from the
+    Command Prompt; Start over
   * no errors in the page
 
 Needs Chrome and node; says "skip" without Chrome rather than failing.
@@ -40,7 +43,7 @@ sys.path.insert(0, PYIDE)
 import app as P                                              # noqa: E402
 
 # Each line lab_browser.mjs prints is a check; this many, or one went missing.
-EXPECTED = 40
+EXPECTED = 49
 
 results = []
 

@@ -36,6 +36,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 import accounts
 import autograde
+import lab_checks
 import quiz
 import library
 import xp
@@ -7663,6 +7664,28 @@ def lab_sandbox():
     anyone — to try the bench and the computer before a lab is set. What's
     built here stays in this browser (localStorage) and nowhere else."""
     return render_template("lab_sandbox.html")
+
+
+@app.get("/lab/scenarios")
+def lab_scenarios():
+    """The A+ lab's built-in tickets (static/lab/scenarios/), to try here in
+    this browser. Open to anyone, like the sandbox; a lab set in a class is
+    graded on the server (lab_checks.py) instead."""
+    rows = [lab_checks.scenario(sid) for sid in lab_checks.scenario_ids()]
+    rows.sort(key=lambda s: s.get("order", 99))
+    for s in rows:
+        s["points"] = sum(t["points"] for t in s["tasks"])
+    return render_template("lab_scenarios.html", rows=rows)
+
+
+@app.get("/lab/try/<sid>")
+def lab_try(sid):
+    """One ticket, to try: the bench and the computer, with its tasks marked
+    as they're done (lab_checks.js). Kept in this browser only."""
+    sc = lab_checks.scenario(sid)
+    if sc is None:
+        abort(404)
+    return render_template("lab_sandbox.html", scenario=sc)
 
 
 @app.get("/lab/credits")

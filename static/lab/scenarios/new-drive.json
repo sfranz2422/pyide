@@ -1,0 +1,175 @@
+{
+ "id": "new-drive",
+ "order": 3,
+ "area": "Windows",
+ "title": "Make a new drive usable",
+ "start": "windows",
+ "ticket": "A 500 GB hard drive was added for backups, but it doesn't show up in File Explorer. Set it up as drive E:, NTFS, named Backup, using the whole disk.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  },
+  {
+   "uid": "hdd",
+   "part": "hdd-500"
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ],
+  [
+   "sata",
+   "hdd",
+   1
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ],
+  [
+   "sata",
+   1
+  ]
+ ],
+ "monitor": "board",
+ "tasks": [
+  {
+   "id": "gpt",
+   "text": "The new disk is initialized as GPT.",
+   "points": 2,
+   "hint": "Disk Management asks to initialize a new disk; or diskpart's convert gpt.",
+   "check": {
+    "path": "os.disks.hdd.style",
+    "op": "==",
+    "value": "GPT"
+   }
+  },
+  {
+   "id": "e-ntfs",
+   "text": "It has an NTFS volume as drive E:.",
+   "points": 4,
+   "hint": "New Simple Volume on the unallocated space (Disk Management), or create partition primary, format, assign letter=E (diskpart).",
+   "check": {
+    "all": [
+     {
+      "path": "volumes.E.disk",
+      "op": "==",
+      "value": "hdd"
+     },
+     {
+      "path": "volumes.E.fs",
+      "op": "==",
+      "value": "NTFS"
+     }
+    ]
+   }
+  },
+  {
+   "id": "label",
+   "text": "The volume is named Backup.",
+   "points": 1,
+   "hint": "The volume label: in the wizard, or format's label=.",
+   "check": {
+    "all": [
+     {
+      "path": "volumes.E.disk",
+      "op": "==",
+      "value": "hdd"
+     },
+     {
+      "path": "volumes.E.label",
+      "op": "==",
+      "value": "Backup"
+     }
+    ]
+   }
+  },
+  {
+   "id": "whole",
+   "text": "It uses the whole disk.",
+   "points": 1,
+   "hint": "Leave the size at the most it can be.",
+   "check": {
+    "all": [
+     {
+      "path": "volumes.E.disk",
+      "op": "==",
+      "value": "hdd"
+     },
+     {
+      "path": "volumes.E.gb",
+      "op": "==",
+      "value": 500
+     }
+    ]
+   }
+  }
+ ]
+}

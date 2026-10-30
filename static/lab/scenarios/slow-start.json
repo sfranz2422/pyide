@@ -1,0 +1,159 @@
+{
+ "id": "slow-start",
+ "order": 8,
+ "area": "Windows",
+ "title": "Slow to start, and slow after",
+ "start": "windows",
+ "ticket": "This PC takes ages to start and the fan roars all the time. The customer uses it for homework: they don't need the game launcher or the chat app to start with Windows. Keep the antivirus.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "os": {
+  "procs+": [
+   {
+    "name": "updater.exe",
+    "cpu": 95,
+    "mem": 300
+   }
+  ],
+  "startup+": [
+   {
+    "name": "Game launcher",
+    "impact": "High",
+    "enabled": true
+   },
+   {
+    "name": "Chat app",
+    "impact": "High",
+    "enabled": true
+   }
+  ]
+ },
+ "tasks": [
+  {
+   "id": "runaway",
+   "text": "The process using all the CPU isn't running.",
+   "points": 3,
+   "hint": "Task Manager › Processes, sorted by CPU. End task (or taskkill /im).",
+   "check": {
+    "path": "os.procs",
+    "op": "lacks",
+    "where": {
+     "name": "updater.exe"
+    }
+   }
+  },
+  {
+   "id": "startup",
+   "text": "The game launcher and the chat app don't start with Windows; the antivirus still does.",
+   "points": 4,
+   "hint": "Task Manager › Startup apps: Disable.",
+   "check": {
+    "all": [
+     {
+      "path": "os.startup",
+      "op": "has",
+      "where": {
+       "name": "Game launcher",
+       "enabled": false
+      }
+     },
+     {
+      "path": "os.startup",
+      "op": "has",
+      "where": {
+       "name": "Chat app",
+       "enabled": false
+      }
+     },
+     {
+      "path": "os.startup",
+      "op": "has",
+      "where": {
+       "name": "Antivirus",
+       "enabled": true
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

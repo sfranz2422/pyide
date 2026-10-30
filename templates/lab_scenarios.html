@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A+ lab tickets — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+<style>
+  .tickets { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+  .ticket-card { display: block; padding: 12px 14px; margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; color: inherit; text-decoration: none; }
+  .ticket-card:hover { border-color: var(--accent); }
+  .ticket-card h3 { margin: 2px 0 4px; font-size: 17px; }
+  .ticket-card p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .ticket-meta { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+{#  The A+ lab's built-in tickets (lab_scenarios in app.py, from
+    static/lab/scenarios/): each opens at /lab/try/<id>. #}
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">A+ lab · tickets</span></div>
+  <div class="actions"><a class="btn" href="{{ url_for('lab_sandbox') }}">Sandbox</a></div>
+</header>
+<main class="tickets">
+  <p>Each ticket is a computer with something wrong with it. Fix it: each task is marked as you go. What you do is kept in this browser.</p>
+  {% for s in rows %}
+  <a class="ticket-card" href="{{ url_for('lab_try', sid=s.id) }}">
+    <div class="ticket-meta">{{ s.area }} · {{ "starts in Windows" if s.start == "windows" else "starts on the bench" }} · {{ s.points }} points</div>
+    <h3>{{ s.title }}</h3>
+    <p>{{ s.ticket }}</p>
+  </a>
+  {% endfor %}
+</main>
+</body>
+</html>

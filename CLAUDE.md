@@ -44,7 +44,7 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by twenty-three of these: `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by twenty-four of these: `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,

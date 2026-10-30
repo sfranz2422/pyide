@@ -3456,6 +3456,25 @@ body.is-demo.is-world .world-view { height: 100%; }
    The drawing's own colours are fixed (a green board, a grey case) rather
    than the theme's: it is a picture of hardware, the same on every screen. */
 .lab-wrap { position: relative; height: calc(100% - var(--bar-h)); min-height: 0; }
+/* With a ticket above it, the lab takes what's left. */
+body.lab-page { display: flex; flex-direction: column; height: 100%; }
+body.lab-page > .bar { flex: none; }
+body.lab-page .lab-wrap { flex: 1; height: auto; }
+.lab-ticket { flex: none; max-height: 38vh; overflow: auto; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
+.lab-ticket[hidden] { display: none; }
+.lab-ticket-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lab-ticket-area { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lab-ticket-score { margin-left: auto; font-weight: 600; }
+.lab-ticket.closed .lab-ticket-body { display: none; }
+.lab-ticket-text { margin: 6px 0; max-width: 90ch; }
+.lab-tasks { margin: 4px 0 2px; padding-left: 0; list-style: none; }
+.lab-task { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 3px 0; }
+.lab-task-mark { width: 18px; text-align: center; font-weight: 700; color: var(--muted); }
+.lab-task.done .lab-task-mark { color: var(--green); }
+.lab-task.done .lab-task-text { color: var(--muted); }
+.lab-task-pts { font-size: 12px; color: var(--muted); }
+.lab-hint-btn { padding: 0 8px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.lab-hint { flex-basis: 100%; margin: 2px 0 4px 26px; font-size: 13px; color: var(--muted); }
 .lab-main { display: grid; grid-template-columns: 230px 1fr 300px; gap: 12px; padding: 12px; height: 100%; min-height: 0; box-sizing: border-box; }
 .lab-shelf, .lab-side { overflow: auto; min-height: 0; }
 .lab-stage { min-height: 0; display: flex; align-items: flex-start; justify-content: center; }

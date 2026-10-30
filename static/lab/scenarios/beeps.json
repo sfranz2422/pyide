@@ -1,0 +1,132 @@
+{
+ "id": "beeps",
+ "order": 4,
+ "area": "Hardware",
+ "title": "Three beeps and a black screen",
+ "start": "bench",
+ "ticket": "Since the memory was upgraded, this PC beeps three times when it's turned on and shows nothing. There's a spare stick on the bench, known to be good.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "cpu",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8",
+   "faulty": "dead"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-650"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  },
+  {
+   "uid": "spare",
+   "part": "ram-ddr4-8"
+  }
+ ],
+ "build": [
+  [
+   "case",
+   "case"
+  ],
+  [
+   "board",
+   "mb"
+  ],
+  [
+   "cpu",
+   "cpu"
+  ],
+  [
+   "cooler",
+   "cool"
+  ],
+  [
+   "ram",
+   "r1",
+   0
+  ],
+  [
+   "ram",
+   "r2",
+   1
+  ],
+  [
+   "psu",
+   "psu"
+  ],
+  [
+   "sata",
+   "os",
+   0
+  ]
+ ],
+ "cables": [
+  "atx24",
+  "cpu8",
+  [
+   "sata",
+   0
+  ]
+ ],
+ "monitor": "board",
+ "tasks": [
+  {
+   "id": "boots",
+   "text": "It starts Windows again.",
+   "points": 5,
+   "hint": "Three short beeps and the DRAM light: memory. Try one stick at a time to find the bad one.",
+   "check": {
+    "path": "boots",
+    "op": "==",
+    "value": true
+   }
+  },
+  {
+   "id": "16gb",
+   "text": "It still has 16 GB: two good sticks, and it starts.",
+   "points": 3,
+   "hint": "Swap the bad stick for the spare, in the same slot.",
+   "check": {
+    "all": [
+     {
+      "path": "boots",
+      "op": "==",
+      "value": true
+     },
+     {
+      "path": "memoryGb",
+      "op": "==",
+      "value": 16
+     },
+     {
+      "path": "dualChannel",
+      "op": "==",
+      "value": true
+     }
+    ]
+   }
+  }
+ ]
+}

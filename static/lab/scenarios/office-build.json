@@ -1,0 +1,94 @@
+{
+ "id": "office-build",
+ "order": 1,
+ "area": "Building",
+ "title": "Build an office PC",
+ "start": "bench",
+ "ticket": "The office needs a PC for email and spreadsheets: nothing fancy, and no money for a graphics card. Build it from the parts on the bench so that it starts Windows with a picture on the screen. Not every part on the bench fits with every other: read the spec cards.",
+ "items": [
+  {
+   "uid": "case",
+   "part": "case-atx"
+  },
+  {
+   "uid": "mb-a",
+   "part": "mb-am4-matx"
+  },
+  {
+   "uid": "mb-i",
+   "part": "mb-1700-atx"
+  },
+  {
+   "uid": "cpu-g",
+   "part": "cpu-am4-6g"
+  },
+  {
+   "uid": "cpu-5",
+   "part": "cpu-am5-8"
+  },
+  {
+   "uid": "cpu-f",
+   "part": "cpu-1700-12f"
+  },
+  {
+   "uid": "cool",
+   "part": "cooler-stock"
+  },
+  {
+   "uid": "r1",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r2",
+   "part": "ram-ddr4-8"
+  },
+  {
+   "uid": "r5",
+   "part": "ram-ddr5-16"
+  },
+  {
+   "uid": "psu",
+   "part": "psu-450"
+  },
+  {
+   "uid": "os",
+   "part": "ssd-256",
+   "windows": true
+  }
+ ],
+ "build": [],
+ "cables": [],
+ "tasks": [
+  {
+   "id": "boots",
+   "text": "It starts Windows, with a picture on the screen.",
+   "points": 6,
+   "hint": "No graphics card: the CPU has to have its own graphics (a G model), and the monitor goes into the motherboard. Then follow the CPU to the board that matches its socket.",
+   "check": {
+    "path": "boots",
+    "op": "==",
+    "value": true
+   }
+  },
+  {
+   "id": "dual",
+   "text": "Both DDR4 sticks are in, running in dual channel (16 GB).",
+   "points": 2,
+   "hint": "Two sticks: one in each channel. On a two-slot board that's A1 and B1.",
+   "check": {
+    "all": [
+     {
+      "path": "dualChannel",
+      "op": "==",
+      "value": true
+     },
+     {
+      "path": "memoryGb",
+      "op": "==",
+      "value": 16
+     }
+    ]
+   }
+  }
+ ]
+}

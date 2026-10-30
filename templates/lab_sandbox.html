@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A+ lab sandbox — PyIDE</title>
+<title>{{ "A+ lab · " + scenario.title if scenario else "A+ lab sandbox" }} — PyIDE</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -19,18 +19,24 @@
 </head>
 <body class="lab-page">
 
-{#  The A+ lab's sandbox (machine.js, bench.js): every part, nothing checked.
-    A scenario set by a teacher is the same bench with its own parts and
-    faults, and tasks beside it. #}
+{#  The A+ lab (static/lab/page.js): the sandbox (lab_sandbox in app.py:
+    every part, nothing checked) or a scenario to try (lab_try: its ticket
+    and tasks above the same bench). What's done is kept in this browser.
+    A lab set in a class is lab.html, which saves to the server. #}
 <header class="bar">
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
-  <div class="meta"><span class="pagetitle">A+ lab · sandbox</span></div>
+  <div class="meta"><span class="pagetitle">{{ "A+ lab · " + scenario.title if scenario else "A+ lab · sandbox" }}</span></div>
   <div class="actions">
+    {% if not scenario %}
     <button id="lab-windows" class="btn btn-primary" type="button" title="A working PC, already put together, switched on to the Windows desktop">🖥 Start in Windows</button>
+    {% endif %}
+    <a class="btn" href="{{ url_for('lab_scenarios') }}">Tickets</a>
     <a class="btn" href="{{ url_for('lab_credits') }}" target="_blank" rel="noopener">Photo credits</a>
-    <button id="lab-reset" class="btn" type="button" title="Put every part back on the shelf">Start over</button>
+    <button id="lab-reset" class="btn" type="button" title="{{ 'Start this ticket again' if scenario else 'Put every part back on the shelf' }}">Start over</button>
   </div>
 </header>
+
+<section id="lab-ticket" class="lab-ticket" aria-label="The ticket" hidden></section>
 
 <main class="lab-wrap">
   <div id="lab" class="lab-main"></div>
@@ -49,83 +55,16 @@
 <script src="{{ url_for('static', filename='lab/desktop.js') }}"></script>
 <script src="{{ url_for('static', filename='lab/cmd.js') }}"></script>
 <script src="{{ url_for('static', filename='lab/apps.js') }}"></script>
+<script src="{{ url_for('static', filename='lab/lab_checks.js') }}"></script>
+<script src="{{ url_for('static', filename='lab/page.js') }}"></script>
 <script>
-  (function () {
-    "use strict";
-    // What's built is kept in this browser, so a reload doesn't undo it.
-    var KEY = "pyide-lab-sandbox";
-    var get = function (name) { return fetch("{{ url_for('static', filename='lab/') }}" + name).then(function (r) { return r.json(); }); };
-    Promise.all([get("parts.json"), get("img/credits.json").catch(function () { return {}; })]).then(function (got) {
-      var cat = got[0], credits = got[1], known = window.PyIDELab.catalogOf(cat);
-      var state = null;
-      try { state = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { state = null; }
-      // A build saved before the parts changed names parts that are gone
-      // (the drawn boards became photos of real ones): start it fresh, or
-      // the bench draws nothing for them and can't take them out.
-      var stale = state && Object.keys(state.items || {}).some(function (u) { return !known[state.items[u].part]; });
-      if (!state || state.v !== 1 || stale) state = window.PyIDELab.sandbox(cat);
-      state.power = { on: false, uptime: 0 };
-      var monitor = document.getElementById("lab-monitor"), desktop = null, bench = null;
-      function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* full or blocked */ } }
-      function showScreen() {
-        if (!desktop) desktop = window.PyIDELabDesktop.mount(document.getElementById("lab-desktop"), {
-          catalog: cat, state: bench.state(), onChange: save, onOff: toBench });
-        monitor.hidden = false;
-        desktop.redraw();
-      }
-      function toBench() {
-        monitor.hidden = true;
-        // Windows stopped (Shut down, or the bench turned it off): the next
-        // start is a fresh desktop, as a real restart is.
-        if (desktop && !window.PyIDELab.running(bench.state())) { desktop.destroy(); desktop = null; }
-        bench.redraw();
-      }
-      bench = window.PyIDELabBench.mount(document.getElementById("lab"), {
-        catalog: cat, state: state, credits: credits, imgBase: "{{ url_for('static', filename='lab/img/') }}",
-        onBoot: showScreen,
-        onChange: function (s) {
-          save(s);
-          // The bench turned it off (it overheated) while the screen was up.
-          if (desktop && !window.PyIDELab.running(s)) toBench();
-        }
-      });
-      document.getElementById("lab-to-bench").addEventListener("click", toBench);
-      /* Start in Windows: straight to the desktop, for practising the tools
-         and the Command Prompt without building a PC first. A build of the
-         student's own that starts Windows is used as it is; anything else
-         (nothing built yet, or a build that doesn't start) is replaced by
-         the ready-made one. ?start=windows opens the page this way, for a
-         link posted to a class. */
-      function startInWindows(ask) {
-        var s = bench.state();
-        if (desktop) { desktop.destroy(); desktop = null; }
-        window.PyIDELab.powerOff(s);
-        var probe = JSON.parse(JSON.stringify(s)), r = window.PyIDELab.powerOn(cat, probe);
-        var boots = r.stage === "windows" && !r.dark;
-        if (!boots) {
-          var built = s.shelf.length < Object.keys(s.items).length;
-          if (ask && built && !confirm("Your build doesn't start Windows. Put a ready-made PC on the bench instead? (Your build will be taken apart.)")) return;
-          s = window.PyIDELab.ready(cat);
-        }
-        // On before the bench takes it, so the bench keeps the machine's
-        // time (a loose cooler still overheats while the desktop is up).
-        window.PyIDELab.powerOn(cat, s);
-        bench.setState(s);
-        save(s);
-        showScreen();
-      }
-      document.getElementById("lab-windows").addEventListener("click", function () { startInWindows(true); });
-      if (/[?&]start=windows\b/.test(location.search)) startInWindows(false);
-
-      document.getElementById("lab-reset").addEventListener("click", function () {
-        if (!confirm("Put every part back on the shelf?")) return;
-        var fresh = window.PyIDELab.sandbox(cat);
-        try { localStorage.setItem(KEY, JSON.stringify(fresh)); } catch (e) {}
-        if (desktop) { desktop.destroy(); desktop = null; monitor.hidden = true; }
-        bench.setState(fresh);
-      });
-    });
-  })();
+  window.PyIDELabPage.start({
+    base: "{{ url_for('static', filename='lab/') }}",
+    imgBase: "{{ url_for('static', filename='lab/img/') }}",
+    scenario: {{ (scenario.id if scenario else none)|tojson }},
+    // What's done is kept in this browser, so a reload doesn't undo it.
+    key: {{ ("pyide-lab-try:" + scenario.id if scenario else "pyide-lab-sandbox")|tojson }}
+  });
 </script>
 </body>
 </html>

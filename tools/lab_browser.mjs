@@ -270,6 +270,42 @@ try {
     return out;
   })()`);
   quick.forEach(([label, ok, detail]) => say(ok, label, detail));
+
+  // ------------------------------------------------------------ a ticket, tried
+  await go("/lab/scenarios");
+  say(await ev("document.querySelectorAll('.ticket-card').length >= 10"), "the tickets page lists the built-in scenarios");
+  await go("/lab/try/overheat");
+  await until("/points/.test((document.getElementById('lab-score') || {}).textContent || '')", 10000);
+  const t1 = await ev(`(async () => {
+    const out = [];
+    out.push(["a ticket shows its story and its tasks, none done", /switches itself off/.test(T.q(".lab-ticket").textContent) && T.q("#lab-score").textContent.startsWith("0 / 6")]);
+    T.click(T.btn("Hint"));
+    out.push(["…a hint opens under its task", !T.q(".lab-hint").hidden && /Reseat/.test(T.q(".lab-hint").textContent)]);
+    T.click(T.spot("cooler")); T.click(T.btn("Reseat"));
+    T.click(T.btn("⏻ Power on"));
+    out.push(["reseating the cooler and starting it: the task is ticked, fixed!", T.q(".lab-task.done") && T.q("#lab-score").textContent === "6 / 6 points · fixed!", T.q("#lab-score").textContent]);
+    return out;
+  })()`);
+  t1.forEach(([label, ok, detail]) => say(ok, label, detail));
+  await go("/lab/try/overheat");
+  await until("/points/.test((document.getElementById('lab-score') || {}).textContent || '')", 10000);
+  say(await ev("document.getElementById('lab-score').textContent.startsWith('6 / 6')"), "…and a reload keeps it");
+  await go("/lab/try/apipa");
+  await until("!!document.querySelector('.ld-taskbar')", 10000);
+  const t2 = await ev(`(async () => {
+    const out = [];
+    out.push(["a ticket that starts in Windows opens on the desktop", !T.q("#lab-monitor").hidden && T.q("#lab-score").textContent.startsWith("0 /")]);
+    T.start("Command Prompt");
+    const c = T.win("Command Prompt");
+    out.push(["…with the fault in it: ipconfig shows APIPA", T.type(c, "ipconfig").includes("Autoconfiguration IPv4")]);
+    T.type(c, "ipconfig /release"); T.type(c, "ipconfig /renew");
+    out.push(["/release and /renew fix it, and both tasks are ticked", T.q("#lab-score").textContent === "5 / 5 points · fixed!", T.q("#lab-score").textContent]);
+    window.confirm = () => true;
+    T.click(T.q("#lab-reset"));
+    out.push(["Start over puts the ticket back as it began", T.q("#lab-score").textContent.startsWith("0 /") && !T.q(".lab-task.done")]);
+    return out;
+  })()`);
+  t2.forEach(([label, ok, detail]) => say(ok, label, detail));
   say(!errors.length, "no errors in the page", errors.slice(0, 3));
 } catch (e) {
   say(false, "the browser run finished", String(e).slice(0, 400));
