@@ -115,7 +115,10 @@ try {
     const t0 = Date.now();
     await ev(P, "document.querySelector('#stop').click()");
     const stopped = await until(P, "!document.querySelector('#run').disabled && document.querySelector('#output').textContent.includes('— stopped —')", 3000);
-    say(stopped && Date.now() - t0 < 2500, "Stop ends it, the buttons back within two seconds", { ms: Date.now() - t0 });
+    // Under a second: the program hears Stop at its next turn. The 1.5 s
+    // backstop (stopRun) would also put the buttons back, so a Stop that never
+    // reached the program would pass a looser limit.
+    say(stopped && Date.now() - t0 < 1000, "Stop ends it, the buttons back within a second", { ms: Date.now() - t0 });
     const ending = await output(P);
     say(ending.includes("tidied up"), "…reaching the program as a KeyboardInterrupt", ending.slice(-120));
   }
