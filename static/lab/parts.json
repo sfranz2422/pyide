@@ -1,0 +1,32 @@
+{
+ "about": "The A+ lab's parts (static/lab/machine.js; lab_checks.py reads it too, so the server's compatibility rules are the browser's). Generic names, no brands: the specs are what the exam asks about.",
+ "parts": [
+  {"id": "case-atx", "type": "case", "name": "Mid-tower case (ATX)", "fits": ["ATX", "mATX", "ITX"]},
+  {"id": "case-itx", "type": "case", "name": "Small case (Mini-ITX)", "fits": ["ITX"]},
+
+  {"id": "mb-am5-atx", "type": "board", "name": "ATX motherboard, socket AM5, DDR5", "socket": "AM5", "ram": "DDR5", "form": "ATX", "dimms": 4, "m2": 2, "sata": 4, "video": true},
+  {"id": "mb-1700-matx", "type": "board", "name": "Micro-ATX motherboard, socket LGA1700, DDR4", "socket": "LGA1700", "ram": "DDR4", "form": "mATX", "dimms": 4, "m2": 1, "sata": 4, "video": true},
+  {"id": "mb-1700-itx", "type": "board", "name": "Mini-ITX motherboard, socket LGA1700, DDR5", "socket": "LGA1700", "ram": "DDR5", "form": "ITX", "dimms": 2, "m2": 1, "sata": 2, "video": true},
+
+  {"id": "cpu-am5-6", "type": "cpu", "name": "6-core CPU, socket AM5, 65 W, with graphics", "socket": "AM5", "watts": 65, "graphics": true},
+  {"id": "cpu-1700-6f", "type": "cpu", "name": "6-core CPU, socket LGA1700, 65 W, no graphics (F model)", "socket": "LGA1700", "watts": 65, "graphics": false},
+  {"id": "cpu-1700-16", "type": "cpu", "name": "16-core CPU, socket LGA1700, 125 W, with graphics", "socket": "LGA1700", "watts": 125, "graphics": true},
+
+  {"id": "ram-ddr4-8", "type": "ram", "name": "8 GB DDR4-3200 memory stick", "ram": "DDR4", "gb": 8},
+  {"id": "ram-ddr5-16", "type": "ram", "name": "16 GB DDR5-5600 memory stick", "ram": "DDR5", "gb": 16},
+
+  {"id": "cooler-stock", "type": "cooler", "name": "Stock CPU cooler (thermal paste already on it)", "watts": 95},
+  {"id": "cooler-tower", "type": "cooler", "name": "Tower CPU cooler, up to 180 W", "watts": 180},
+
+  {"id": "psu-450", "type": "psu", "name": "450 W power supply (no PCIe power cables)", "watts": 450, "pcie": false},
+  {"id": "psu-650", "type": "psu", "name": "650 W power supply, with an 8-pin PCIe cable", "watts": 650, "pcie": true},
+  {"id": "psu-850", "type": "psu", "name": "850 W power supply, with 8-pin PCIe cables", "watts": 850, "pcie": true},
+
+  {"id": "gpu-75", "type": "gpu", "name": "Low-power graphics card, 75 W (powered by the slot)", "watts": 75, "power": false},
+  {"id": "gpu-200", "type": "gpu", "name": "Graphics card, 200 W, needs an 8-pin PCIe power cable", "watts": 200, "power": true},
+
+  {"id": "nvme-1tb", "type": "drive", "name": "1 TB NVMe SSD (M.2)", "iface": "M.2", "gb": 1000, "media": "SSD"},
+  {"id": "ssd-500", "type": "drive", "name": "500 GB 2.5-inch SATA SSD", "iface": "SATA", "gb": 500, "media": "SSD"},
+  {"id": "hdd-2tb", "type": "drive", "name": "2 TB 3.5-inch SATA hard drive", "iface": "SATA", "gb": 2000, "media": "HDD"}
+ ]
+}
