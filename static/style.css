@@ -3455,7 +3455,8 @@ body.is-demo.is-world .world-view { height: 100%; }
    The bench (static/lab/bench.js): shelf, the drawn computer, the side panel.
    The drawing's own colours are fixed (a green board, a grey case) rather
    than the theme's: it is a picture of hardware, the same on every screen. */
-.lab-main { display: grid; grid-template-columns: 230px 1fr 300px; gap: 12px; padding: 12px; height: calc(100% - var(--bar-h)); min-height: 0; }
+.lab-wrap { position: relative; height: calc(100% - var(--bar-h)); min-height: 0; }
+.lab-main { display: grid; grid-template-columns: 230px 1fr 300px; gap: 12px; padding: 12px; height: 100%; min-height: 0; box-sizing: border-box; }
 .lab-shelf, .lab-side { overflow: auto; min-height: 0; }
 .lab-stage { min-height: 0; display: flex; align-items: flex-start; justify-content: center; }
 .lab-head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 4px 0 8px; }
@@ -3511,3 +3512,108 @@ body.is-demo.is-world .world-view { height: 100%; }
 .lab-screen { height: 90px; border-radius: 6px; background: #000; color: #ddd; font: 12px ui-monospace, Menlo, monospace; padding: 8px; }
 .lab-bios { font: 12px ui-monospace, Menlo, monospace; background: #0a2a6a; color: #fff; padding: 6px 8px; border-radius: 4px; }
 @media (max-width: 1000px) { .lab-main { grid-template-columns: 1fr; height: auto; } }
+
+/* ---- The A+ lab's computer screen (static/lab/desktop.js, apps.js). The
+   PC's own screen, so its colours are its own and don't follow the site's
+   theme: a monitor looks the same whatever the page around it does. */
+.lab-monitor { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: #111; padding: 8px 12px 12px; box-sizing: border-box; }
+.lab-monitor[hidden] { display: none; }
+.lab-monitor-bar { display: flex; align-items: center; justify-content: space-between; color: #ddd; font-size: 13px; padding: 0 2px 8px; }
+.lab-desktop-host { flex: 1; min-height: 0; border-radius: 6px; overflow: hidden; border: 6px solid #2a2a2a; }
+.ld { position: relative; height: 100%; display: flex; flex-direction: column; font: 13px/1.4 "IBM Plex Sans", system-ui, sans-serif; color: #1d2128; user-select: none; }
+.ld-screen { position: relative; flex: 1; min-height: 0; overflow: hidden;
+  background: radial-gradient(circle at 25% 30%, #3f7fb8 0, transparent 45%), radial-gradient(circle at 80% 75%, #2f9a8f 0, transparent 40%), linear-gradient(135deg, #17324f, #0d1d30); }
+.ld-icons { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ld-icon { width: 84px; padding: 6px 2px; border: 1px solid transparent; border-radius: 6px; background: none; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font: inherit; font-size: 12px; text-shadow: 0 1px 2px #000; }
+.ld-icon:hover, .ld-icon:focus-visible { background: rgba(255, 255, 255, .15); border-color: rgba(255, 255, 255, .3); }
+.ld-icon-pic { font-size: 30px; }
+.ld-taskbar { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; background: rgba(22, 26, 32, .96); color: #fff; }
+.ld-startbtn { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.ld-startbtn:hover, .ld-startbtn.on { background: rgba(255, 255, 255, .14); }
+.ld-logo { width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(#4fb3ff, #44d19b, #ffd34d, #ff7a7a, #4fb3ff); }
+.ld-tasks { flex: 1; display: flex; gap: 4px; overflow: hidden; }
+.ld-task { max-width: 170px; height: 34px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; border-radius: 4px; background: rgba(255, 255, 255, .06); color: #fff; font: inherit; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ld-task.on { background: rgba(255, 255, 255, .16); border-bottom-color: #4fb3ff; }
+.ld-tray { height: 34px; min-width: 34px; border: 0; border-radius: 4px; background: none; color: #fff; font-size: 16px; cursor: pointer; }
+.ld-tray:hover { background: rgba(255, 255, 255, .14); }
+.ld-clock { text-align: right; font-size: 11px; line-height: 1.3; padding: 0 4px; }
+.ld-clock.wrong { color: #ffd34d; }
+.ld-start { position: absolute; left: 8px; bottom: 50px; z-index: 5000; width: 280px; padding: 12px; border-radius: 10px; background: rgba(32, 37, 45, .98); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.ld-start[hidden] { display: none; }
+.ld-start-head { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin-bottom: 6px; }
+.ld-start-app { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 6px; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.ld-start-app:hover, .ld-start-app:focus-visible { background: rgba(255, 255, 255, .12); }
+.ld-start-icon { width: 22px; text-align: center; font-size: 17px; }
+.ld-start-power { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .15); }
+.ld-win { position: absolute; display: flex; flex-direction: column; min-width: 280px; background: #f7f8fa; border: 1px solid #8a94a3; border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); overflow: hidden; }
+.ld-win.ld-front { border-color: #4f8fd6; }
+.ld-win-head { display: flex; align-items: center; gap: 8px; height: 34px; padding-left: 10px; background: #e6e9ee; cursor: move; touch-action: none; flex: none; }
+.ld-front .ld-win-head { background: #dce7f5; }
+.ld-win-title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-win-btn { width: 44px; height: 34px; border: 0; background: none; font-size: 14px; color: #333; cursor: pointer; }
+.ld-win-btn:hover { background: rgba(0, 0, 0, .08); } .ld-close:hover { background: #d9413a; color: #fff; }
+.ld-win-body { flex: 1; overflow: auto; padding: 10px 12px; user-select: text; }
+.ld-btn { padding: 5px 12px; border: 1px solid #a9b2bf; border-radius: 4px; background: #fff; color: #1d2128; font: inherit; cursor: pointer; }
+.ld-btn:hover:not(:disabled) { background: #eef3fa; border-color: #4f8fd6; }
+.ld-btn:disabled { opacity: .5; cursor: default; }
+.ld-start .ld-btn { background: rgba(255, 255, 255, .1); color: #fff; border-color: rgba(255, 255, 255, .25); }
+.ld-primary { background: #2f6fbf; border-color: #2f6fbf; color: #fff; } .ld-primary:hover:not(:disabled) { background: #275ea3; }
+.ld-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ld-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; background: #fff; }
+.ld-table th { text-align: left; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid #c9d0da; background: #f0f2f5; white-space: nowrap; }
+.ld-table td { padding: 3px 8px; border-bottom: 1px solid #eceff3; }
+.ld-table tbody tr[tabindex] { cursor: pointer; }
+.ld-table tbody tr[tabindex]:hover { background: #eef4fb; }
+.ld-table tr.sel, .ld-table tr.sel:hover { background: #cfe2f8; }
+.ld-table tr.hot td:nth-child(2) { background: #ffd9a8; font-weight: 600; }
+.ld-table tr.lvl-critical td:first-child, .ld-table tr.lvl-error td:first-child { color: #b3261e; font-weight: 600; }
+.ld-table tr.lvl-warning td:first-child { color: #9a6700; }
+.ld-dim { color: #66707d; } .ld .small { font-size: 12px; }
+.ld-tree, .ld-tree ul { list-style: none; margin: 0; padding-left: 18px; }
+.ld-tree { padding-left: 0; background: #fff; border: 1px solid #d6dbe2; padding: 6px; }
+.ld-tree-root { font-weight: 600; } .ld-tree-cat { margin-top: 2px; }
+.ld-dev { padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+.ld-dev:hover { background: #eef4fb; } .ld-dev.sel { background: #cfe2f8; }
+.ld-warn { color: #000; background: #ffd34d; border-radius: 3px; padding: 0 3px; font-size: 11px; }
+.ld-down { color: #fff; background: #5d6672; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+.ld-status { margin-top: 8px; padding: 8px 10px; background: #fff; border: 1px solid #d6dbe2; border-radius: 4px; }
+.ld-status p { margin: 4px 0; }
+.ld-disks { display: flex; flex-direction: column; gap: 6px; }
+.ld-disk { display: flex; gap: 4px; min-height: 64px; }
+.ld-disk-label { width: 110px; flex: none; padding: 4px 8px; background: #e8ebf0; border: 1px solid #c9d0da; font-size: 12px; cursor: pointer; }
+.ld-disk-label.sel { outline: 2px solid #2f6fbf; }
+.ld-disk-strip { flex: 1; display: flex; gap: 2px; min-width: 0; }
+.ld-part { min-width: 70px; padding: 4px 6px; border: 1px solid #c9d0da; border-top: 8px solid #2f6fbf; background: #fff; font-size: 11.5px; cursor: pointer; overflow: hidden; }
+.ld-part.ld-unalloc { border-top-color: #111; background: repeating-linear-gradient(45deg, #fff, #fff 6px, #f0f0f0 6px, #f0f0f0 12px); }
+.ld-part.sel { outline: 2px solid #2f6fbf; background: #eaf2fc; }
+.ld-tabs { display: flex; gap: 2px; border-bottom: 1px solid #c9d0da; margin-bottom: 8px; }
+.ld-tab { padding: 6px 14px; border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; cursor: pointer; }
+.ld-tab.on { border-bottom-color: #2f6fbf; font-weight: 600; }
+.ld-gauge { margin: 8px 0; } .ld-gauge-name { font-weight: 600; }
+.ld-gauge-bar { height: 10px; background: #e1e5eb; border-radius: 5px; overflow: hidden; margin: 3px 0; }
+.ld-gauge-fill { height: 100%; background: #2f6fbf; } .ld-gauge-fill.hot { background: #d9413a; }
+.ld-crumb { padding: 4px 8px; margin-bottom: 8px; background: #fff; border: 1px solid #d6dbe2; border-radius: 4px; font-size: 12px; }
+.ld-link { border: 0; background: none; padding: 0; color: #2f6fbf; font: inherit; cursor: pointer; text-decoration: underline; }
+.ld-split { display: flex; gap: 10px; height: 100%; }
+.ld-side { width: 170px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+.ld-side-btn { padding: 7px 10px; border: 0; border-radius: 4px; background: none; font: inherit; text-align: left; cursor: pointer; }
+.ld-side-btn:hover { background: #e6ebf2; } .ld-side-btn.on { background: #dce7f5; font-weight: 600; }
+.ld-main { flex: 1; min-width: 0; } .ld-main h3 { margin: 2px 0 10px; font-size: 18px; font-weight: 600; }
+.ld-netcard { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 10px; background: #fff; border: 1px solid #d6dbe2; border-radius: 6px; }
+.ld-netcard p { margin: 2px 0 0; } .ld-netcard-icon { font-size: 26px; }
+.ld-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.ld-drive { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid #d6dbe2; border-radius: 6px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
+.ld-drive:hover { border-color: #4f8fd6; } .ld-drive > div { flex: 1; } .ld-drive-pic { font-size: 28px; }
+.ld-shade { position: absolute; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .25); }
+.ld-dialog { width: min(440px, 92%); max-height: 92%; overflow: auto; padding: 14px 16px; background: #fff; border: 1px solid #8a94a3; border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); user-select: text; }
+.ld-dialog-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+.ld-dialog p { margin: 4px 0 8px; }
+.ld-dialog-msg { padding: 6px 8px; border-radius: 4px; background: #fde7e5; color: #8c1d18; }
+.ld-dialog-btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.ld-field { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.ld-field > span { width: 46%; font-size: 12.5px; }
+.ld-field > span:empty { display: none; }
+.ld-input { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid #a9b2bf; border-radius: 4px; font: inherit; background: #fff; color: #1d2128; }
+.ld-choices { display: flex; flex-direction: column; gap: 6px; }
+.ld-choice { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid #c9d0da; border-radius: 6px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
+.ld-choice:hover { border-color: #2f6fbf; background: #eef4fb; } .ld-choice strong { color: #2f6fbf; }

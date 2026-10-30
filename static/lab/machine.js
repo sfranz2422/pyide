@@ -374,8 +374,12 @@ window.PyIDELab = (function () {
     if (os.uncleanShutdown) {
       logEvent(os, "Critical", "Kernel-Power", 41,
                "The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.");
+      logEvent(os, "Error", "EventLog", 6008, "The previous system shutdown was unexpected.");
       os.uncleanShutdown = false;
     }
+    // Every start leaves its ordinary line, so a crash stands out among them
+    // in Event Viewer the way it does on a real PC.
+    logEvent(os, "Information", "EventLog", 6005, "The Event log service was started.");
     // Every drive it can see is a disk; one it hasn't seen before is new and empty.
     drivesConnected(cat, state).forEach(function (uid) {
       if (!os.disks[uid]) {
@@ -388,8 +392,29 @@ window.PyIDELab = (function () {
     if (os.net.dhcp) lease(os);
   }
 
+  var MAX_EVENTS = 200;     // the state is saved on every change: keep the log short
   function logEvent(os, level, source, id, msg) {
-    os.events.push({ n: os.events.length + 1, boot: os.bootCount, level: level, source: source, id: id, msg: msg });
+    var n = os.events.length ? os.events[os.events.length - 1].n + 1 : 1;
+    os.events.push({ n: n, boot: os.bootCount, level: level, source: source, id: id, msg: msg });
+    if (os.events.length > MAX_EVENTS) os.events.splice(0, os.events.length - MAX_EVENTS);
+  }
+
+  /* The disks Windows sees now, numbered as Disk Management and diskpart
+     number them: M.2 slots first, then SATA ports, in order. A drive that's
+     been taken out keeps its entry in os.disks (put back, it has its volumes
+     again) but isn't listed. */
+  function disks(cat, state) {
+    if (!state.os) return [];
+    return drivesConnected(cat, state).filter(function (uid) { return state.os.disks[uid]; }).map(function (uid, n) {
+      return { n: n, uid: uid, part: partOf(cat, state, uid), disk: state.os.disks[uid], free: freeGb(state, uid, cat) };
+    });
+  }
+
+  // Installed memory, as System Information and Task Manager show it.
+  function memoryGb(cat, state) {
+    var gb = 0;
+    state.ram.forEach(function (uid) { var p = uid && partOf(cat, state, uid); if (p) gb += p.gb; });
+    return gb;
   }
 
   function running(state) {
@@ -425,14 +450,19 @@ window.PyIDELab = (function () {
     return out;
   }
 
-  /* Update driver: from the maker's folder on the desktop (or Windows
-     Update, with the internet working). */
-  function updateDriver(cat, state, key) {
+  /* Update driver, the two ways Windows offers: "auto" searches online
+     (Windows Update: it needs the internet), "browse" looks in the maker's
+     folder on the desktop. A missing NETWORK driver can only come from the
+     folder, since without it there's no internet: a real A+ point. With no
+     `how`, either will do. */
+  function updateDriver(cat, state, key, how) {
     if (!running(state)) return no("Windows isn't running.");
     var os = state.os;
     if (!(key in os.drivers)) return no("That device's driver is up to date.");
     if (os.drivers[key] === "ok") return no("The best driver for this device is already installed.");
-    if (!os.driverFolder && !online(state)) return no("Windows couldn't find a driver. There's no driver on this computer, and it can't reach the internet.");
+    if (how === "auto" && !online(state)) return no("Windows couldn't search online for a driver: this computer can't reach the internet. If you have the maker's driver, browse your computer for it.");
+    if (how === "browse" && !os.driverFolder) return no("There's no driver for this device on this computer.");
+    if (!how && !os.driverFolder && !online(state)) return no("Windows couldn't find a driver. There's no driver on this computer, and it can't reach the internet.");
     os.drivers[key] = "ok";
     if (key === "net" && os.net.dhcp) lease(os);
     return YES;
@@ -704,6 +734,6 @@ window.PyIDELab = (function () {
     changeLetter: changeLetter, deleteVolume: deleteVolume, findVolume: findVolume,
     release: release, renew: renew, setIp: setIp, reach: reach, online: online, dnsWorks: dnsWorks,
     endTask: endTask, setStartup: setStartup, sfc: sfc, chkdsk: chkdsk, restart: restart,
-    logEvent: logEvent
+    logEvent: logEvent, disks: disks, memoryGb: memoryGb
   };
 })();

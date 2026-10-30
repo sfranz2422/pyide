@@ -170,6 +170,8 @@ function goodBuild(extra) {
   check("…and it turns itself off", t === "overheated" && !s.power.on, t);
   L.powerOn(CAT, s);
   check("next start, the event log has Kernel-Power 41", s.os.events.some((e) => e.id === 41 && e.source === "Kernel-Power"), s.os.events);
+  check("…and 6008, an unexpected shutdown, in the same start", s.os.events.some((e) => e.id === 6008 && e.boot === s.os.bootCount));
+  check("each start logs 6005, the event log starting", s.os.events.filter((e) => e.id === 6005).length === s.os.bootCount, s.os.events.length);
   L.powerOff(s); L.reseatCooler(s); L.powerOn(CAT, s);
   check("…reseated, it stays on and cool", L.tick(CAT, s, 600) === null && L.cpuTemp(s) < 60, L.cpuTemp(s));
 }
@@ -188,6 +190,15 @@ function goodBuild(extra) {
   const t = goodBuild(); L.powerOn(CAT, t); t.os.drivers.net = "missing"; t.os.driverFolder = false; L.renew(t);
   const nowhere = L.updateDriver(CAT, t, "net");
   check("without the driver folder or the internet, Windows can't find a driver", !nowhere.ok && /couldn't find/.test(nowhere.why), nowhere.why);
+  const u = goodBuild(); L.powerOn(CAT, u); u.os.drivers.net = "missing"; L.renew(u);
+  const auto = L.updateDriver(CAT, u, "net", "auto");
+  check("a missing network driver can't be searched for online (no internet without it)", !auto.ok && /internet/.test(auto.why), auto.why);
+  check("…browsing to the maker's folder finds it", L.updateDriver(CAT, u, "net", "browse").ok && u.os.drivers.net === "ok");
+  u.os.drivers.audio = "missing"; u.os.driverFolder = false;
+  check("with the internet working, a search online finds the sound driver", L.updateDriver(CAT, u, "audio", "auto").ok);
+  u.os.drivers.gpu = "missing";
+  const none = L.updateDriver(CAT, u, "gpu", "browse");
+  check("…but browsing finds nothing with no maker's folder on the computer", !none.ok && /no driver/.test(none.why), none.why);
   L.setDeviceEnabled(s, "net", false);
   check("a disabled adapter shows as disabled, and reaches nothing",
         L.devices(CAT, s).find((d) => d.key === "net").status === "disabled" && !L.reach(s, "192.168.1.1").ok);
@@ -214,6 +225,11 @@ function goodBuild(extra) {
   check("format F: as FAT32 is refused (200 GB)", !L.formatVolume(s, "F", "FAT32").ok);
   check("C: can't be formatted or deleted", !L.formatVolume(s, "C", "NTFS").ok && !L.deleteVolume(s, "C").ok);
   check("delete E:", L.deleteVolume(s, "E").ok && !L.findVolume(s.os, "E"));
+  const dk = L.disks(CAT, s);
+  check("Disk Management numbers the disks: the Windows SSD on SATA0 is Disk 0, the new one Disk 1",
+        dk.length === 2 && dk[0].uid === "os" && dk[0].n === 0 && dk[1].uid === "ssd" && dk[1].n === 1, dk.map((d) => d.uid));
+  check("…with its free space (E:'s 56 GB, deleted, is free again)", dk[1].free === 56 && dk[0].free === 0, dk.map((d) => d.free));
+  check("memory: two 8 GB sticks are 16 GB", L.memoryGb(CAT, s) === 16);
   const m = goodBuild([["hdd", "hdd-500"]]); ins(m, "sata", "hdd", 2); L.connect(CAT, m, "sata", true, 2); L.powerOn(CAT, m);
   L.initializeDisk(m, "hdd", "MBR");
   [1, 2, 3, 4].forEach(() => L.newVolume(CAT, m, "hdd", { gb: 100 }));

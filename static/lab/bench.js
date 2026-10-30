@@ -452,6 +452,10 @@ window.PyIDELabBench = (function () {
         var screen = el("div", { class: "lab-screen" + (on && !post.dark && post.screen ? " lit" : "") },
                         [on && !post.dark ? (post.stage === "windows" ? "Windows is running." : post.screen) : ""]);
         power.appendChild(screen);
+        // Back to Windows after a look at the bench (the desktop is the page's).
+        if (L.running(state) && !post.dark && opts.onBoot) {
+          power.appendChild(el("button", { type: "button", class: "btn btn-primary", text: "🖥 Show the screen", onclick: function () { opts.onBoot(state); } }));
+        }
         if (on) power.appendChild(el("p", { class: "small dim", text: "CPU temperature (BIOS): " + L.cpuTemp(state) + " °C" }));
       }
       side.appendChild(power);
