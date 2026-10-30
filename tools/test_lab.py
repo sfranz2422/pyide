@@ -136,18 +136,35 @@ def main():
     check("Assign makes a lab in that class", r.status_code == 200 and "/teacher/" in out.get("url", ""), out)
     slug = out.get("slug")
     item = q(accounts.Assignment, slug=slug)[0]
-    check("…kind lab, named after its ticket, out of its points", item.kind == "lab" and item.title == "It shuts itself off" and item.out_of == 6,
-          (item.kind, item.title, item.out_of))
+    check("…kind lab, named after its ticket, out of its tasks' and its notes' questions' points (6 + 2)",
+          item.kind == "lab" and item.title == "It shuts itself off" and item.out_of == 8, (item.kind, item.title, item.out_of))
+    starter = open(os.path.join(ROOT, "static", "lab", "scenarios", "overheat.md")).read()
+    check("…with the ticket's starter notes, as lab.md", item.file_map().get("lab.md") == starter)
+    tut = q(accounts.LibraryItem, id=item.tutorial_id) if item.tutorial_id else []
+    check("…made a tutorial in the teacher's library, to rewrite", tut and tut[0].body == starter and tut[0].teacher_id == tid)
+    cls2 = teacher.post("/api/class", json={"name": "A+ P5"}).get_json()["id"]
+    twin = q(accounts.Assignment, slug=teacher.post("/api/class/%d/new" % cls2, json={"kind": "lab", "scenario": "overheat"}).get_json()["slug"])[0]
+    check("the same ticket in another period: the SAME tutorial, so one rewrite reaches both",
+          twin.tutorial_id == item.tutorial_id and twin.tutorial_id)
     check("…its ticket in lab.json", json.loads(item.file_map()["lab.json"]) == {"scenario": "overheat"})
     check("…on the class's page", any(ci.assignment_id == item.id for ci in q(accounts.ClassItem, class_id=cls)))
     check("…and no live link made for it", not q(accounts.LiveSession, assignment_id=item.id))
     check("a ticket that doesn't exist is refused", teacher.post("/api/class/%d/new" % cls, json={"kind": "lab", "scenario": "../parts"}).status_code == 400)
     check("another teacher can't put one in this class", other.post("/api/class/%d/new" % cls, json={"kind": "lab", "scenario": "overheat"}).status_code in (403, 404))
 
+    print("Its notes")
+    mine = [i for i in teacher.get("/api/library").get_json()["items"] if i["title"] == "It shuts itself off"]
+    rewritten = starter.replace("## Heat, and how Windows remembers", "## Heat (Mr F's version)")
+    r = teacher.post("/api/library/" + mine[0]["slug"], json={"body": rewritten}) if mine else None
+    check("rewriting the tutorial in the library reaches both periods' labs",
+          r is not None and r.status_code == 200 and all("Mr F's version" in q(accounts.Assignment, id=a.id)[0].file_map()["lab.md"] for a in (item, twin)))
+
     print("Opening it")
     sp = kid.get("/a/" + slug)
     html = sp.get_data(as_text=True)
     check("a student's link opens the lab, saving to the server", sp.status_code == 200 and "lab/page.js" in html and "/api/lab/%s/state" % slug in html)
+    check("…its notes beside it (the teacher's rewrite), the answer keys out",
+          "Mr F" in html and "Kernel-Power 41" in html and "[x]" not in html and "lab/lab_notes.js" in html)
     check("…with the idle sign-out (_idle.html, beating for this class), and the class's attendance",
           ("var CLASS = %d;" % cls) in html and q(accounts.Visit, user_id=sid, class_id=cls))
     tp = teacher.get("/a/" + slug)
@@ -180,6 +197,15 @@ def main():
     finally:
         db.close()
     check("…and its task paid XP", paid == 1, paid)
+    k = [x for x in P.quiz.keys(q(accounts.Assignment, id=item.id)[0].file_map()["lab.md"]) if "Kernel-Power 41" in json.dumps(x)][0]
+    right = next(c for c in k["choices"] if "Kernel-Power 41" in c)        # an answer is the choice's text
+    a = kid.post("/api/quiz/answer", json={"assignment": slug, "question": k["qid"], "response": right})
+    db = P.SessionLocal()
+    try:
+        total = P._earned(db, item.id).get(sid)
+    finally:
+        db.close()
+    check("a question in its notes, answered right: its point added to the lab's (7)", a.status_code == 200 and total == 7, (a.get_json(), total))
     again = dict(machines["fixed"], monitor=machines["fixed"]["monitor"], coolerSeated=True, cmos=True)
     again["os"] = dict(again["os"], hostname="PC-RENAMED")
     save(kid, again)

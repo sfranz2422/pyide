@@ -31,6 +31,8 @@ ROOT = os.path.dirname(HERE)
 LAB = os.path.join(ROOT, "static", "lab")
 sys.path.insert(0, ROOT)
 import lab_checks as LC                                       # noqa: E402
+import quiz                                                   # noqa: E402
+import re                                                     # noqa: E402
 
 HARNESS = r"""
 import fs from "fs";
@@ -240,6 +242,18 @@ def main():
         py = LC.grade(sc, sol["state"])
         check("%s: the solution passes every task" % key, all(t["ok"] for t in py), [t["id"] for t in py if not t["ok"]])
         check("%s: …and the browser marks it the same" % key, py == sol["js"], {"py": py, "js": sol["js"]})
+
+    print("Each ticket's starter notes (the tutorial a new lab gets)")
+    for sid in ids:
+        path = os.path.join(LAB, "scenarios", sid + ".md")
+        md = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+        tasks = {t["id"] for t in LC.scenario(sid)["tasks"]}
+        named = [ln.strip() for block in re.findall(r"```lab\n(.*?)```", md, re.S) for ln in block.splitlines() if ln.strip()]
+        keys = quiz.keys(md)
+        check("%s: notes with questions that have keys, kept out of the student's copy" % sid,
+              md and keys and all(k["has_key"] for k in keys) and "[x]" not in quiz.redact(md), len(keys))
+        check("%s: …and step cards naming only real tasks, every task on one" % sid,
+              named and set(named) == tasks, {"named": named, "tasks": sorted(tasks)})
 
     print("The two readers, on machines made at random")
     keys = ["valid", "boots", "coolerOk", "memoryGb", "dualChannel", "online", "dnsWorks", "volumes"]

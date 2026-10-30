@@ -311,10 +311,16 @@ _vl = teacher.post("/api/class/%d/new" % _vc, json={"title": "Viewed lesson",
 set_notes(teacher, _vl, NOTES)
 _vt = re.search(r'/view/([A-Za-z0-9_-]+)"',
                 teacher.get("/teacher/class/%d" % _vc).get_data(as_text=True)).group(1)
-for _what, _slug in (("an assignment", _va), ("a lesson", _vl)):
+# An A+ lab's notes (its tutorial), on its page beside the lab (_lab_notes).
+_vb = teacher.post("/api/class/%d/new" % _vc, json={"kind": "lab", "scenario": "overheat"}).get_json()["slug"]
+set_notes(teacher, _vb, NOTES)
+for _what, _slug in (("an assignment", _va), ("a lesson", _vl), ("an A+ lab", _vb)):
     page = stranger.get("/view/%s/a/%s" % (_vt, _slug)).get_data(as_text=True)
     check("a class's view-only link, %s" % _what, not leaks(page) and "len(" in page,
           leaks(page) or ("" if "len(" in page else "the question is not there at all"))
+page = kid.get("/a/" + _vb).get_data(as_text=True)
+check("an A+ lab's page, its notes beside it", not leaks(page) and "len(" in page,
+      leaks(page) or ("" if "len(" in page else "the question is not there at all"))
 
 # ---------------------------------------------------------------- answering
 print("\nAnswering")

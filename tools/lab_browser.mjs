@@ -318,6 +318,16 @@ try {
   await until(`/Assigned to/.test(document.querySelector('[data-scenario="overheat"] .js-state').textContent)`, 10000);
   const slug = await ev(`(document.querySelector('[data-scenario="overheat"] .js-state a') || {}).href.split("/teacher/")[1]`);
   say(!!slug, "Assign on the tickets page puts it in the class, with a link to it", slug);
+  // Its notes, rewritten in the library as a teacher would: a step card
+  // that holds the next slide until it's done.
+  const notesSet = await ev(`(async () => {
+    const items = (await (await fetch("/api/library")).json()).items;
+    const tut = items.find((i) => i.title === "It shuts itself off");
+    const body = "locked: yes\\n# Step 1\\n\\nReseat the cooler.\\n\\n\u0060\u0060\u0060lab\\ncool\\n\u0060\u0060\u0060\\n\\n---\\n\\n# Done\\n\\nWell done.\\n";
+    const r = await fetch("/api/library/" + tut.slug, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
+    return r.ok;
+  })()`);
+  say(notesSet, "the teacher rewrites its notes in the library");
   await signIn("student");
   await go("/a/" + slug);
   await ev("localStorage.clear()");
@@ -326,7 +336,16 @@ try {
   const c1 = await ev(`(async () => {
     const out = [];
     out.push(["the student's link opens the lab with its ticket, and no answers' Tickets link", T.q("#lab-score").textContent.startsWith("0 / 6") && !T.has("a.btn", "Tickets")]);
+    const notes = T.q("#lab-notes"), pos = () => T.q(".lab-notes .slide-pos").textContent.trim();
+    out.push(["its notes are open beside the lab, the teacher's rewrite, with the step card", !notes.hidden && /Step 1/.test(notes.textContent)
+              && T.q(".lab-notes .lab-card .test-line").textContent.includes("cooler is seated")]);
+    T.click(T.all(".lab-notes .slide-btn").pop());
+    out.push(["…its next slide held while the card isn't done (locked: yes)", pos() === "1 / 2", pos()]);
     T.click(T.spot("cooler")); T.click(T.btn("Reseat")); T.click(T.btn("⏻ Power on"));
+    out.push(["fixing it ticks the card", T.q(".lab-notes .lab-card").hasAttribute("data-passed") && T.q(".lab-notes .lab-card .tests-mark").textContent === "✓"]);
+    T.click(T.all(".lab-notes .slide-btn").pop());
+    await T.sleep(500);            // a slide draws after its transition
+    out.push(["…and the next slide opens", pos() === "2 / 2" && notes.textContent.includes("Well done"), pos() + " | " + notes.textContent.slice(0, 160)]);
     out.push(["fixing it says Saving…", /Saving/.test(T.q("#lab-saved").textContent), T.q("#lab-saved").textContent]);
     return out;
   })()`);

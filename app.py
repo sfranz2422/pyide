@@ -2227,6 +2227,29 @@ def _is_lesson(item):
 
 #: A lab's own file: which built-in scenario it is ({"scenario": id}).
 LAB_FILE = "lab.json"
+#: Its notes: a tutorial in the library, like any assignment's.
+LAB_NOTES = "lab.md"
+
+
+def _lab_starter_notes(db, user, sc):
+    """(notes, tutorial id) for a new lab of this ticket: the teacher's own
+    tutorial for it if another of their labs of the same ticket has one —
+    so the notes they rewrote once for this ticket reach every period that
+    has it, the library's whole point — else the ticket's starter notes
+    (static/lab/scenarios/<id>.md), to be adopted as a new tutorial."""
+    for other in (db.query(accounts.Assignment)
+                    .filter_by(teacher_id=user.id, app=APP_NAME, kind="lab")
+                    .order_by(accounts.Assignment.id.desc()).all()):
+        if other.tutorial_id and (_lab_of(other) or {}).get("id") == sc["id"]:
+            tut = db.query(accounts.LibraryItem).filter_by(id=other.tutorial_id).first()
+            if tut is not None:
+                return tut.body, tut.id
+    path = os.path.join(app.static_folder, "lab", "scenarios", sc["id"] + ".md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read(), None
+    except OSError:
+        return "", None
 
 
 def _is_lab(item):
@@ -4637,12 +4660,17 @@ def class_new_assignment(class_id):
                                                   else "Untitled assignment")
         if lab:
             # An A+ lab: graded on the server as the student works, so it is
-            # out of its tasks' points from the start.
+            # out of its tasks' points, and its notes' questions', from the start.
+            notes, tutorial = _lab_starter_notes(db, user, sc)
+            files = {LAB_FILE: json.dumps({"scenario": sc["id"]})}
+            if notes.strip():
+                files[LAB_NOTES] = notes
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, kind="lab", code="",
-                files=json.dumps({LAB_FILE: json.dumps({"scenario": sc["id"]})}),
-                out_of=sum(t["points"] for t in sc["tasks"]))
+                files=json.dumps(files), tutorial_id=tutorial,
+                out_of=math.ceil(sum(t["points"] for t in sc["tasks"])
+                                 + sum(k["points"] for k in quiz.keys(notes))))
         elif lesson:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
@@ -4661,6 +4689,8 @@ def class_new_assignment(class_id):
         db.add(item)
         db.commit()
         _store_quiz_keys(db, item.id, item.file_map().values())
+        if lab and item.tutorial_id is None:
+            library.adopt(db, item, sc["title"])     # its own tutorial, to edit
         _place(db, course, item)
         return jsonify(slug=item.slug, url=url_for(
             "edit_lesson" if lesson else "teacher_assignment" if lab else "edit_assignment",
@@ -5174,7 +5204,8 @@ def class_view_item(token, slug):
             return render_template("lesson.html", **ctx)
         if _is_lab(item) and _lab_of(item) is not None:
             # The lab, kept in the visitor's browser and saved nowhere.
-            ctx.update(scenario=_lab_of(item), lab_item=item, lab_saves=False, attend_class=None)
+            ctx.update(scenario=_lab_of(item), lab_item=item, lab_saves=False,
+                       lab_notes=_lab_notes(item), attend_class=None)
             return render_template("lab_sandbox.html", **ctx)
         ctx.update(code=item.code, files=quiz.redact_files(item.file_map()),
                    title=item.title, author="", readonly=True, authoring=False,
@@ -7805,9 +7836,16 @@ def _lab_page(db, item, user):
         abort(404)
     saves = (user is not None and user.id != item.teacher_id)
     ctx = user_context(db)
-    ctx.update(scenario=sc, lab_item=item, lab_saves=saves,
+    ctx.update(scenario=sc, lab_item=item, lab_saves=saves, lab_notes=_lab_notes(item),
                attend_class=_attend_item(db, user, item))
     return render_template("lab_sandbox.html", **ctx)
+
+
+def _lab_notes(item):
+    """A lab's notes as a student is given them: the answer keys out, as
+    every copy that leaves for a student has them (test_quiz.py's leak
+    checks hold this one too)."""
+    return quiz.redact(item.file_map().get(_notes_name(item), ""))
 
 
 def _lab_for_student(db, slug):

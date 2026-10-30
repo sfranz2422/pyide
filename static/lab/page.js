@@ -3,7 +3,8 @@
  * show the lab (lab_sandbox.html for the sandbox and /lab/try/<id>) give
  * it where things are and how to keep the machine; this wires the rest.
  *
- *   PyIDELabPage.start({base, imgBase, scenario, key, load, save})
+ *   PyIDELabPage.start({base, imgBase, scenario, key, load, save,
+ *                       notes, slug, signedIn, viewOnly})
  *
  * base: static/lab/; scenario: a scenario's id, or none for the sandbox;
  * key: the localStorage name the machine is kept under when load/save
@@ -11,6 +12,12 @@
  *
  * A scenario's ticket marks its tasks after every change, with
  * lab_checks.js — the same marking the server repeats for the grade.
+ *
+ * A lab set in a class has notes (`notes`, its tutorial, keys taken out):
+ * a pane beside the lab, as slides, its questions answered into the
+ * assignment (notes.js, /api/quiz) and its ```lab cards ticked from the same
+ * marking (lab_notes.js). `locked: yes` in them holds a slide until its
+ * card is done.
  */
 window.PyIDELabPage = (function () {
   "use strict";
@@ -144,7 +151,7 @@ window.PyIDELabPage = (function () {
       ticket.appendChild(el("div", { class: "lab-ticket-body" }, [el("p", { class: "lab-ticket-text", text: sc.ticket }), tasks]));
     }
     function mark(s) {
-      if (!sc || !ticket) return;
+      if (!sc || !ticket) return null;
       var got = K.grade(cat, sc, s), score = 0, total = 0;
       got.forEach(function (g) {
         total += g.points;
@@ -158,8 +165,40 @@ window.PyIDELabPage = (function () {
         }
       });
       $("lab-score").textContent = score + " / " + total + " points" + (score === total ? " · fixed!" : "");
+      return got;
     }
+    /* ---------------------------------------------------------- the notes */
+    function mountNotes() {
+      var pane = $("lab-notes"), body = $("lab-notes-body"), N = window.PyIDENotes;
+      if (!opts.notes || !pane || !N) return;
+      window.PyIDELabNotes.setTasks(sc);
+      N.setQuizContext({ assignment: opts.slug, signedIn: !!opts.signedIn, viewOnly: !!opts.viewOnly });
+      var view = N.slideView(body, { key: "lab:" + opts.slug, locked: true });
+      view.show(opts.notes);
+      // Open the first time; after that, as the student left it.
+      var KEY = "pyide-lab-notes-open", open = true;
+      try { open = localStorage.getItem(KEY) !== "0"; } catch (e) { /* open */ }
+      var btn = $("lab-notes-toggle");
+      function show(on) {
+        pane.hidden = !on;
+        btn.setAttribute("aria-expanded", String(on));
+        btn.classList.toggle("on", on);
+        try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) { /* this visit */ }
+      }
+      btn.hidden = false;
+      btn.addEventListener("click", function () { show(pane.hidden); });
+      $("lab-notes-close").addEventListener("click", function () { show(false); });
+      show(open);
+    }
+    var marked = mark;
+    mark = function (s) {
+      var got = marked(s);
+      if (window.PyIDELabNotes && got) window.PyIDELabNotes.update(got);
+      return got;
+    };
+
     drawTicket();
+    mountNotes();
     mark(state);
     if (sc && sc.start === "windows") boot(state);
   }

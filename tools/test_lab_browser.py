@@ -24,7 +24,8 @@ everything around it a student touches on /lab/sandbox:
   * a class lab: the teacher assigns a ticket from the tickets page, the
     student fixes it on their page, it saves and is turned in, and a reload
     with this browser's storage cleared brings it back from the server —
-    and the .py finds it marked there
+    and the .py finds it marked there; its notes (rewritten in the library)
+    beside it, a locked slide held until the step card's task is done
   * no errors in the page
 
 Needs Chrome and node; says "skip" without Chrome rather than failing.
@@ -51,7 +52,7 @@ import accounts                                              # noqa: E402
 import json                                                  # noqa: E402
 
 # Each line lab_browser.mjs prints is a check; this many, or one went missing.
-EXPECTED = 54
+EXPECTED = 59
 
 results = []
 

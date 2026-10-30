@@ -1218,6 +1218,11 @@ window.PyIDENotes = (function () {
     if (window.PyIDETests) {
       try { window.PyIDETests.renderBlocks(root); } catch (e) { /* left as code */ }
     }
+    // ```lab blocks, where lab_notes.js is loaded (an A+ lab's page): the
+    // ticket's tasks for that step, ticked as the machine passes them.
+    if (window.PyIDELabNotes) {
+      try { window.PyIDELabNotes.renderBlocks(root); } catch (e) { /* left as code */ }
+    }
     // ```python run blocks, where snippets.js is loaded (the editor and the
     // live page); elsewhere they stay code to read.
     if (window.IDESnippets) {

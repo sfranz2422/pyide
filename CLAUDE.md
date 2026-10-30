@@ -563,7 +563,14 @@ back) and every placement is checked again, so a forged save that passes
 is a correct machine. Marks are a TestResult "verified", so `_earned` and
 every total already count them; the same machine saved again does nothing,
 so a turn-in time never moves by itself. **Labs are never live**: no live
-link made, not in the chooser, `_assignment_for` refuses them.
+link made, not in the chooser, `_assignment_for` refuses them. A lab's
+notes (`lab.md`) are a library tutorial like any assignment's, started from
+`static/lab/scenarios/<id>.md`; a second lab of the same ticket links the
+teacher's EXISTING tutorial for it (`_lab_starter_notes`), so one rewrite
+reaches every period. They show in a pane beside the lab, keys out
+(`_lab_notes`, in `test_quiz.py`'s leak checks); a ```` ```lab ```` block
+names ticket tasks and is drawn as a card ticked from the machine
+(`lab_notes.js`, one hook in `notes.js`), which `locked: yes` holds a slide on.
 
 ## Style
 

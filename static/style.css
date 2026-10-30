@@ -3460,6 +3460,13 @@ body.is-demo.is-world .world-view { height: 100%; }
 body.lab-page { display: flex; flex-direction: column; height: 100%; }
 body.lab-page > .bar { flex: none; }
 body.lab-page .lab-wrap { flex: 1; height: auto; }
+/* A lab's notes: a pane at the right, over the bench and the screen. */
+.lab-notes { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(440px, 92vw); display: flex; flex-direction: column;
+  background: var(--bg); border-left: 1px solid var(--line); box-shadow: -6px 0 18px rgba(0, 0, 0, .18); }
+.lab-notes[hidden] { display: none; }
+.lab-notes-bar { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.lab-notes-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px; }
+#lab-notes-toggle.on { border-color: var(--accent); }
 .lab-ticket { flex: none; max-height: 38vh; overflow: auto; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg-panel); }
 .lab-ticket[hidden] { display: none; }
 .lab-ticket-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

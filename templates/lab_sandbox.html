@@ -42,6 +42,7 @@
     {% if not scenario %}
     <button id="lab-windows" class="btn btn-primary" type="button" title="A working PC, already put together, switched on to the Windows desktop">🖥 Start in Windows</button>
     {% endif %}
+    {% if lab_notes %}<button id="lab-notes-toggle" class="btn" type="button" aria-controls="lab-notes" hidden>📖 Notes</button>{% endif %}
     {% if is_teacher and not lab_item %}<a class="btn" href="{{ url_for('lab_scenarios') }}">Tickets</a>{% endif %}
     <a class="btn" href="{{ url_for('lab_credits') }}" target="_blank" rel="noopener">Photo credits</a>
     <button id="lab-reset" class="btn" type="button" title="{{ 'Start this ticket again' if scenario else 'Put every part back on the shelf' }}">Start over</button>
@@ -60,6 +61,14 @@
     </div>
     <div id="lab-desktop" class="lab-desktop-host"></div>
   </div>
+  {% if lab_notes %}
+  {#  The lab's notes (its tutorial), beside the bench and the screen. #}
+  <aside id="lab-notes" class="lab-notes" aria-label="Notes" hidden>
+    <div class="lab-notes-bar"><strong>📖 Notes</strong>
+      <button id="lab-notes-close" class="btn" type="button" title="Hide the notes">✕</button></div>
+    <div id="lab-notes-body" class="notes-body prose lab-notes-body"></div>
+  </aside>
+  {% endif %}
 </main>
 
 <script src="{{ url_for('static', filename='lab/machine.js') }}"></script>
@@ -68,12 +77,25 @@
 <script src="{{ url_for('static', filename='lab/cmd.js') }}"></script>
 <script src="{{ url_for('static', filename='lab/apps.js') }}"></script>
 <script src="{{ url_for('static', filename='lab/lab_checks.js') }}"></script>
+{% if lab_notes %}
+<script src="{{ url_for('static', filename='notes.js') }}"></script>
+<script src="{{ url_for('static', filename='xp.js') }}"></script>
+<script src="{{ url_for('static', filename='lab/lab_notes.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='lab/page.js') }}"></script>
 <script>
   window.PyIDELabPage.start({
     base: "{{ url_for('static', filename='lab/') }}",
     imgBase: "{{ url_for('static', filename='lab/img/') }}",
     scenario: {{ (scenario.id if scenario else none)|tojson }},
+    {% if lab_notes %}
+    // The notes with the answer keys taken out (_lab_notes), as every copy
+    // a student is given has them.
+    notes: {{ lab_notes|tojson }},
+    slug: {{ lab_item.slug|tojson }},
+    signedIn: {{ "true" if user else "false" }},
+    viewOnly: {{ "true" if visitor else "false" }},
+    {% endif %}
     // What's done is kept in this browser, so a reload doesn't undo it.
     key: {{ ("pyide-lab-a:" + lab_item.slug if lab_item else "pyide-lab-try:" + scenario.id if scenario else "pyide-lab-sandbox")|tojson }}
     {% if lab_saves %},
