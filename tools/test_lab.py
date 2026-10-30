@@ -166,6 +166,14 @@ def main():
     check("rewriting the tutorial in the library reaches both periods' labs",
           r is not None and r.status_code == 200 and all("Mr F's version" in q(accounts.Assignment, id=a.id)[0].file_map()["lab.md"] for a in (item, twin)))
 
+    r = teacher.post("/api/assignment/%s/title" % twin.slug, json={"title": "Lab 6 · It shuts itself off (P5)"})
+    renamed = q(accounts.Assignment, id=twin.id)[0]
+    check("a lab can be renamed, and stays the same lab", r.status_code == 200 and renamed.title.endswith("(P5)")
+          and json.loads(renamed.file_map()["lab.json"]) == {"scenario": "overheat"})
+    check("…but not by another teacher, nor to nothing",
+          other.post("/api/assignment/%s/title" % twin.slug, json={"title": "Mine"}).status_code == 404
+          and teacher.post("/api/assignment/%s/title" % twin.slug, json={"title": "  "}).status_code == 400)
+
     print("Opening it")
     sp = kid.get("/a/" + slug)
     html = sp.get_data(as_text=True)

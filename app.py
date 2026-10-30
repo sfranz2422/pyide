@@ -2776,6 +2776,30 @@ def update_assignment(slug):
         db.close()
 
 
+@app.post("/api/assignment/<slug>/title")
+def rename_assignment(slug):
+    """A new name, and nothing else. update_assignment saves a whole project
+    (code and files) and can't rename a lab or a lesson without trampling
+    what they are — a lab's lab.json would go with the files it replaces."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            return jsonify(error="not allowed"), 403
+        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        if item is None or item.teacher_id != user.id:
+            return jsonify(error="no such assignment"), 404
+        title = clean((request.get_json(silent=True) or {}).get("title"), 200)
+        if not title:
+            return jsonify(error="Give it a name."), 400
+        item.title = title
+        item.updated_at = accounts.now()
+        db.commit()
+        return jsonify(ok=True, title=item.title)
+    finally:
+        db.close()
+
+
 @app.post("/api/assignment/<slug>/archive")
 def archive_assignment(slug):
     """Tidy an assignment away, or bring it back.
