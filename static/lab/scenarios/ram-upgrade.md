@@ -8,7 +8,7 @@
 
 A board has two memory **channels**, A and B. One stick in each channel doubles how fast memory can be read.
 
-On a four-slot board the slots are **A1, A2, B1, B2**, and the manual says which to fill first. For two sticks it's usually **A2 and B2**: the slots furthest from the CPU.
+On a four-slot board the slots are **A1, A2, B1, B2**, and the manual says which to fill first. For two sticks it's usually **A2 and B2**: the 2nd and 4th slots from the CPU. Always check the manual.
 
 ```quiz
 Two sticks on a four-slot board. Which slots does this board's manual ask for?
