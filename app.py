@@ -7656,6 +7656,14 @@ def help_world():
     return render_template("help_world.html", blocks=blocks, wool=WOOL_COLOURS)
 
 
+@app.get("/lab/sandbox")
+def lab_sandbox():
+    """The A+ lab's sandbox: every part on the shelf, nothing checked, open to
+    anyone — to try the bench and the computer before a lab is set. What's
+    built here stays in this browser (localStorage) and nowhere else."""
+    return render_template("lab_sandbox.html")
+
+
 @app.get("/privacy")
 def privacy():
     """The policy Google's consent screen links to, for all three editors —

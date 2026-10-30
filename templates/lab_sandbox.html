@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A+ lab sandbox — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+</head>
+<body class="lab-page">
+
+{#  The A+ lab's sandbox (machine.js, bench.js): every part, nothing checked.
+    A scenario set by a teacher is the same bench with its own parts and
+    faults, and tasks beside it. #}
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">A+ lab · sandbox</span></div>
+  <div class="actions">
+    <button id="lab-reset" class="btn" type="button" title="Put every part back on the shelf">Start over</button>
+  </div>
+</header>
+
+<main id="lab" class="lab-main"></main>
+
+<script src="{{ url_for('static', filename='lab/machine.js') }}"></script>
+<script src="{{ url_for('static', filename='lab/bench.js') }}"></script>
+<script>
+  (function () {
+    "use strict";
+    // What's built is kept in this browser, so a reload doesn't undo it.
+    var KEY = "pyide-lab-sandbox";
+    fetch("{{ url_for('static', filename='lab/parts.json') }}").then(function (r) { return r.json(); }).then(function (cat) {
+      var state = null;
+      try { state = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { state = null; }
+      if (!state || state.v !== 1) state = window.PyIDELab.sandbox(cat);
+      state.power = { on: false, uptime: 0 };
+      var bench = window.PyIDELabBench.mount(document.getElementById("lab"), {
+        catalog: cat, state: state,
+        onChange: function (s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* full or blocked */ } }
+      });
+      document.getElementById("lab-reset").addEventListener("click", function () {
+        if (!confirm("Put every part back on the shelf?")) return;
+        var fresh = window.PyIDELab.sandbox(cat);
+        try { localStorage.setItem(KEY, JSON.stringify(fresh)); } catch (e) {}
+        bench.setState(fresh);
+      });
+    });
+  })();
+</script>
+</body>
+</html>
