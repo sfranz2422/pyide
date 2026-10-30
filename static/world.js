@@ -583,6 +583,7 @@ window.PyIDEWorld = (function () {
 
   function draw() {
     view.needsDraw = false;
+    view.drawn = (view.drawn || 0) + 1;
     var p = world.player, c = world.camera, cam = view.camera, e = eye(), d = world.direction();
     view.body.visible = c.mode !== "normal";
     view.body.position.set(p.x, p.y + 0.9, p.z);
@@ -1004,6 +1005,13 @@ window.PyIDEWorld = (function () {
       return c;
     },
     world: theWorld,
+    // How much has been drawn: for tools/world_browser.mjs, which can't read
+    // a WebGL picture back but can tell an empty scene from a built one.
+    stats: function () {
+      var n = 0;
+      Object.keys(view.meshes).forEach(function (k) { n += view.meshes[k].length; });
+      return { meshes: n, frames: view.drawn || 0, ready: !!view.ready };
+    },
     LOOKS: LOOKS
   };
 })();
