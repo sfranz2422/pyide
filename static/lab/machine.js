@@ -535,38 +535,131 @@ window.PyIDELab = (function () {
     return hit;
   }
 
-  function formatVolume(state, letter, fs, label) {
-    if (!running(state)) return no("Windows isn't running.");
-    var v = findVolume(state.os, letter);
-    if (!v) return no("There's no drive " + letter + ":.");
-    if (v.part.letter === "C") return no("Windows can't format the drive it's running from.");
-    fs = (fs || "NTFS").toUpperCase();
+  /* By partition (a disk and its index) — what diskpart works with, and
+     Disk Management for a partition that has no letter to name it by. The
+     by-letter functions below are these, found by letter. */
+  function partAt(state, uid, i) {
+    var d = state.os && state.os.disks[uid];
+    return d && d.parts[i] ? d.parts[i] : null;
+  }
+  function checkFs(fs, gb) {
+    fs = String(fs || "NTFS").toUpperCase();
     if (["NTFS", "FAT32", "EXFAT"].indexOf(fs) < 0) return no("Choose NTFS, FAT32 or exFAT.");
-    if (fs === "FAT32" && v.part.gb > 32) return no("Windows formats FAT32 volumes up to 32 GB. Use NTFS or exFAT.");
-    v.part.fs = fs === "EXFAT" ? "exFAT" : fs;
-    if (label != null) v.part.label = label;
-    return YES;
+    if (fs === "FAT32" && gb > 32) return no("Windows formats FAT32 volumes up to 32 GB. Use NTFS or exFAT.");
+    return { ok: true, fs: fs === "EXFAT" ? "exFAT" : fs };
   }
-
-  function changeLetter(state, from, to) {
+  function formatPartition(state, uid, i, fs, label) {
     if (!running(state)) return no("Windows isn't running.");
-    var v = findVolume(state.os, from);
-    if (!v) return no("There's no drive " + from + ":.");
-    if (v.part.letter === "C") return no("The system drive's letter can't be changed.");
-    to = String(to).toUpperCase().replace(":", "");
-    if (!/^[D-Z]$/.test(to)) return no("Choose a letter from D to Z.");
+    var v = partAt(state, uid, i);
+    if (!v) return no("There's no such partition.");
+    if (v.letter === "C") return no("Windows can't format the drive it's running from.");
+    var f = checkFs(fs, v.gb);
+    if (!f.ok) return f;
+    v.fs = f.fs;
+    v.dirty = false;
+    if (label != null) v.label = label;
+    return YES;
+  }
+  // A letter for a partition: the one asked for, or the next free one.
+  function assignLetter(state, uid, i, letter) {
+    if (!running(state)) return no("Windows isn't running.");
+    var v = partAt(state, uid, i);
+    if (!v) return no("There's no such partition.");
+    if (v.letter === "C") return no("The system drive's letter can't be changed.");
+    var to = letter ? String(letter).toUpperCase().replace(":", "") : nextLetter(state.os);
+    if (!to || !/^[D-Z]$/.test(to)) return no("Choose a letter from D to Z.");
+    if (to === v.letter) return YES;
     if (lettersInUse(state.os)[to]) return no("The drive letter " + to + ": is already in use.");
-    v.part.letter = to;
+    v.letter = to;
+    return YES;
+  }
+  function removeLetter(state, uid, i) {
+    if (!running(state)) return no("Windows isn't running.");
+    var v = partAt(state, uid, i);
+    if (!v) return no("There's no such partition.");
+    if (v.letter === "C") return no("Windows can't remove the letter of the drive it's running from.");
+    v.letter = "";
+    return YES;
+  }
+  function deletePartition(state, uid, i) {
+    if (!running(state)) return no("Windows isn't running.");
+    var v = partAt(state, uid, i);
+    if (!v) return no("There's no such partition.");
+    if (v.letter === "C") return no("Windows can't delete the volume it's running from.");
+    state.os.disks[uid].parts.splice(i, 1);
+    return YES;
+  }
+  /* diskpart's create partition primary: space set aside, with no file
+     system (RAW) and no letter until it's formatted and assigned. On a disk
+     that isn't initialized, diskpart makes it MBR first, as the real one
+     does — a thing worth knowing when a 3 TB disk comes out MBR. */
+  function createPartition(cat, state, uid, gb) {
+    if (!running(state)) return no("Windows isn't running.");
+    var d = state.os.disks[uid];
+    if (!d) return no("There's no such disk.");
+    if (!d.style) d.style = "MBR";
+    if (d.style === "MBR" && d.parts.length >= 4) return no("An MBR disk holds at most four primary partitions.");
+    var free = freeGb(state, uid, cat), size = gb ? Math.min(gb, free) : free;
+    if (size <= 0) return no("There is not enough usable free space on specified disk(s) to create the partition.");
+    d.parts.push({ gb: size, fs: "RAW", letter: "", label: "" });
+    return { ok: true, why: "", index: d.parts.length - 1 };
+  }
+  // diskpart clean: every partition gone, and the disk back to not initialized.
+  function cleanDisk(state, uid) {
+    if (!running(state)) return no("Windows isn't running.");
+    var d = state.os.disks[uid];
+    if (!d) return no("There's no such disk.");
+    if (d.parts.some(function (v) { return v.letter === "C"; })) {
+      return no("Clean is not allowed on the disk containing the current boot, system, pagefile, crashdump or hibernation volume.");
+    }
+    d.parts = [];
+    d.style = null;
+    return YES;
+  }
+  // convert gpt / convert mbr: only on an empty disk.
+  function convertDisk(state, uid, style) {
+    if (!running(state)) return no("Windows isn't running.");
+    var d = state.os.disks[uid];
+    if (!d) return no("There's no such disk.");
+    style = String(style || "").toUpperCase();
+    if (style !== "GPT" && style !== "MBR") return no("Choose GPT or MBR.");
+    if (d.parts.length) return no("The specified disk is not convertible. Only empty disks can be converted (clean it first).");
+    d.style = style;
     return YES;
   }
 
-  function deleteVolume(state, letter) {
+  function byLetter(state, letter, fn) {
     if (!running(state)) return no("Windows isn't running.");
     var v = findVolume(state.os, letter);
     if (!v) return no("There's no drive " + letter + ":.");
-    if (v.part.letter === "C") return no("Windows can't delete the volume it's running from.");
-    state.os.disks[v.disk].parts.splice(v.index, 1);
-    return YES;
+    return fn(v.disk, v.index);
+  }
+  function formatVolume(state, letter, fs, label) {
+    return byLetter(state, letter, function (uid, i) { return formatPartition(state, uid, i, fs, label); });
+  }
+  function changeLetter(state, from, to) {
+    return byLetter(state, from, function (uid, i) {
+      if (!to || !/^[D-Z]$/i.test(String(to).replace(":", ""))) return partAt(state, uid, i).letter === "C" ? no("The system drive's letter can't be changed.") : no("Choose a letter from D to Z.");
+      return assignLetter(state, uid, i, to);
+    });
+  }
+  function deleteVolume(state, letter) {
+    return byLetter(state, letter, function (uid, i) { return deletePartition(state, uid, i); });
+  }
+
+  /* What a name looks up to (nslookup, and ping or tracert by name): from the
+     DNS server asked for, or the adapter's first. Why not, when not:
+     "noserver" (no DNS server set), "timeout" (it doesn't answer), or
+     "nxdomain" (it answered: there's no such name). */
+  function lookup(state, name, server) {
+    var os = state.os;
+    if (!running(state)) return { ok: false, why: "off" };
+    var srv = server || (os.net.dns || [])[0];
+    if (!srv) return { ok: false, why: "noserver" };
+    var answers = onLan(os) && (srv === os.lan.dns || (online(state) && PUBLIC_DNS[srv]));
+    if (!answers) return { ok: false, why: "timeout", server: srv };
+    var ip = NAMES[String(name || "").toLowerCase()];
+    return ip ? { ok: true, ip: ip, server: srv } : { ok: false, why: "nxdomain", server: srv };
   }
 
   /* --------------------------------------------- the network */
@@ -734,6 +827,8 @@ window.PyIDELab = (function () {
     changeLetter: changeLetter, deleteVolume: deleteVolume, findVolume: findVolume,
     release: release, renew: renew, setIp: setIp, reach: reach, online: online, dnsWorks: dnsWorks,
     endTask: endTask, setStartup: setStartup, sfc: sfc, chkdsk: chkdsk, restart: restart,
-    logEvent: logEvent, disks: disks, memoryGb: memoryGb
+    logEvent: logEvent, disks: disks, memoryGb: memoryGb, lookup: lookup, NAMES: NAMES, PUBLIC_DNS: PUBLIC_DNS,
+    partAt: partAt, formatPartition: formatPartition, assignLetter: assignLetter, removeLetter: removeLetter,
+    deletePartition: deletePartition, createPartition: createPartition, cleanDisk: cleanDisk, convertDisk: convertDisk
   };
 })();

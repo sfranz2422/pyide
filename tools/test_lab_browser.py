@@ -38,7 +38,7 @@ sys.path.insert(0, PYIDE)
 import app as P                                              # noqa: E402
 
 # Each line lab_browser.mjs prints is a check; this many, or one went missing.
-EXPECTED = 28
+EXPECTED = 37
 
 results = []
 

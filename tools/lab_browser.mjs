@@ -47,6 +47,13 @@ const HELPERS = `
     dialog: () => T.q(".ld-dialog"),
     dmsg: () => { const m = T.q(".ld-dialog-msg"); return m && !m.hidden ? m.textContent : ""; },
     saved: () => JSON.parse(localStorage.getItem("pyide-lab-sandbox") || "null"),
+    // Type a line into a Command Prompt window and press Enter; what it printed after.
+    type: (w, line) => {
+      const out = T.q(".ld-term-out", w), before = out.textContent.length, input = T.q(".ld-term-in", w);
+      input.value = line;
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      return out.textContent.slice(before);
+    },
   };
 `;
 
@@ -144,6 +151,7 @@ try {
   await go("/lab/sandbox");
   const desk = await ev(`(async () => {
     const out = [];
+    try {
     T.click(T.btn("⏻ Power on"));
     await T.sleep(100);
     out.push(["no network driver: the taskbar says Not connected", T.q(".ld-tray").title === "Not connected", T.q(".ld-tray").title]);
@@ -158,7 +166,7 @@ try {
     sel[1].value = "FAT32";
     T.click(T.btn("Finish", T.dialog()));
     out.push(["FAT32 over 32 GB is refused, and the wizard stays open to fix it", /32 GB/.test(T.dmsg()) && !!T.dialog(), T.dmsg()]);
-    sel[1].value = "NTFS"; T.all("input", T.dialog())[1].value = "Games";
+    sel[1].value = "NTFS"; T.all("input", T.dialog())[0].value = "100"; T.all("input", T.dialog())[1].value = "Games";
     T.click(T.btn("Finish", T.dialog()));
     out.push(["an NTFS volume is made, and listed as Games (D:)", !T.dialog() && !!T.has(".ld-table td", "Games (D:)") && T.saved().os.disks.new.parts[0].letter === "D"]);
     T.start("Device Manager");
@@ -200,8 +208,39 @@ try {
     out.push(["Back to the bench leaves it running, with a way back", T.q("#lab-monitor").hidden && !!T.btn("🖥 Show the screen")]);
     T.click(T.btn("🖥 Show the screen"));
     out.push(["…and the windows are still open", !T.q("#lab-monitor").hidden && T.all(".ld-win").length === 6, T.all(".ld-win").length]);
+    T.start("Command Prompt");
+    const c = T.win("Command Prompt");
+    out.push(["Command Prompt: ipconfig prints the static address", T.type(c, "ipconfig").includes(": 192.168.1.80")]);
+    out.push(["…sfc refuses without an administrator", /must be an administrator/.test(T.type(c, "sfc /scannow"))]);
+    T.q(".ld-term-in", c).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    out.push(["…↑ brings back the last command", T.q(".ld-term-in", c).value === "sfc /scannow", T.q(".ld-term-in", c).value]);
+    T.q(".ld-term-in", c).value = "";
+    T.click(T.q(".ld-startbtn")); T.click(T.q(".ld-start-admin"));
+    out.push(["Run as administrator asks first (User Account Control)", /allow this app to make changes/.test((T.dialog() || {}).textContent || "")]);
+    T.click(T.btn("Yes", T.dialog()));
+    await T.sleep(20);
+    const a = T.win("Administrator: Command Prompt");
+    out.push(["…and opens an administrator's Command Prompt in system32", !!a && T.q(".ld-term-prompt", a).textContent.endsWith("system32>")]);
+    T.type(a, "diskpart"); T.type(a, "select disk 1"); T.type(a, "create partition primary size=51200");
+    const lp = T.type(a, "list partition");
+    out.push(["diskpart makes a 50 GB partition on the new disk", lp.includes("* Partition 2") && lp.includes("50 GB"), lp]);
+    T.type(a, "exit");
+    T.start("Disk Management");
+    const dm = T.win("Disk Management");
+    T.click(T.has(".ld-part", "partition 2", dm));
+    out.push(["Disk Management shows it RAW, with no letter, and offers Add Drive Letter", !!T.has(".ld-table td", "RAW", dm) && !!T.btn("Add Drive Letter", dm)]);
+    T.click(T.btn("Format", dm)); T.click(T.btn("OK", T.dialog()));
+    T.click(T.btn("Add Drive Letter", dm)); T.click(T.btn("OK", T.dialog()));
+    const made = T.saved().os.disks.new.parts[1];
+    out.push(["…formats it and gives it a letter", made.fs === "NTFS" && made.letter === "E", made]);
+    T.type(a, "exit");
+    out.push(["exit closes the Command Prompt", !T.win("Administrator: Command Prompt")]);
     T.click(T.q(".ld-startbtn")); T.click(T.btn("⏻ Shut down"));
     out.push(["Shut down turns it off and goes back to the bench", T.q("#lab-monitor").hidden && !T.saved().power.on && !!T.btn("⏻ Power on")]);
+    } catch (e) {
+      // Where it stopped: the check after the last one reported.
+      out.push(["the computer's steps ran to the end", false, "stopped after " + (out.length ? out[out.length - 1][0] : "the start") + ": " + e.message]);
+    }
     return out;
   })()`);
   desk.forEach(([label, ok, detail]) => say(ok, label, detail));

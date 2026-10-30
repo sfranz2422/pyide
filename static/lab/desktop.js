@@ -68,6 +68,9 @@ window.PyIDELabDesktop = (function () {
       changed: changed,
       open: open,
       dialog: dialog,
+      close: function (w) { close(w); },
+      restart: restart,
+      off: function () { L.powerOff(state); changed(); },
       // A device's or a volume's name the way the apps print sizes.
       size: function (gb) { return gb >= 1000 ? (gb / 1000).toFixed(gb % 1000 ? 2 : 0) + " TB" : gb + " GB"; }
     };
@@ -243,16 +246,15 @@ window.PyIDELabDesktop = (function () {
       menu.appendChild(el("div", { class: "ld-start-head", text: "Apps" }));
       ORDER.forEach(function (id) {
         if (APPS[id].hidden) return;
-        menu.appendChild(el("button", { type: "button", class: "ld-start-app", onclick: function () { open(id); } },
-                            [el("span", { class: "ld-start-icon", text: APPS[id].icon }), APPS[id].title]));
+        var row = el("div", { class: "ld-start-row" }, [el("button", { type: "button", class: "ld-start-app", onclick: function () { open(id); } },
+                            [el("span", { class: "ld-start-icon", text: APPS[id].icon }), APPS[id].title])]);
+        // What a right-click gives on Windows, as a button a finger can reach.
+        if (APPS[id].admin) row.appendChild(el("button", { type: "button", class: "ld-start-admin", title: "Run as administrator",
+                                                           text: "Run as administrator", onclick: function () { runAsAdmin(APPS[id].admin); } }));
+        menu.appendChild(row);
       });
       menu.appendChild(el("div", { class: "ld-start-power" }, [
-        el("button", { type: "button", class: "ld-btn", text: "⟳ Restart", onclick: function () {
-          closeMenu();
-          wins.slice().forEach(close);
-          L.restart(cat, state);
-          changed();
-        } }),
+        el("button", { type: "button", class: "ld-btn", text: "⟳ Restart", onclick: function () { closeMenu(); restart(); } }),
         el("button", { type: "button", class: "ld-btn", text: "⏻ Shut down", onclick: function () {
           closeMenu();
           L.powerOff(state);
@@ -261,6 +263,21 @@ window.PyIDELabDesktop = (function () {
       ]));
       menu.hidden = false;
       drawBar();
+    }
+    // A restart closes every app, as a real one does.
+    function restart() {
+      wins.slice().forEach(close);
+      L.restart(cat, state);
+      changed();
+    }
+    /* Run as administrator: Windows asks first (User Account Control), and
+       that question is on the exam too. */
+    function runAsAdmin(id) {
+      closeMenu();
+      dialog(null, "User Account Control", el("div", {}, [
+        el("p", { text: "Do you want to allow this app to make changes to your device?" }),
+        el("p", { class: "ld-dim", text: APPS[id].title })
+      ]), [{ text: "Yes", primary: true, onclick: function () { setTimeout(function () { open(id); }, 0); } }, { text: "No" }]);
     }
     function closeMenu() {
       if (!menuOpen) return;

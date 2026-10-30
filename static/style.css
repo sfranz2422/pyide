@@ -3543,6 +3543,9 @@ body.is-demo.is-world .world-view { height: 100%; }
 .ld-start-head { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin-bottom: 6px; }
 .ld-start-app { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 6px; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer; }
 .ld-start-app:hover, .ld-start-app:focus-visible { background: rgba(255, 255, 255, .12); }
+.ld-start-row { display: flex; align-items: center; gap: 4px; }
+.ld-start-admin { flex: none; padding: 3px 7px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 4px; background: none; color: #cfd6de; font: inherit; font-size: 11px; cursor: pointer; }
+.ld-start-admin:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .ld-start-icon { width: 22px; text-align: center; font-size: 17px; }
 .ld-start-power { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .15); }
 .ld-win { position: absolute; display: flex; flex-direction: column; min-width: 280px; background: #f7f8fa; border: 1px solid #8a94a3; border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); overflow: hidden; }
@@ -3614,6 +3617,12 @@ body.is-demo.is-world .world-view { height: 100%; }
 .ld-field > span { width: 46%; font-size: 12.5px; }
 .ld-field > span:empty { display: none; }
 .ld-input { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid #a9b2bf; border-radius: 4px; font: inherit; background: #fff; color: #1d2128; }
+.ld-win-body.ld-term-body { padding: 0; overflow: hidden; }
+.ld-term { height: 100%; overflow: auto; padding: 8px 10px; background: #0c0c0c; color: #d6d6d6; font: 13px/1.35 "IBM Plex Mono", ui-monospace, Menlo, monospace; cursor: text; box-sizing: border-box; }
+.ld-term-out { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; user-select: text; }
+.ld-term-line { display: flex; align-items: baseline; }
+.ld-term-prompt { white-space: pre-wrap; }
+.ld-term-in { flex: 1; min-width: 40px; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; caret-color: #d6d6d6; }
 .ld-choices { display: flex; flex-direction: column; gap: 6px; }
 .ld-choice { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid #c9d0da; border-radius: 6px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
 .ld-choice:hover { border-color: #2f6fbf; background: #eef4fb; } .ld-choice strong { color: #2f6fbf; }

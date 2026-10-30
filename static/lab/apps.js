@@ -133,11 +133,15 @@
       if (fresh && !win.data.asked) { win.data.asked = true; setTimeout(function () { initialize(ctx, win, fresh); }, 0); }
 
       var pick = function (v) { win.data.sel = v; ctx.changed(); };
+      /* A partition is picked by its disk and place ("part:<uid>:<i>"), not
+         its letter: one made in diskpart has none until it's assigned, and
+         is still to be formatted and lettered here. */
+      var name = function (d, v, i) { return ((v.label || "") + (v.letter ? " (" + v.letter + ":)" : "")) || "(Disk " + d.n + " partition " + (i + 1) + ")"; };
       var vols = [];
       disks.forEach(function (d) {
-        d.disk.parts.forEach(function (v) {
-          vols.push({ key: "vol:" + v.letter + ":" + d.uid, cells: [
-            (v.label || "") + (v.letter ? " (" + v.letter + ":)" : ""), "Simple", "Basic", v.fs,
+        d.disk.parts.forEach(function (v, i) {
+          vols.push({ key: "part:" + d.uid + ":" + i, cells: [
+            name(d, v, i), "Simple", "Basic", v.fs,
             v.letter === "C" ? "Healthy (Boot, Page File, Primary Partition)" : "Healthy (Primary Partition)",
             ctx.size(v.gb), ctx.size(v.gb - usedGb(v))] });
         });
@@ -156,10 +160,10 @@
           el("div", { text: d.disk.style ? "Online" : "Not Initialized" })
         ]));
         var strip = el("div", { class: "ld-disk-strip" });
-        d.disk.parts.forEach(function (v) {
-          var key = "vol:" + v.letter + ":" + d.uid;
+        d.disk.parts.forEach(function (v, i) {
+          var key = "part:" + d.uid + ":" + i;
           strip.appendChild(el("div", { class: "ld-part" + (sel === key ? " sel" : ""), style: "flex:" + v.gb, tabindex: "0", onclick: function () { pick(key); } }, [
-            el("strong", { text: (v.label || "") + (v.letter ? " (" + v.letter + ":)" : "") }),
+            el("strong", { text: name(d, v, i) }),
             el("div", { text: ctx.size(v.gb) + " " + v.fs }), el("div", { text: "Healthy" })
           ]));
         });
@@ -174,17 +178,18 @@
       if (!disks.length) map.appendChild(p("No disks.", "ld-dim"));
 
       // What can be done to what's selected — a menu a right-click would give, as buttons.
-      var bits = (sel || "").split(":"), disk = disks.find(function (d) { return d.uid === bits[bits.length - 1] || d.uid === bits[1]; });
+      var bits = (sel || "").split(":"), disk = disks.find(function (d) { return d.uid === bits[1]; });
       var acts = [];
       if (bits[0] === "disk" && disk && !disk.disk.style) acts.push(["Initialize Disk…", function () { initialize(ctx, win, disk); }]);
       if (bits[0] === "free" && disk) acts.push(["New Simple Volume…", function () { newVolume(ctx, win, disk); }, !disk.disk.style]);
-      if (bits[0] === "vol") {
-        var letter = bits[1];
-        acts.push(["Change Drive Letter…", function () { changeLetter(ctx, win, letter); }]);
-        acts.push(["Format…", function () { format(ctx, win, letter); }]);
+      var part = bits[0] === "part" && disk ? L.partAt(s, disk.uid, Number(bits[2])) : null;
+      if (part) {
+        var uid = disk.uid, at = Number(bits[2]);
+        acts.push([part.letter ? "Change Drive Letter…" : "Add Drive Letter…", function () { letterDialog(ctx, win, uid, at); }]);
+        acts.push(["Format…", function () { format(ctx, win, uid, at); }]);
         acts.push(["Delete Volume…", function () {
           ctx.dialog(win, "Delete simple volume", p("Deleting this volume will erase all data on it. Back up any data you want to keep before deleting. Do you want to continue?"), [
-            { text: "Yes", primary: true, onclick: function () { var r = L.deleteVolume(s, letter); if (r.ok) win.data.sel = null; return r; } }, { text: "No" }]);
+            { text: "Yes", primary: true, onclick: function () { var r = L.deletePartition(s, uid, at); if (r.ok) win.data.sel = null; return r; } }, { text: "No" }]);
         }]);
       }
       body.appendChild(toolbar(acts.length ? acts : [["Select a disk, a volume or unallocated space", null, true]]));
@@ -218,18 +223,18 @@
       return r;
     } }, { text: "Cancel" }]);
   }
-  function changeLetter(ctx, win, from) {
-    var s = ctx.state(), to = select(lettersFree(s.os));
-    ctx.dialog(win, "Change Drive Letter and Paths for " + from + ":", field("Assign the following drive letter:", to), [
-      { text: "OK", primary: true, onclick: function () { var r = L.changeLetter(s, from, to.value); if (r.ok) win.data.sel = null; return r; } }, { text: "Cancel" }]);
+  function letterDialog(ctx, win, uid, i) {
+    var s = ctx.state(), v = L.partAt(s, uid, i), to = select(lettersFree(s.os));
+    ctx.dialog(win, "Change Drive Letter and Paths" + (v.letter ? " for " + v.letter + ":" : ""), field("Assign the following drive letter:", to), [
+      { text: "OK", primary: true, onclick: function () { return L.assignLetter(s, uid, i, to.value); } }, { text: "Cancel" }]);
   }
-  function format(ctx, win, letter) {
-    var s = ctx.state(), v = L.findVolume(s.os, letter).part;
-    var fs = select(["NTFS", "exFAT", "FAT32"], v.fs), label = input(v.label);
-    ctx.dialog(win, "Format " + letter + ":", el("div", {}, [
+  function format(ctx, win, uid, i) {
+    var s = ctx.state(), v = L.partAt(s, uid, i);
+    var fs = select(["NTFS", "exFAT", "FAT32"], v.fs === "RAW" ? "NTFS" : v.fs), label = input(v.label || "New Volume");
+    ctx.dialog(win, "Format " + (v.letter ? v.letter + ":" : "partition"), el("div", {}, [
       field("Volume label:", label), field("File system:", fs),
       p("Formatting this volume will erase all data on it.", "ld-dim small")
-    ]), [{ text: "OK", primary: true, onclick: function () { return L.formatVolume(s, letter, fs.value, label.value.slice(0, 32)); } }, { text: "Cancel" }]);
+    ]), [{ text: "OK", primary: true, onclick: function () { return L.formatPartition(s, uid, i, fs.value, label.value.slice(0, 32)); } }, { text: "Cancel" }]);
   }
 
   /* ===================================================== Task Manager */
@@ -378,6 +383,58 @@
                             dns: [dns1.value.trim(), dns2.value.trim()].filter(Boolean) });
       } }, { text: "Cancel" }]);
   }
+
+  /* ===================================================== Command Prompt */
+  /* The words are cmd.js's; this is only the window. Its screen is built
+     once and kept in win.data, because the desktop redraws every window on
+     every change and a terminal redrawn would lose what's being typed. */
+  function terminal(admin) {
+    return function (body, ctx, win) {
+      var C = window.PyIDELabCmd;
+      if (!win.data.node) {
+        var sess = C.session({ admin: admin }), history = [], back = 0;
+        var screen = el("pre", { class: "ld-term-out" }), promptEl = el("span", { class: "ld-term-prompt" });
+        var line = el("input", { class: "ld-term-in", type: "text", spellcheck: "false", autocomplete: "off", "aria-label": "Command" });
+        var term = el("div", { class: "ld-term", onclick: function () { if (!window.getSelection().toString()) line.focus(); } },
+                      [screen, el("div", { class: "ld-term-line" }, [promptEl, line])]);
+        screen.textContent = "Windows (lab edition) [Version 10.0.26100]\nType HELP for the commands you can use here.\n\n";
+        var showPrompt = function () { promptEl.textContent = C.prompt(sess); };
+        line.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            back = Math.max(0, Math.min(history.length, back + (e.key === "ArrowUp" ? 1 : -1)));
+            line.value = back ? history[history.length - back] : "";
+            return;
+          }
+          if (e.key !== "Enter") return;
+          var text = line.value;
+          line.value = "";
+          back = 0;
+          if (text.trim()) history.push(text);
+          screen.textContent += C.prompt(sess) + text + "\n";
+          var r = C.run(ctx.cat, ctx.state(), sess, text);
+          if (r.action === "cls") screen.textContent = "";
+          else if (r.out) screen.textContent += r.out + "\n\n";
+          // The screen keeps its last few thousand lines, as a console does.
+          if (screen.textContent.length > 60000) screen.textContent = screen.textContent.slice(-50000);
+          showPrompt();
+          if (r.action === "exit") { ctx.close(win); return; }
+          if (r.action === "off") { ctx.off(); return; }
+          if (r.action === "restart") { ctx.restart(); return; }
+          ctx.changed();
+          term.scrollTop = term.scrollHeight;
+          line.focus();
+        });
+        showPrompt();
+        win.data.node = term;
+        setTimeout(function () { line.focus(); }, 0);
+      }
+      body.classList.add("ld-term-body");
+      body.appendChild(win.data.node);
+    };
+  }
+  D.register("cmd", { title: "Command Prompt", icon: "⌨️", w: 680, h: 420, admin: "cmdadmin", render: terminal(false) });
+  D.register("cmdadmin", { title: "Administrator: Command Prompt", icon: "⌨️", w: 680, h: 420, hidden: true, render: terminal(true) });
 
   /* ===================================================== File Explorer */
   var DRIVER_FILES = ["Chipset", "Ethernet (network)", "Audio", "Graphics"];
