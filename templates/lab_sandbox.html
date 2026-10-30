@@ -26,6 +26,7 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
   <div class="meta"><span class="pagetitle">A+ lab · sandbox</span></div>
   <div class="actions">
+    <a class="btn" href="{{ url_for('lab_credits') }}" target="_blank" rel="noopener">Photo credits</a>
     <button id="lab-reset" class="btn" type="button" title="Put every part back on the shelf">Start over</button>
   </div>
 </header>
@@ -39,13 +40,19 @@
     "use strict";
     // What's built is kept in this browser, so a reload doesn't undo it.
     var KEY = "pyide-lab-sandbox";
-    fetch("{{ url_for('static', filename='lab/parts.json') }}").then(function (r) { return r.json(); }).then(function (cat) {
+    var get = function (name) { return fetch("{{ url_for('static', filename='lab/') }}" + name).then(function (r) { return r.json(); }); };
+    Promise.all([get("parts.json"), get("img/credits.json").catch(function () { return {}; })]).then(function (got) {
+      var cat = got[0], credits = got[1], known = window.PyIDELab.catalogOf(cat);
       var state = null;
       try { state = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { state = null; }
-      if (!state || state.v !== 1) state = window.PyIDELab.sandbox(cat);
+      // A build saved before the parts changed names parts that are gone
+      // (the drawn boards became photos of real ones): start it fresh, or
+      // the bench draws nothing for them and can't take them out.
+      var stale = state && Object.keys(state.items || {}).some(function (u) { return !known[state.items[u].part]; });
+      if (!state || state.v !== 1 || stale) state = window.PyIDELab.sandbox(cat);
       state.power = { on: false, uptime: 0 };
       var bench = window.PyIDELabBench.mount(document.getElementById("lab"), {
-        catalog: cat, state: state,
+        catalog: cat, state: state, credits: credits, imgBase: "{{ url_for('static', filename='lab/img/') }}",
         onChange: function (s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* full or blocked */ } }
       });
       document.getElementById("lab-reset").addEventListener("click", function () {

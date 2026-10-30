@@ -1,0 +1,136 @@
+{
+ "board-atx": {
+  "title": "2023 Płyta główna Asus ROG STRIX Z690-A GAMING WIFI.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_P%C5%82yta_g%C5%82%C3%B3wna_Asus_ROG_STRIX_Z690-A_GAMING_WIFI.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "board-matx": {
+  "title": "2023 Płyta główna ASRock A320M-DVS.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_P%C5%82yta_g%C5%82%C3%B3wna_ASRock_A320M-DVS.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "case-atx": {
+  "title": "Fractal Design Focus G.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Fractal_Design_Focus_G.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Tiia Monto"
+ },
+ "cpu-lga1700": {
+  "title": "2023 Intel Core i7 12700KF (3).jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_Intel_Core_i7_12700KF_(3).jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "cpu-am5": {
+  "title": "AMD@5nmCCD(6nmIOD)@Zen4@Raphael@Ryzen 7 7800X3D@100-000000910 BS 2312PGY 9LW3390030138 DSCx01.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:AMD@5nmCCD(6nmIOD)@Zen4@Raphael@Ryzen_7_7800X3D@100-000000910_BS_2312PGY_9LW3390030138_DSCx01.jpg",
+  "license": "CC0",
+  "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+  "author": "FritzchensFritz"
+ },
+ "ram-ddr4": {
+  "title": "RAM Module (SDRAM-DDR4).jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:RAM_Module_(SDRAM-DDR4).jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "ElooKoN"
+ },
+ "ram-ddr5": {
+  "title": "2023 Pamięci Corsair Vengeance RGB.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_Pami%C4%99ci_Corsair_Vengeance_RGB.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "cooler-stock": {
+  "title": "AMD Ryzen 5 1600 processor with Wraith Spire cooler - detail view of cooler.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:AMD_Ryzen_5_1600_processor_with_Wraith_Spire_cooler_-_detail_view_of_cooler.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "ITEagle Europe - Sebastiaan Broekhoven"
+ },
+ "cooler-tower": {
+  "title": "2023 Chłodzenie procesora Endorfy Fera 5 ARGB.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_Ch%C5%82odzenie_procesora_Endorfy_Fera_5_ARGB.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "psu": {
+  "title": "NZXT C850 V2.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:NZXT_C850_V2.jpg",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0",
+  "author": "Piotr Doroszewski"
+ },
+ "gpu": {
+  "title": "Nvidia GeForce RTX 5060 Ti 16GB, PNY Overclocked Dual Fan, front.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Nvidia_GeForce_RTX_5060_Ti_16GB,_PNY_Overclocked_Dual_Fan,_front.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "FreeMediaKid!"
+ },
+ "nvme": {
+  "title": "2023 Dysk SSD Kingston NV2 2TB.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:2023_Dysk_SSD_Kingston_NV2_2TB.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Jacek Halicki"
+ },
+ "ssd": {
+  "title": "Hanye 256GB 2.5in 7mm SATA III SSD Q60-256GST3.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Hanye_256GB_2.5in_7mm_SATA_III_SSD_Q60-256GST3.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Qurren"
+ },
+ "hdd": {
+  "title": "Western Digital 3.5 Hard Disk Caviar 500gb Blue.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Western_Digital_3.5_Hard_Disk_Caviar_500gb_Blue.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Adryan R. Villanueva"
+ },
+ "cpu-am4": {
+  "title": "AMD Ryzen 7 5700X 1.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:AMD_Ryzen_7_5700X_1.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "Qurren"
+ },
+ "cpu-am4g": {
+  "title": "AMD@7nm@Zen3@Cezanne@Ryzen 5 5600G@100-000000252 EF 2127SUS 9JP9827S10002 DSCx1.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:AMD@7nm@Zen3@Cezanne@Ryzen_5_5600G@100-000000252_EF_2127SUS_9JP9827S10002_DSCx1.jpg",
+  "license": "CC0",
+  "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+  "author": "FritzchensFritz"
+ },
+ "gpu-low": {
+  "title": "MSI GeForce GT 1030 2G LP OC Graphics Card 20200604-001.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:MSI_GeForce_GT_1030_2G_LP_OC_Graphics_Card_20200604-001.jpg",
+  "license": "CC0",
+  "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+  "author": "Gary Houston",
+  "size": [
+   900,
+   653
+  ]
+ },
+ "case-itx": {
+  "title": "Cooler Master Elite Midnight Black Mini-ITX Case 3 2019-02-16.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Cooler_Master_Elite_Midnight_Black_Mini-ITX_Case_3_2019-02-16.jpg",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+  "author": "FASTILY",
+  "size": [
+   900,
+   675
+  ]
+ }
+}

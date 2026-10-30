@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A+ lab photo credits — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+<style>
+  .credits { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
+  .credit-row { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .credit-row img { width: 120px; height: 80px; object-fit: contain; background: #fff; border-radius: 6px; }
+  .credit-row p { margin: 2px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+{#  The A+ lab's photos (lab_credits in app.py, from static/lab/img/credits.json).
+    CC BY and CC BY-SA ask for the author, the licence and a link; this page
+    is where every one of them is named. #}
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">A+ lab · photo credits</span></div>
+</header>
+<main class="credits">
+  <p>The parts in the A+ lab are real photographs from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a>,
+     used under the licence shown for each. They were trimmed and made smaller for the lab; nothing else was changed.
+     Brand names and logos on the parts belong to their makers, and the lab is not connected with any of them.</p>
+  {% for r in rows %}
+  <div class="credit-row">
+    <img src="{{ url_for('static', filename='lab/img/' + r.name + '.jpg') }}" alt="">
+    <div>
+      <p><strong>{{ r.used|join(", ") or r.name }}</strong></p>
+      <p><a href="{{ r.page }}" target="_blank" rel="noopener">{{ r.title }}</a></p>
+      <p>By {{ r.author or "an unnamed author" }} ·
+        {% if r.license_url %}<a href="{{ r.license_url }}" target="_blank" rel="noopener">{{ r.license }}</a>{% else %}{{ r.license }}{% endif %}</p>
+    </div>
+  </div>
+  {% endfor %}
+</main>
+</body>
+</html>

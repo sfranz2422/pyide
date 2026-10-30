@@ -52,8 +52,10 @@ window.PyIDELab = (function () {
       items: {},
       shelf: [],
       case: null, board: null, cpu: null, cooler: null, psu: null, gpu: null,
-      ram: [null, null, null, null], m2: [null, null], sata: [null, null, null, null],
-      cables: { atx24: false, cpu8: false, gpu8: false, sata: [false, false, false, false] },
+      // As many places as the biggest board has (4 DIMMs, 4 M.2, 6 SATA); a
+      // smaller board's own counts (parts.json) say which of them exist.
+      ram: [null, null, null, null], m2: [null, null, null, null], sata: [null, null, null, null, null, null],
+      cables: { atx24: false, cpu8: false, gpu8: false, sata: [false, false, false, false, false, false] },
       coolerSeated: true,
       monitor: null,           // the display cable: "gpu", "board" or null
       cmos: true,              // the coin battery: false = flat
@@ -80,7 +82,7 @@ window.PyIDELab = (function () {
       items.push({ part: p.id });
       if (p.type === "ram") items.push({ part: p.id });
     });
-    items.push({ part: "nvme-1tb", uid: "windows-drive", windows: true });
+    items.push({ part: "ssd-256", uid: "windows-drive", windows: true });
     return create(cat, items);
   }
 

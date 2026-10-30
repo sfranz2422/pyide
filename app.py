@@ -7665,6 +7665,26 @@ def lab_sandbox():
     return render_template("lab_sandbox.html")
 
 
+@app.get("/lab/credits")
+def lab_credits():
+    """Who took the A+ lab's photos, and under what licence. They're from
+    Wikimedia Commons; CC BY and CC BY-SA need the author and the licence
+    named where the picture is used, which the spec card does and this page
+    does for all of them at once. static/lab/img/credits.json is written by
+    whoever fetches a photo (test_lab_machine.py fails on a photo without
+    its line)."""
+    path = os.path.join(app.static_folder, "lab", "img", "credits.json")
+    with open(path, encoding="utf-8") as f:
+        credits = json.load(f)
+    with open(os.path.join(app.static_folder, "lab", "parts.json"), encoding="utf-8") as f:
+        parts = json.load(f)["parts"]
+    rows = []
+    for name, c in sorted(credits.items()):
+        used = [p["name"] for p in parts if p.get("photo") == name]
+        rows.append(dict(c, name=name, used=used))
+    return render_template("lab_credits.html", rows=rows)
+
+
 @app.get("/privacy")
 def privacy():
     """The policy Google's consent screen links to, for all three editors —

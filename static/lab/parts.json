@@ -1,32 +1,32 @@
 {
- "about": "The A+ lab's parts (static/lab/machine.js; lab_checks.py reads it too, so the server's compatibility rules are the browser's). Generic names, no brands: the specs are what the exam asks about.",
+ "about": "The A+ lab's parts (static/lab/machine.js; lab_checks.py reads it too, so the server's compatibility rules are the browser's). Generic names, no brands: the specs are what the exam asks about. Each part's specs are the real part's in its photo (`photo`, static/lab/img/, credited in img/credits.json) - a student can read the label on the picture, so the card must not contradict it.",
  "parts": [
-  {"id": "case-atx", "type": "case", "name": "Mid-tower case (ATX)", "fits": ["ATX", "mATX", "ITX"]},
-  {"id": "case-itx", "type": "case", "name": "Small case (Mini-ITX)", "fits": ["ITX"]},
+  {"id": "case-atx", "type": "case", "name": "Mid-tower case (ATX)", "fits": ["ATX", "mATX", "ITX"], "photo": "case-atx"},
+  {"id": "case-itx", "type": "case", "name": "Small case (Mini-ITX)", "fits": ["ITX"], "photo": "case-itx"},
 
-  {"id": "mb-am5-atx", "type": "board", "name": "ATX motherboard, socket AM5, DDR5", "socket": "AM5", "ram": "DDR5", "form": "ATX", "dimms": 4, "m2": 2, "sata": 4, "video": true},
-  {"id": "mb-1700-matx", "type": "board", "name": "Micro-ATX motherboard, socket LGA1700, DDR4", "socket": "LGA1700", "ram": "DDR4", "form": "mATX", "dimms": 4, "m2": 1, "sata": 4, "video": true},
-  {"id": "mb-1700-itx", "type": "board", "name": "Mini-ITX motherboard, socket LGA1700, DDR5", "socket": "LGA1700", "ram": "DDR5", "form": "ITX", "dimms": 2, "m2": 1, "sata": 2, "video": true},
+  {"id": "mb-1700-atx", "type": "board", "name": "ATX motherboard, socket LGA1700, DDR5", "socket": "LGA1700", "ram": "DDR5", "form": "ATX", "dimms": 4, "m2": 4, "sata": 6, "video": true, "photo": "board-atx"},
+  {"id": "mb-am4-matx", "type": "board", "name": "Micro-ATX motherboard, socket AM4, DDR4", "socket": "AM4", "ram": "DDR4", "form": "mATX", "dimms": 2, "m2": 1, "sata": 4, "video": true, "cpu_power": "4-pin", "photo": "board-matx"},
 
-  {"id": "cpu-am5-6", "type": "cpu", "name": "6-core CPU, socket AM5, 65 W, with graphics", "socket": "AM5", "watts": 65, "graphics": true},
-  {"id": "cpu-1700-6f", "type": "cpu", "name": "6-core CPU, socket LGA1700, 65 W, no graphics (F model)", "socket": "LGA1700", "watts": 65, "graphics": false},
-  {"id": "cpu-1700-16", "type": "cpu", "name": "16-core CPU, socket LGA1700, 125 W, with graphics", "socket": "LGA1700", "watts": 125, "graphics": true},
+  {"id": "cpu-am4-6g", "type": "cpu", "name": "6-core CPU, socket AM4, 65 W, with graphics (G model)", "socket": "AM4", "watts": 65, "graphics": true, "photo": "cpu-am4g"},
+  {"id": "cpu-am4-8", "type": "cpu", "name": "8-core CPU, socket AM4, 65 W, no graphics", "socket": "AM4", "watts": 65, "graphics": false, "photo": "cpu-am4"},
+  {"id": "cpu-am5-8", "type": "cpu", "name": "8-core CPU, socket AM5, 120 W, with graphics", "socket": "AM5", "watts": 120, "graphics": true, "photo": "cpu-am5"},
+  {"id": "cpu-1700-12f", "type": "cpu", "name": "12-core CPU, socket LGA1700, 125 W, no graphics (F model)", "socket": "LGA1700", "watts": 125, "graphics": false, "photo": "cpu-lga1700"},
 
-  {"id": "ram-ddr4-8", "type": "ram", "name": "8 GB DDR4-3200 memory stick", "ram": "DDR4", "gb": 8},
-  {"id": "ram-ddr5-16", "type": "ram", "name": "16 GB DDR5-5600 memory stick", "ram": "DDR5", "gb": 16},
+  {"id": "ram-ddr4-8", "type": "ram", "name": "8 GB DDR4-3200 memory stick", "ram": "DDR4", "gb": 8, "photo": "ram-ddr4"},
+  {"id": "ram-ddr5-16", "type": "ram", "name": "16 GB DDR5-6000 memory stick", "ram": "DDR5", "gb": 16, "photo": "ram-ddr5"},
 
-  {"id": "cooler-stock", "type": "cooler", "name": "Stock CPU cooler (thermal paste already on it)", "watts": 95},
-  {"id": "cooler-tower", "type": "cooler", "name": "Tower CPU cooler, up to 180 W", "watts": 180},
+  {"id": "cooler-stock", "type": "cooler", "name": "Stock CPU cooler, up to 95 W (thermal paste already on it)", "watts": 95, "photo": "cooler-stock"},
+  {"id": "cooler-tower", "type": "cooler", "name": "Tower CPU cooler, up to 180 W", "watts": 180, "photo": "cooler-tower"},
 
-  {"id": "psu-450", "type": "psu", "name": "450 W power supply (no PCIe power cables)", "watts": 450, "pcie": false},
-  {"id": "psu-650", "type": "psu", "name": "650 W power supply, with an 8-pin PCIe cable", "watts": 650, "pcie": true},
-  {"id": "psu-850", "type": "psu", "name": "850 W power supply, with 8-pin PCIe cables", "watts": 850, "pcie": true},
+  {"id": "psu-450", "type": "psu", "name": "450 W power supply (no PCIe power cables)", "watts": 450, "pcie": false, "photo": "psu"},
+  {"id": "psu-650", "type": "psu", "name": "650 W power supply, with an 8-pin PCIe cable", "watts": 650, "pcie": true, "photo": "psu"},
+  {"id": "psu-850", "type": "psu", "name": "850 W power supply, with 8-pin PCIe cables", "watts": 850, "pcie": true, "photo": "psu"},
 
-  {"id": "gpu-75", "type": "gpu", "name": "Low-power graphics card, 75 W (powered by the slot)", "watts": 75, "power": false},
-  {"id": "gpu-200", "type": "gpu", "name": "Graphics card, 200 W, needs an 8-pin PCIe power cable", "watts": 200, "power": true},
+  {"id": "gpu-75", "type": "gpu", "name": "Low-power graphics card, 75 W (powered by the slot)", "watts": 75, "power": false, "photo": "gpu-low"},
+  {"id": "gpu-180", "type": "gpu", "name": "Graphics card, 180 W, needs an 8-pin PCIe power cable", "watts": 180, "power": true, "photo": "gpu"},
 
-  {"id": "nvme-1tb", "type": "drive", "name": "1 TB NVMe SSD (M.2)", "iface": "M.2", "gb": 1000, "media": "SSD"},
-  {"id": "ssd-500", "type": "drive", "name": "500 GB 2.5-inch SATA SSD", "iface": "SATA", "gb": 500, "media": "SSD"},
-  {"id": "hdd-2tb", "type": "drive", "name": "2 TB 3.5-inch SATA hard drive", "iface": "SATA", "gb": 2000, "media": "HDD"}
+  {"id": "nvme-2tb", "type": "drive", "name": "2 TB NVMe SSD (M.2)", "iface": "M.2", "gb": 2000, "media": "SSD", "photo": "nvme"},
+  {"id": "ssd-256", "type": "drive", "name": "256 GB 2.5-inch SATA SSD", "iface": "SATA", "gb": 256, "media": "SSD", "photo": "ssd"},
+  {"id": "hdd-500", "type": "drive", "name": "500 GB 3.5-inch SATA hard drive", "iface": "SATA", "gb": 500, "media": "HDD", "photo": "hdd"}
  ]
 }

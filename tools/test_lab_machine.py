@@ -33,35 +33,46 @@ const check = (label, ok, detail) => out.push([label, !!ok, detail === undefined
 // A machine with these parts on the shelf; `uid`s name them in the test.
 function bench(list) { return L.create(CAT, list.map(([uid, part, extra]) => Object.assign({ uid, part }, extra || {}))); }
 const ins = (s, place, uid, i) => L.install(CAT, s, place, uid, i);
-// A good AM5 build, ready to switch on; `tweak` changes it first.
+// A good AM4 build with a G CPU (its own graphics), Windows on a SATA SSD,
+// the monitor on the board: ready to switch on.
 function goodBuild(extra) {
-  const s = bench([["case", "case-atx"], ["mb", "mb-am5-atx"], ["cpu", "cpu-am5-6"], ["cool", "cooler-stock"],
-                   ["r1", "ram-ddr5-16"], ["r2", "ram-ddr5-16"], ["psu", "psu-650"], ["os", "nvme-1tb", { windows: true }]]
+  const s = bench([["case", "case-atx"], ["mb", "mb-am4-matx"], ["cpu", "cpu-am4-6g"], ["cool", "cooler-stock"],
+                   ["r1", "ram-ddr4-8"], ["r2", "ram-ddr4-8"], ["psu", "psu-650"], ["os", "ssd-256", { windows: true }]]
                   .concat(extra || []));
   ins(s, "case", "case"); ins(s, "board", "mb"); ins(s, "cpu", "cpu"); ins(s, "cooler", "cool");
-  ins(s, "ram", "r1", 1); ins(s, "ram", "r2", 3); ins(s, "psu", "psu"); ins(s, "m2", "os", 0);
-  L.connect(CAT, s, "atx24", true); L.connect(CAT, s, "cpu8", true); L.setMonitor(s, "board");
+  ins(s, "ram", "r1", 0); ins(s, "ram", "r2", 1); ins(s, "psu", "psu"); ins(s, "sata", "os", 0);
+  L.connect(CAT, s, "atx24", true); L.connect(CAT, s, "cpu8", true); L.connect(CAT, s, "sata", true, 0); L.setMonitor(s, "board");
   return s;
 }
 
 // --------------------------------------------------- what fits
 {
-  const s = bench([["case", "case-itx"], ["atx", "mb-am5-atx"], ["itx", "mb-1700-itx"], ["cpu", "cpu-am5-6"], ["r4", "ram-ddr4-8"]]);
+  const s = bench([["itx", "case-itx"], ["case", "case-atx"], ["atx", "mb-1700-atx"], ["matx", "mb-am4-matx"], ["cpu", "cpu-am5-8"], ["r4", "ram-ddr4-8"]]);
   check("a board needs a case to go in", !L.install(CAT, s, "board", "atx").ok);
-  ins(s, "case", "case");
+  ins(s, "case", "itx");
   const r = ins(s, "board", "atx");
   check("an ATX board doesn't fit a Mini-ITX case", !r.ok && /ATX/.test(r.why), r.why);
-  check("…a Mini-ITX one does", ins(s, "board", "itx").ok);
+  check("…nor does a Micro-ATX one", !ins(s, "board", "matx").ok);
+  L.remove(CAT, s, "case"); ins(s, "case", "case");
+  check("…a mid-tower takes the ATX board", ins(s, "board", "atx").ok);
   const c = ins(s, "cpu", "cpu");
   check("an AM5 CPU won't go in an LGA1700 socket", !c.ok && /AM5/.test(c.why) && /LGA1700/.test(c.why), c.why);
   const m = ins(s, "ram", "r4", 0);
   check("DDR4 won't go in a DDR5 board", !m.ok && /DDR4/.test(m.why), m.why);
-  check("a Mini-ITX board has two memory slots", JSON.stringify(L.ramSlots(CAT, s)) === '["A1","B1"]', L.ramSlots(CAT, s));
-  check("…and no third", !ins(s, "ram", "r4", 2).ok);
+  check("the ATX board has four memory slots", L.ramSlots(CAT, s).length === 4, L.ramSlots(CAT, s));
 }
 {
-  const s = bench([["case", "case-atx"], ["mb", "mb-1700-matx"], ["cpu", "cpu-1700-16"], ["stock", "cooler-stock"], ["tower", "cooler-tower"],
-                   ["hdd", "hdd-2tb"], ["nvme", "nvme-1tb"]]);
+  const s = bench([["case", "case-atx"], ["mb", "mb-am4-matx"], ["am5", "cpu-am5-8"], ["r4", "ram-ddr4-8"], ["nvme", "nvme-2tb"]]);
+  ins(s, "case", "case"); ins(s, "board", "mb");
+  const c = ins(s, "cpu", "am5");
+  check("an AM5 CPU won't go in an AM4 socket either", !c.ok && /AM5/.test(c.why) && /AM4/.test(c.why), c.why);
+  check("the AM4 board has two memory slots", JSON.stringify(L.ramSlots(CAT, s)) === '["A1","B1"]', L.ramSlots(CAT, s));
+  check("…and no third", !ins(s, "ram", "r4", 2).ok);
+  check("it has one M.2 slot, not two", ins(s, "m2", "nvme", 0).ok && !ins(s, "m2", "nvme", 1).ok);
+}
+{
+  const s = bench([["case", "case-atx"], ["mb", "mb-1700-atx"], ["cpu", "cpu-1700-12f"], ["stock", "cooler-stock"], ["tower", "cooler-tower"],
+                   ["hdd", "hdd-500"], ["nvme", "nvme-2tb"]]);
   ins(s, "case", "case"); ins(s, "board", "mb"); ins(s, "cpu", "cpu");
   const w = ins(s, "cooler", "stock");
   check("a 95 W cooler can't cool a 125 W CPU", !w.ok && /125/.test(w.why), w.why);
@@ -89,22 +100,21 @@ function goodBuild(extra) {
   check("no 8-pin CPU power: fans spin, the CPU light is on", r.stage === "nopost" && r.led === "CPU", r);
 }
 {
-  const s = goodBuild(); L.remove(CAT, s, "ram", 1); L.remove(CAT, s, "ram", 3);
+  const s = goodBuild(); L.remove(CAT, s, "ram", 0); L.remove(CAT, s, "ram", 1);
   const r = L.powerOn(CAT, s);
   check("no memory: 3 short beeps and the DRAM light", r.stage === "ram" && r.beeps === "3 short" && r.led === "DRAM", r);
 }
 {
-  const s = goodBuild([["spare", "ram-ddr5-16"]]);
+  const s = goodBuild([["spare", "ram-ddr4-8"]]);
   s.items.r2.faulty = "dead";
   check("one dead stick: the same beeps", L.powerOn(CAT, s).stage === "ram");
-  L.powerOff(s); L.remove(CAT, s, "ram", 3); ins(s, "ram", "spare", 3);
+  L.powerOff(s); L.remove(CAT, s, "ram", 1); ins(s, "ram", "spare", 1);
   check("…swapped for a good one, it starts", L.powerOn(CAT, s).stage === "windows");
 }
 {
-  const s = goodBuild([["psu450", "psu-450"], ["big", "cpu-1700-16"]]);
-  // A 16-core CPU and a 200 W card on a 450 W supply: too much.
-  const t = bench([["case", "case-atx"], ["mb", "mb-1700-matx"], ["cpu", "cpu-1700-16"], ["cool", "cooler-tower"], ["r", "ram-ddr4-8"],
-                   ["gpu", "gpu-200"], ["psu", "psu-450"], ["os", "nvme-1tb", { windows: true }]]);
+  // A 12-core CPU and a 180 W card on a 450 W supply: too much.
+  const t = bench([["case", "case-atx"], ["mb", "mb-1700-atx"], ["cpu", "cpu-1700-12f"], ["cool", "cooler-tower"], ["r", "ram-ddr5-16"],
+                   ["gpu", "gpu-180"], ["psu", "psu-450"], ["os", "nvme-2tb", { windows: true }]]);
   ["case", "board:mb", "cpu", "cooler:cool", "ram:r:0", "gpu", "psu", "m2:os:0"].forEach((x) => {
     const [place, uid, i] = x.split(":"); ins(t, place, uid || place, i === undefined ? undefined : Number(i));
   });
@@ -112,10 +122,10 @@ function goodBuild(extra) {
   const g = L.connect(CAT, t, "gpu8", true);
   check("a 450 W supply has no PCIe cable for the card", !g.ok, g.why);
   const r = L.powerOn(CAT, t);
-  check("…and can't run a 16-core CPU and a 200 W card: on, then straight off", r.stage === "shutoff" && !t.power.on, r);
+  check("…and can't run a 12-core CPU and a 180 W card: on, then straight off", r.stage === "shutoff" && !t.power.on, r);
 }
 {
-  const s = goodBuild([["gpu", "gpu-200"]]);
+  const s = goodBuild([["gpu", "gpu-180"]]);
   ins(s, "gpu", "gpu");
   let r = L.powerOn(CAT, s);
   check("a card without its 8-pin: 1 long 3 short, the VGA light", r.stage === "video" && r.led === "VGA", r);
@@ -127,14 +137,20 @@ function goodBuild(extra) {
   check("…moved to the card, there's a picture", r.stage === "windows" && !r.dark, r);
 }
 {
-  const s = bench([["case", "case-atx"], ["mb", "mb-1700-matx"], ["cpu", "cpu-1700-6f"], ["cool", "cooler-stock"], ["r", "ram-ddr4-8"],
-                   ["psu", "psu-650"], ["os", "nvme-1tb", { windows: true }]]);
+  const s = bench([["case", "case-atx"], ["mb", "mb-1700-atx"], ["cpu", "cpu-1700-12f"], ["cool", "cooler-tower"], ["r", "ram-ddr5-16"],
+                   ["psu", "psu-650"], ["os", "nvme-2tb", { windows: true }]]);
   ins(s, "case", "case"); ins(s, "board", "mb"); ins(s, "cpu", "cpu"); ins(s, "cooler", "cool"); ins(s, "ram", "r", 0);
   ins(s, "psu", "psu"); ins(s, "m2", "os", 0); L.connect(CAT, s, "atx24", true); L.connect(CAT, s, "cpu8", true); s.monitor = "board";
   check("an F-model CPU (no graphics) and no card: no video", L.powerOn(CAT, s).stage === "video");
 }
 {
-  const s = goodBuild(); L.remove(CAT, s, "m2", 0);
+  const s = goodBuild(); L.remove(CAT, s, "cooler"); L.remove(CAT, s, "cpu");
+  s.shelf.push("am4"); s.items.am4 = { part: "cpu-am4-8" };
+  ins(s, "cpu", "am4"); ins(s, "cooler", "cool");
+  check("the AM4 CPU without graphics, no card: no video either", L.powerOn(CAT, s).stage === "video");
+}
+{
+  const s = goodBuild(); L.remove(CAT, s, "sata", 0);
   check("no drive with Windows: No bootable device", L.powerOn(CAT, s).stage === "noboot");
   const d = goodBuild(); d.items.os.faulty = "dead";
   check("…nor with a dead one", L.powerOn(CAT, d).stage === "noboot");
@@ -181,11 +197,11 @@ function goodBuild(extra) {
 
 // --------------------------------------------------- Windows: disks
 {
-  const s = goodBuild([["ssd", "ssd-500"]]);
-  ins(s, "sata", "ssd", 0);
+  const s = goodBuild([["ssd", "ssd-256"]]);
+  ins(s, "sata", "ssd", 1);
   L.powerOn(CAT, s);
   check("a SATA drive without its power cable isn't seen", !s.os.disks.ssd);
-  L.powerOff(s); L.connect(CAT, s, "sata", true, 0); L.powerOn(CAT, s);
+  L.powerOff(s); L.connect(CAT, s, "sata", true, 1); L.powerOn(CAT, s);
   check("…with it, it's a new disk, not initialized", s.os.disks.ssd && s.os.disks.ssd.style === null, s.os.disks.ssd);
   check("a volume can't be made on it yet", !L.newVolume(CAT, s, "ssd", {}).ok);
   check("initialize it GPT", L.initializeDisk(s, "ssd", "GPT").ok && s.os.disks.ssd.style === "GPT");
@@ -193,12 +209,12 @@ function goodBuild(extra) {
   check("FAT32 is refused over 32 GB", !f.ok && /32 GB/.test(f.why), f.why);
   check("…the letter C: is taken", !L.newVolume(CAT, s, "ssd", { letter: "C" }).ok);
   check("a new NTFS volume takes the next letter, D:", L.newVolume(CAT, s, "ssd", { gb: 200 }).ok && L.findVolume(s.os, "D").part.fs === "NTFS");
-  check("…the rest as exFAT on E:", L.newVolume(CAT, s, "ssd", { fs: "exfat", letter: "E" }).ok && L.findVolume(s.os, "E").part.gb === 300, L.findVolume(s.os, "E"));
+  check("…the rest as exFAT on E:", L.newVolume(CAT, s, "ssd", { fs: "exfat", letter: "E" }).ok && L.findVolume(s.os, "E").part.gb === 56, L.findVolume(s.os, "E"));
   check("change D: to F:", L.changeLetter(s, "D", "F").ok && L.findVolume(s.os, "F") && !L.findVolume(s.os, "D"));
   check("format F: as FAT32 is refused (200 GB)", !L.formatVolume(s, "F", "FAT32").ok);
   check("C: can't be formatted or deleted", !L.formatVolume(s, "C", "NTFS").ok && !L.deleteVolume(s, "C").ok);
   check("delete E:", L.deleteVolume(s, "E").ok && !L.findVolume(s.os, "E"));
-  const m = goodBuild([["hdd", "hdd-2tb"]]); ins(m, "sata", "hdd", 1); L.connect(CAT, m, "sata", true, 1); L.powerOn(CAT, m);
+  const m = goodBuild([["hdd", "hdd-500"]]); ins(m, "sata", "hdd", 2); L.connect(CAT, m, "sata", true, 2); L.powerOn(CAT, m);
   L.initializeDisk(m, "hdd", "MBR");
   [1, 2, 3, 4].forEach(() => L.newVolume(CAT, m, "hdd", { gb: 100 }));
   const fifth = L.newVolume(CAT, m, "hdd", { gb: 100 });
@@ -259,6 +275,18 @@ function goodBuild(extra) {
         CAT.parts.every((p) => Object.values(s.items).some((i) => i.part === p.id))
         && Object.values(s.items).filter((i) => i.part === "ram-ddr5-16").length === 2 && s.items["windows-drive"].windows);
 }
+{
+  // The photos: a part's picture is the real part, so its card must match it, and each must exist and be credited.
+  const credits = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+  const missing = CAT.parts.filter((p) => p.photo && !(credits[p.photo] && fs.existsSync(process.argv[4] + "/" + p.photo + ".jpg")));
+  check("every part's photo is in img/ and in credits.json", !missing.length, missing.map((p) => p.id));
+  // What the bench shows in the computer (bench.js CUT) is the photo cut out.
+  const uncut = CAT.parts.filter((p) => p.photo && ["cpu", "cooler", "ram", "gpu", "drive"].includes(p.type)
+                                    && !fs.existsSync(process.argv[4] + "/" + p.photo + "-cut.webp"));
+  check("…and each part shown in the computer has its cut-out", !uncut.length, uncut.map((p) => p.id));
+  const unused = Object.keys(credits).filter((k) => !CAT.parts.some((p) => p.photo === k));
+  check("…and no credited photo goes unused", !unused.length, unused);
+}
 console.log(JSON.stringify(out));
 """
 
@@ -267,7 +295,9 @@ def main():
     if not shutil.which("node"):
         print("node is needed: brew install node")
         sys.exit(1)
-    run = subprocess.run(["node", "--input-type=module", "-e", HARNESS, MACHINE, PARTS],
+    img = os.path.join(ROOT, "static", "lab", "img")
+    run = subprocess.run(["node", "--input-type=module", "-e", HARNESS, MACHINE, PARTS,
+                          os.path.join(img, "credits.json"), img],
                          capture_output=True, text=True, timeout=120)
     try:
         results = json.loads(run.stdout.strip().splitlines()[-1])
