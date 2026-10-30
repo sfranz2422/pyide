@@ -128,6 +128,26 @@ check("…and nothing the world doesn't", look_ids <= model_ids, sorted(look_ids
 check("mcpi's block list is the world's", py_ids == model_ids,
       "only in block.py: %s; only in the world: %s" % (sorted(py_ids - model_ids), sorted(model_ids - py_ids)))
 
+print("the help page (/help/world)")
+import os                                                     # noqa: E402
+import tempfile                                               # noqa: E402
+os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "w.db")
+os.environ["SECRET_KEY"] = "k" * 32
+sys.path.insert(0, str(ROOT))
+import app as P                                               # noqa: E402
+page = P.app.test_client().get("/help/world")
+html = page.get_data(as_text=True)
+names = re.findall(r"^(\w+) = Block\(", block_py, re.M)
+check("it's there for anyone, signed in or not", page.status_code == 200, page.status_code)
+check("…listing every block in mcpi.block, by name", all("<code>%s</code>" % n in html for n in names),
+      [n for n in names if "<code>%s</code>" % n not in html])
+check("…drawn by world.js, the world's own pictures",
+      "filename='world.js'" not in html and "world.js" in html and "PyIDEWorld.swatch(" in html)
+check("…with all sixteen wool colours", html.count('data-id="35" data-data=') == 16)
+check("the editor's Docs button for it shows in World mode only",
+      'id="world-docs"' in template and "url_for('help_world')" in template
+      and 'worldDocs.hidden = mode !== "world"' in body(app, "paintMode"))
+
 bad = results.count(False)
 print("\n%d checks, %s" % (len(results), "%d FAILED" % bad if bad else "all ok"))
 sys.exit(1 if bad else 0)

@@ -4,9 +4,11 @@ A browser-based Python IDE for intro programming classes. Student code runs
 entirely in the browser via Pyodide, so the server never executes anything a
 student wrote — it stores and serves code, and nothing more.
 
-Two kinds of program run here: ordinary console Python, and kaypy games
-(`from kaypy import *`). Which one is decided by the code itself, not by a
-setting — `game.js`'s `looksLikeGame()` is the whole rule.
+Three kinds of program run here: ordinary console Python, kaypy games
+(`from kaypy import *`), and block-world programs (`from mcpi.minecraft
+import Minecraft`, the Raspberry Pi's Minecraft API). Which one is decided by
+the code itself, not by a setting — `game.js`'s `looksLikeGame()`, then
+`world_model.js`'s `looksLikeWorld()`, is the whole rule.
 
 ## Running it
 
@@ -41,7 +43,8 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by eighteen of these: `test_attendance.py`, `test_calendar.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by twenty-one of these: `test_attendance.py`, `test_calendar.py`, `test_charts.py`, `test_dungeon.py`,
+`test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
@@ -491,6 +494,33 @@ do. It sets colours only for the default looks (no `data-theme`, or
 written outright anywhere else in it would quietly paint over every theme
 sold. `test_site_look.py` (the same in all three) fails on that, on a page
 that stops loading it, and on an editor that starts.
+
+**The block world** (`static/world_model.js`, `static/world.js`,
+`static/py/mcpi/`, `_pyide_run_world` in `runtime.js`; `/help/world`). A
+program that imports `mcpi` builds in a 3D world of blocks, the Pi's
+Minecraft lessons unchanged. `world_model.js` is the world and answers the
+Pi's own text protocol (`command("world.setBlock(1,2,3,4)")`), so floats and
+ints come back where a Pi gives them; `static/py/mcpi` is OUR package, written
+from the API reference (no Mojang code or textures), bundled by
+`tools/build_mcpi.py` — rebuild after any change, the tests load the bundle.
+The program runs on the page's own thread, so it **takes turns with the page**
+(`mcpi/_pyide.py`): every call, a patched `time.sleep`, and the trace guard in
+a loop that does neither, `run_sync` a frame's promise (JSPI, as `input()`).
+That's also when Stop is heard — as a `KeyboardInterrupt`, Ctrl+C on a Pi. A
+loop with no turn at all is stopped after 10 s, saying to add
+`time.sleep(0.1)`; without JSPI (Safari) a run gets the console's limit and a
+sentence saying why. A fresh `mcpi` every run, or one program's changes to it
+outlive it. **The world is saved with the project** as `world.mcpi`: a hidden
+doc (no tab, never written to Python's files, left out of the rescue when
+big), only the cells that differ from a **seeded, integer-only terrain** —
+`GEN_VERSION` and a golden checksum pin it, because changing the terrain would
+shift every saved building; a new terrain is a new version beside the old.
+The changes are canonical, so a run that changed nothing saves nothing and
+turns nothing in. Escape that releases the world's mouse never stops the
+program (`holdsEscape`). The new tab and hide-my-code links play it, saving
+nothing back. Not on the live page, by the teacher's choice. Tests:
+`test_world_model.py`, `test_world_python.py` (real Pyodide, with and
+without JSPI), `test_world_editor.py`.
 
 **The week's calendar** (`static/calendar.js`, the same file in all three;
 `Course.calendar`; `/api/class/<id>/calendar`). The teacher pastes one block

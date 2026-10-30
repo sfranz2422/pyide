@@ -7616,6 +7616,22 @@ def help_questions():
         {"kind": k, "title": t, "about": a, "block": b} for k, t, a, b in NOTES_EXTRAS])
 
 
+# The block world's help: every block by its name in mcpi.block, read from
+# the package itself so the page can't list a block the package hasn't got.
+_MCPI_BLOCK_PY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "py", "mcpi", "block.py")
+WOOL_COLOURS = ["white", "orange", "magenta", "light blue", "yellow", "lime", "pink", "gray",
+                "light gray", "cyan", "purple", "blue", "brown", "green", "red", "black"]
+
+
+@app.get("/help/world")
+def help_world():
+    """Programs that build in the block world (they import mcpi): the
+    commands, the controls, the blocks. Open to anyone, like the formats page."""
+    with open(_MCPI_BLOCK_PY, encoding="utf-8") as f:
+        blocks = [{"name": n, "id": int(i)} for n, i in re.findall(r"^(\w+) = Block\((\d+)\)", f.read(), re.M)]
+    return render_template("help_world.html", blocks=blocks, wool=WOOL_COLOURS)
+
+
 @app.get("/privacy")
 def privacy():
     """The policy Google's consent screen links to, for all three editors —

@@ -274,7 +274,8 @@ window.PyIDESigHint = (function () {
   }
 
   // --------------------------------------------------------------- lookup
-  function lookup(call, own, kaypyOn, kaypySigs, flask) {
+  // mcpiSigs: mcpi's table (static/py/mcpi_sigs.json), in a program that imports mcpi; else null.
+  function lookup(call, own, kaypyOn, kaypySigs, flask, mcpiSigs) {
     var name = call.parts[call.parts.length - 1];
     var dotted = call.parts.join(".");
     var hits = [];
@@ -284,16 +285,20 @@ window.PyIDESigHint = (function () {
     if (call.parts.length === 1) {
       take(own.functions[name], name, "yours");
       if (!hits.length && kaypyOn && kaypySigs) take(kaypySigs.functions[name], name, "kaypy");
+      if (!hits.length && mcpiSigs) take(mcpiSigs.functions[name], name, "mcpi");
       if (!hits.length && flask) take(FLASK_FUNCTIONS[name], name);
       if (!hits.length) take(FUNCTIONS[name], name);
       return hits;
     }
+    // Minecraft.create — mcpi's, before the built-in modules'
+    if (mcpiSigs && mcpiSigs.functions[dotted]) { take(mcpiSigs.functions[dotted], dotted, "mcpi"); return hits; }
     // module.function — random.randint, math.sqrt, sqlite3.connect
     var modFn = (flask && FLASK_FUNCTIONS[dotted]) || FUNCTIONS[dotted];
     if (modFn) { take(modFn, dotted); return hits; }
     // obj.method
     take(own.methods[name], "." + name, "yours");
     if (kaypyOn && kaypySigs) take(kaypySigs.methods[name], "." + name, "kaypy");
+    if (mcpiSigs) take(mcpiSigs.methods[name], "." + name, "mcpi");
     ((flask && FLASK_METHODS[name]) || []).forEach(function (e) { take(e, "." + name, e.kind); });
     (METHODS[name] || []).forEach(function (e) { take(e, "." + name, e.kind); });
     return hits.slice(0, 3);
@@ -369,10 +374,22 @@ window.PyIDESigHint = (function () {
     return kaypyLoading || Promise.resolve();
   }
 
+  // mcpi's table, the same way: fetched the first time a program imports it.
+  var mcpiSigs = null, mcpiLoading = null;
+  function loadMcpi(url) {
+    if (!mcpiLoading && url) {
+      mcpiLoading = fetch(url).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { mcpiSigs = d; })
+        .catch(function () { mcpiLoading = null; });
+    }
+    return mcpiLoading || Promise.resolve();
+  }
+
   function attach(cm, opts) {
     opts = opts || {};
     var box = null, dismissed = null, own = { functions: {}, methods: {} }, ownFrom = null;
     var KAYPY = /^\s*(from\s+kaypy\s+import|import\s+kaypy)\b/m;
+    var MCPI = /^\s*(from\s+mcpi[\w.]*\s+import|import\s+mcpi)\b/m;
 
     function hide() {
       if (box && box.parentNode) box.parentNode.removeChild(box);
@@ -401,7 +418,13 @@ window.PyIDESigHint = (function () {
         if (kaypySigs) update();
       });
 
-      var hits = lookup(call, own, kaypyOn, kaypySigs, opts.flask);
+      // mcpi's, only in a program that imports it (a block-world program).
+      var mcpiOn = !opts.flask && MCPI.test(cm.getValue());
+      if (mcpiOn && !mcpiSigs) loadMcpi(opts.mcpiUrl).then(function () {
+        if (mcpiSigs) update();
+      });
+
+      var hits = lookup(call, own, kaypyOn, kaypySigs, opts.flask, mcpiOn ? mcpiSigs : null);
       if (!hits.length) return;
 
       box = render(hits, call);

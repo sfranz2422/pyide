@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The block world — PyIDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+</head>
+<body>
+
+{#  Programs that import mcpi (the Raspberry Pi's Minecraft API) build in
+    PyIDE's block world (world_model.js, world.js). The blocks are read from
+    static/py/mcpi/block.py by help_world in app.py; their pictures are
+    drawn here by world.js, the same painting the world uses. #}
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="meta"><span class="pagetitle">The block world</span></div>
+  <div class="actions"></div>
+</header>
+
+<main class="sheet prose help-questions help-world">
+  <h1>Building in the block world</h1>
+  <p>A program that imports <code>mcpi</code> builds in a 3D world of blocks, the way the
+    Raspberry Pi's Minecraft lessons do. Most Pi lesson programs work here as they are.
+    The world is kept with your project, so what you build is still there next time.</p>
+  <pre class="help-src">from mcpi.minecraft import Minecraft
+from mcpi import block
+
+mc = Minecraft.create()
+mc.postToChat("Hello, world")
+x, y, z = mc.player.getTilePos()
+mc.setBlock(x + 2, y, z, block.STONE.id)</pre>
+
+  <h2 id="moving">Moving about</h2>
+  <table class="help-table">
+    <tr><td>Click the world</td><td>take the mouse, to look about with it</td></tr>
+    <tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>walk</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>jump; press it twice quickly (or <kbd>F</kbd>) to fly, then <kbd>Space</kbd> goes up and <kbd>Shift</kbd> down</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>9</kbd>, or the mouse wheel</td><td>choose from the hotbar along the bottom</td></tr>
+    <tr><td>The sword (slot 1)</td><td>clicking a block with it changes nothing: it's what <code>mc.events.pollBlockHits()</code> reports</td></tr>
+    <tr><td>Any other slot</td><td>left click breaks a block, right click places one</td></tr>
+    <tr><td><kbd>T</kbd></td><td>say something in chat: <code>mc.events.pollChatPosts()</code> reads it</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>give the mouse back. Your program keeps running: <strong>Stop</strong> ends it</td></tr>
+  </table>
+
+  <h2 id="commands">The commands</h2>
+  <p><code>mc</code> is what <code>Minecraft.create()</code> gave you. Positions are blocks: <code>x</code> and
+    <code>z</code> across, <code>y</code> up.</p>
+  <table class="help-table">
+    <tr><th>Write</th><th>What it does</th></tr>
+    <tr><td><code>mc.setBlock(x, y, z, id)</code><br><code>mc.setBlock(x, y, z, id, data)</code></td><td>puts one block there</td></tr>
+    <tr><td><code>mc.setBlocks(x1, y1, z1, x2, y2, z2, id)</code></td><td>fills the box between two corners</td></tr>
+    <tr><td><code>mc.getBlock(x, y, z)</code></td><td>the id of the block there</td></tr>
+    <tr><td><code>mc.getBlockWithData(x, y, z)</code></td><td>the block there, with its data (<code>.id</code>, <code>.data</code>)</td></tr>
+    <tr><td><code>mc.getHeight(x, z)</code></td><td>the <code>y</code> of the highest block that isn't air</td></tr>
+    <tr><td><code>mc.postToChat("text")</code></td><td>a line of chat, in the world and in the output</td></tr>
+    <tr><td><code>mc.player.getPos()</code></td><td>where you are, in fractions of a block: a <code>Vec3</code> with <code>.x .y .z</code></td></tr>
+    <tr><td><code>mc.player.getTilePos()</code></td><td>the block you're standing in, in whole numbers</td></tr>
+    <tr><td><code>mc.player.setPos(x, y, z)</code><br><code>mc.player.setTilePos(x, y, z)</code></td><td>moves you there</td></tr>
+    <tr><td><code>mc.player.getDirection()</code><br><code>mc.player.getRotation()</code> <code>mc.player.getPitch()</code></td><td>which way you're looking</td></tr>
+    <tr><td><code>mc.events.pollBlockHits()</code></td><td>the blocks hit with the sword since you last asked: each has <code>.pos</code> and <code>.face</code></td></tr>
+    <tr><td><code>mc.events.pollChatPosts()</code></td><td>chat typed since you last asked: each has <code>.message</code></td></tr>
+    <tr><td><code>mc.saveCheckpoint()</code><br><code>mc.restoreCheckpoint()</code></td><td>remember the world, then put it back as it was</td></tr>
+    <tr><td><code>mc.camera.setFollow()</code><br><code>mc.camera.setFixed()</code> <code>mc.camera.setPos(x, y, z)</code><br><code>mc.camera.setNormal()</code></td><td>watch from behind you, from a fixed place, or from your own eyes again</td></tr>
+    <tr><td><code>mc.setting("world_immutable", True)</code></td><td>no breaking or placing by hand (your program still can)</td></tr>
+  </table>
+  <p>A program that keeps going needs <code>time.sleep(0.1)</code> in its loop, as on a Pi: it gives the
+    world its turn to move. <strong>Stop</strong> reaches your program as a <code>KeyboardInterrupt</code>,
+    so <code>except KeyboardInterrupt:</code> can tidy up, as Ctrl+C does on a Pi.</p>
+
+  <h2 id="blocks">The blocks</h2>
+  <p>Use them by name — <code>block.STONE.id</code> — or by number.</p>
+  <div class="help-blocks">
+    {% for b in blocks %}
+      <div class="help-block"><span class="help-swatch" data-id="{{ b.id }}"></span>
+        <code>{{ b.name }}</code><span class="dim">{{ b.id }}</span></div>
+    {% endfor %}
+  </div>
+
+  <h2 id="wool">Wool colours</h2>
+  <p>Wool's data is its colour: <code>mc.setBlock(x, y, z, block.WOOL.id, 14)</code> is red, and so is
+    <code>block.WOOL.withData(14)</code>.</p>
+  <div class="help-blocks">
+    {% for colour in wool %}
+      <div class="help-block"><span class="help-swatch" data-id="35" data-data="{{ loop.index0 }}"></span>
+        <code>{{ loop.index0 }}</code><span class="dim">{{ colour }}</span></div>
+    {% endfor %}
+  </div>
+
+  <h2 id="different">Not quite a Pi</h2>
+  <ul>
+    <li>Water and lava stay where they're put, sand doesn't fall, and TNT doesn't explode.</li>
+    <li>There's one player: you. <code>mc.getPlayerEntityIds()</code> is <code>[1]</code>.</li>
+    <li>The world is 256 blocks across each way (<code>x</code> and <code>z</code> from -128 to 127) and
+      <code>y</code> runs from -64 to 63. Blocks set outside it are left out.</li>
+    <li>Nothing here is Minecraft's: the world, its pictures and the <code>mcpi</code> package are PyIDE's own.</li>
+  </ul>
+</main>
+
+<script src="{{ url_for('static', filename='world_model.js') }}"></script>
+<script src="{{ url_for('static', filename='world.js') }}"></script>
+<script>
+  document.querySelectorAll(".help-swatch").forEach(function (el) {
+    el.appendChild(window.PyIDEWorld.swatch(Number(el.dataset.id), Number(el.dataset.data || 0), 32));
+  });
+</script>
+</body>
+</html>

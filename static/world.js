@@ -991,6 +991,18 @@ window.PyIDEWorld = (function () {
     // Escape gives back the mouse; it must not also stop the program. True
     // while the mouse is held, and for a moment after it was let go.
     holdsEscape: function () { return !!view.locked || Date.now() - unlockedAt < 400; },
+    // A block's picture as a small canvas, for the help page's table: the
+    // same painting as the world's, and no three.js needed for it.
+    swatch: function (id, data, size) {
+      if (!atlas) paintAtlas();
+      var t = tiles[lookOf(id, data || 0, 2)] || tiles.missing, c = document.createElement("canvas");
+      c.width = c.height = size || 32;
+      if (!id) return c;          // air: nothing to see
+      var ctx = c.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(atlas.canvas, t[0] * TILE, t[1] * TILE, TILE, TILE, 0, 0, c.width, c.height);
+      return c;
+    },
     world: theWorld,
     LOOKS: LOOKS
   };

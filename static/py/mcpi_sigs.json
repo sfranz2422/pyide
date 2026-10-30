@@ -1,0 +1,234 @@
+{
+ "functions": {
+  "Block": {
+   "doc": "A block id, and its data",
+   "forms": [
+    [
+     "id"
+    ],
+    [
+     "id",
+     "data"
+    ]
+   ]
+  },
+  "Minecraft.create": {
+   "doc": "Connects to the world: mc = Minecraft.create()",
+   "forms": [
+    []
+   ]
+  },
+  "Vec3": {
+   "doc": "A place in the world, or a direction",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z"
+    ]
+   ]
+  }
+ },
+ "methods": {
+  "clearAll": {
+   "doc": "Forgets hits and chat not yet polled",
+   "forms": [
+    []
+   ]
+  },
+  "getBlock": {
+   "doc": "The id of the block there",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z"
+    ]
+   ]
+  },
+  "getBlockWithData": {
+   "doc": "The block there, with its data",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z"
+    ]
+   ]
+  },
+  "getDirection": {
+   "doc": "Which way the player is looking",
+   "forms": [
+    []
+   ]
+  },
+  "getHeight": {
+   "doc": "The y of the highest block that isn't air",
+   "forms": [
+    [
+     "x",
+     "z"
+    ]
+   ]
+  },
+  "getPitch": {
+   "doc": "How far up or down the player looks, in degrees",
+   "forms": [
+    []
+   ]
+  },
+  "getPlayerEntityIds": {
+   "doc": "",
+   "forms": [
+    []
+   ]
+  },
+  "getPos": {
+   "doc": "Where the player is, in fractions of a block",
+   "forms": [
+    []
+   ]
+  },
+  "getRotation": {
+   "doc": "Which way the player faces, in degrees",
+   "forms": [
+    []
+   ]
+  },
+  "getTilePos": {
+   "doc": "The block the player is standing in",
+   "forms": [
+    []
+   ]
+  },
+  "pollBlockHits": {
+   "doc": "Blocks hit with the sword since you last asked",
+   "forms": [
+    []
+   ]
+  },
+  "pollChatPosts": {
+   "doc": "Chat typed since you last asked",
+   "forms": [
+    []
+   ]
+  },
+  "postToChat": {
+   "doc": "",
+   "forms": [
+    [
+     "message"
+    ]
+   ]
+  },
+  "restoreCheckpoint": {
+   "doc": "Puts the world back as it was at saveCheckpoint()",
+   "forms": [
+    []
+   ]
+  },
+  "saveCheckpoint": {
+   "doc": "Remembers the world as it is now",
+   "forms": [
+    []
+   ]
+  },
+  "setBlock": {
+   "doc": "",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z",
+     "id"
+    ],
+    [
+     "x",
+     "y",
+     "z",
+     "id",
+     "data"
+    ]
+   ]
+  },
+  "setBlocks": {
+   "doc": "Fills the box between two corners",
+   "forms": [
+    [
+     "x1",
+     "y1",
+     "z1",
+     "x2",
+     "y2",
+     "z2",
+     "id"
+    ],
+    [
+     "x1",
+     "y1",
+     "z1",
+     "x2",
+     "y2",
+     "z2",
+     "id",
+     "data"
+    ]
+   ]
+  },
+  "setFixed": {
+   "doc": "The camera stays where camera.setPos put it",
+   "forms": [
+    []
+   ]
+  },
+  "setFollow": {
+   "doc": "The camera behind the player",
+   "forms": [
+    []
+   ]
+  },
+  "setNormal": {
+   "doc": "The camera back in the player's eyes",
+   "forms": [
+    []
+   ]
+  },
+  "setPos": {
+   "doc": "",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z"
+    ]
+   ]
+  },
+  "setTilePos": {
+   "doc": "",
+   "forms": [
+    [
+     "x",
+     "y",
+     "z"
+    ]
+   ]
+  },
+  "setting": {
+   "doc": "",
+   "forms": [
+    [
+     "name",
+     "on"
+    ]
+   ]
+  },
+  "withData": {
+   "doc": "The same block with other data: WOOL.withData(14) is red wool",
+   "forms": [
+    [
+     "data"
+    ]
+   ]
+  }
+ }
+}

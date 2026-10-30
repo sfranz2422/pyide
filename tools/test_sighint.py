@@ -283,6 +283,56 @@ for tpl in ("index.html", "live.html"):
 check("kaypy's hints are only for a program that imports kaypy",
       "var kaypyOn = !opts.flask && KAYPY.test(cm.getValue());" in sighint)
 
+# ------------------------------------------------------------- mcpi's
+# The block world's API (static/py/mcpi), from a table written by hand in
+# tools/build_mcpi.py: every name in it must be a real call in the package,
+# or the hint offers something that stops with an AttributeError.
+print("\nmcpi's hints are mcpi's")
+import ast                                                    # noqa: E402
+import build_mcpi                                             # noqa: E402
+stored = json.load(open(build_mcpi.SIGS_OUT))
+check("static/py/mcpi_sigs.json is the table in build_mcpi.py", stored == build_mcpi.SIGS,
+      "run python3 tools/build_mcpi.py")
+defined, classes = set(), {}
+for f in os.listdir(build_mcpi.PACKAGE):
+    if f.endswith(".py"):
+        for found in ast.walk(ast.parse(open(os.path.join(build_mcpi.PACKAGE, f)).read())):
+            if isinstance(found, ast.ClassDef):
+                classes[found.name] = {n.name for n in found.body if isinstance(n, ast.FunctionDef)}
+                defined |= classes[found.name]
+missing = [m for m in build_mcpi.SIGS["methods"] if m not in defined]
+missing += [fn for fn in build_mcpi.SIGS["functions"]
+            if not (fn in classes or ("." in fn and fn.split(".")[1] in classes.get(fn.split(".")[0], ())))]
+check("every call it hints is one the package has", not missing, missing)
+MCPI_CASES = [
+    ("from mcpi.minecraft import Minecraft\nmc = Minecraft.create()\nmc.setBlocks(1, 2, 3, ",
+     ["mcpi .setBlocks(x1, y1, z1, *x2*, y2, z2, id)", "mcpi .setBlocks(x1, y1, z1, *x2*, y2, z2, id, data)"]),
+    ("from mcpi.minecraft import Minecraft\nmc = Minecraft.create(", ["mcpi Minecraft.create()"]),
+    ("import mcpi.minecraft as minecraft\nmc.player.getTilePos(", ["mcpi .getTilePos()"]),
+    ("from mcpi import block\nb = block.WOOL.withData(", ["mcpi .withData(*data*)"]),
+    ("mc.setBlocks(1, 2, 3, ", []),           # no mcpi here: nothing to hint
+]
+MC = open(os.path.join(ROOT, "static", "py", "mcpi_sigs.json")).read()
+got = node("""(function () { var MC = %s; return %s.map(function (c) {
+  var call = S.openCall(c);
+  if (!call) return [];
+  return S.lookup(call, S.ownDefs([c]), false, null, false, /mcpi/.test(c) ? MC : null).map(function (h) {
+    return h.forms.map(function (f) {
+      var on = S.activeIndex(f, call);
+      return (h.kind ? h.kind + " " : "") + h.label + "("
+        + f.map(function (p, i) { return i === on ? "*" + p + "*" : p; }).join(", ") + ")";
+    });
+  }).reduce(function (a, b) { return a.concat(b); }, []);
+}); })()""" % (MC, json.dumps([c for c, _ in MCPI_CASES]))) or []
+for (code, want), hint in zip(MCPI_CASES, got):
+    check("  %s" % json.dumps(code)[-40:], hint == want, "" if hint == want else "got %r" % hint)
+check("all the mcpi cases ran", len(got) == len(MCPI_CASES))
+check("mcpi's hints are only for a program that imports mcpi",
+      "var mcpiOn = !opts.flask && MCPI.test(cm.getValue());" in sighint
+      and "mcpiOn ? mcpiSigs : null" in sighint)
+check("the editor tells it where mcpi's are",
+      'mcpiUrl: "/static/py/mcpi_sigs.json"' in open(os.path.join(ROOT, "static", "app.js")).read())
+
 failed = results.count(False)
 print("\n%s (%d checks, %d failed)" % ("ALL PASSED" if not failed else "SOME FAILED",
                                        len(results), failed))

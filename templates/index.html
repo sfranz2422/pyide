@@ -79,6 +79,9 @@
     <a id="kaypy-docs" class="btn" href="https://kaypy.app/api/" target="_blank"
        rel="noopener" title="Every KayPy function, with an example"
        hidden>Docs</a>
+    {#  The block world's own help, for a program that imports mcpi. #}
+    <a id="world-docs" class="btn" href="{{ url_for('help_world') }}" target="_blank"
+       rel="noopener" title="The block world: every command, every block, and how to move" hidden>Docs</a>
     {#  Who sees what. A student gets ONE thing to press besides Run:
 
           signed in, on an assignment       Turn in   (it autosaves anyway)

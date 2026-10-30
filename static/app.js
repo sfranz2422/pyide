@@ -723,6 +723,8 @@
     if (runTabBtn) runTabBtn.hidden = !(isGame || mode === "world");
     var docs = $("kaypy-docs");
     if (docs) docs.hidden = !isGame;
+    var worldDocs = $("world-docs");
+    if (worldDocs) worldDocs.hidden = mode !== "world";
     paintWorld(mode === "world");
     relayout();
   }
@@ -826,7 +828,8 @@
         .map(function (n) { return docs[n].getValue(); });
     },
     isPython: function () { return /\.py$/i.test(editingFile()); },
-    kaypyUrl: "/static/py/kaypy_sigs.json"
+    kaypyUrl: "/static/py/kaypy_sigs.json",
+    mcpiUrl: "/static/py/mcpi_sigs.json"
   });
 
   /* Name completion, for main.py only. A .txt or .md tab is not Python, and a

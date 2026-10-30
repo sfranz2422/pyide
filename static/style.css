@@ -3439,3 +3439,14 @@ body.is-demo.is-world .world-view { height: 100%; }
   color: #fff; font-size: 18px; }
 .world-slot.on { border-color: #fff; }
 .world-slot canvas { width: 24px; height: 24px; image-rendering: pixelated; }
+
+/* The block world's help page (/help/world). */
+.help-table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
+.help-table th, .help-table td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.help-table td:first-child { white-space: nowrap; }
+.help-world kbd { font: 12px ui-monospace, Menlo, monospace; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; }
+.help-blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; margin: 8px 0 16px; }
+.help-block { display: flex; align-items: center; gap: 8px; }
+.help-block .dim { margin-left: auto; }
+.help-swatch canvas { display: block; width: 28px; height: 28px; image-rendering: pixelated; border-radius: 3px; box-shadow: 0 0 0 1px var(--line); }
+@media (max-width: 720px) { .help-table td:first-child { white-space: normal; } }

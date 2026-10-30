@@ -125,6 +125,7 @@ w.breathe = broken
 while True:
     pass
 """, None, ", True, 1"),
+    ("example", open(os.path.join(ROOT, "examples", "06_block_world.py")).read(), 400, ""),
     ("mistake", HEAD + "mc.setBlock(1, 2)\n", None, ""),
     # A program that changes mcpi itself: the next run gets the package as it is.
     ("meddle", HEAD + "block.STONE.id = 99\nprint('changed', block.STONE)\n", None, ""),
@@ -270,6 +271,10 @@ def main():
     fz = r.get("frozen", {})
     check("a loop that never lets the world have a turn is stopped, saying what to add",
           fz.get("status") == "timeout" and "time.sleep(0.1)" in fz.get("text", ""), fz)
+    ex = r.get("example", {})
+    check("examples/06_block_world.py builds its house and ends tidily on Stop",
+          ex.get("status") == "stopped" and ex.get("said", [])[-1:] == ["Bye!"]
+          and "Done!" in " ".join(ex.get("said", [])), ex)
     mk = r.get("mistake", {})
     check("a mistake is a traceback naming the line", mk.get("status") == "error"
           and "RequestError" in mk.get("text", "") and "line 5" in mk.get("text", ""), mk)
