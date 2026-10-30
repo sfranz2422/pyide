@@ -249,8 +249,10 @@ check("  with Describe on an assignment's row and a heading's",
       and 'js-describe">Describe' in _row_html(group_row))
 
 # What each is, and whether it is in Google Classroom.
-check("the Add form's kinds are Code, Lesson and Material",
-      re.search(r'<option value="code">Code</option>\s*<option value="lesson">Lesson</option>'
+# Block world: a Raspberry Pi Minecraft project (the block world), PyIDE only.
+check("the Add form's kinds are Code, Block world, Lesson and Material",
+      re.search(r'<option value="code">Code</option>\s*<option value="world">Block world \(Minecraft\)</option>'
+                r'\s*<option value="lesson">Lesson</option>'
                 r'\s*<option value="material">Material</option>', page) is not None)
 _quiz_row = [int(i) for i, s_, _ in order() if s_ == QUIZ][0]
 check("a code assignment is tagged code, a lesson lesson",

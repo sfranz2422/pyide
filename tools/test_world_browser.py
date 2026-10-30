@@ -115,10 +115,11 @@ else:
     db.add(accounts.Enrollment(class_id=cls, email="kid@example.org", name="Kid"))
     db.commit()
     db.close()
-    slug = teacher.post("/api/class/%d/new" % cls, json={"title": "Gold"}).get_json()["slug"]
-    teacher.post("/api/assignment/%s" % slug, json={"code": BUILD, "title": "Gold"})
-    demo = client().post("/api/share", json={"code": PROGRAM, "author": "Kid", "hidden": True,
-                                             "title": "Tower"}).get_json()["url"]
+    # A block world, as a teacher makes one: Add to class → Block world.
+    slug = teacher.post("/api/class/%d/new" % cls, json={"title": "Gold", "kind": "world"}).get_json()["slug"]
+    teacher.post("/api/assignment/%s" % slug, json={"code": BUILD, "title": "Gold", "files": {"world.mcpi": ""}})
+    demo = client().post("/api/share", json={"code": PROGRAM, "author": "Kid", "hidden": True, "title": "Tower",
+                                             "files": {"world.mcpi": ""}}).get_json()["url"]
 
     server = make_server("127.0.0.1", 0, P.app, threaded=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()

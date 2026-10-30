@@ -8,7 +8,8 @@ Three kinds of program run here: ordinary console Python, kaypy games
 (`from kaypy import *`), and block-world programs (`from mcpi.minecraft
 import Minecraft`, the Raspberry Pi's Minecraft API). Which one is decided by
 the code itself, not by a setting — `game.js`'s `looksLikeGame()`, then
-`world_model.js`'s `looksLikeWorld()`, is the whole rule.
+`world_model.js`'s `looksLikeWorld()`, is the whole rule — except that the
+block world also needs the project to have a `world.mcpi` (below).
 
 ## Running it
 
@@ -498,7 +499,13 @@ that stops loading it, and on an editor that starts.
 **The block world** (`static/world_model.js`, `static/world.js`,
 `static/py/mcpi/`, `_pyide_run_world` in `runtime.js`; `/help/world`). A
 program that imports `mcpi` builds in a 3D world of blocks, the Pi's
-Minecraft lessons unchanged. `world_model.js` is the world and answers the
+Minecraft lessons unchanged. **Only in a teacher's block-world assignment**
+(the teacher's choice): Add to class → Block world (Minecraft) makes one with a
+`world.mcpi`, and the world shows only where that file is (`hasWorld` in
+`app.js`, the same in `demo.js`), so every copy of it — drafts, turn-ins,
+shares, the new tab — is a world project and a student's own project never
+is. mcpi there gets a sentence saying so instead of running; a student can't
+make the file by hand. `world_model.js` is the world and answers the
 Pi's own text protocol (`command("world.setBlock(1,2,3,4)")`), so floats and
 ints come back where a Pi gives them; `static/py/mcpi` is OUR package, written
 from the API reference (no Mojang code or textures), bundled by

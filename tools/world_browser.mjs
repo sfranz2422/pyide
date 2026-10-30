@@ -92,7 +92,8 @@ try {
   const PROGRAM = setup.program;
   let P = await open("/help/world");
   await until(P, "document.readyState === 'complete'", 20000);
-  await ev(P, `localStorage.setItem("pyide-play", ${JSON.stringify(JSON.stringify({ code: PROGRAM, files: {}, title: "Tower" }))})`);
+  // With its world file: the new tab of a block-world assignment's project.
+  await ev(P, `localStorage.setItem("pyide-play", ${JSON.stringify(JSON.stringify({ code: PROGRAM, files: { "world.mcpi": "" }, title: "Tower" }))})`);
   await send("Page.navigate", { url: base + "/play" }, P);
   const played = await until(P, "(document.querySelector('#output')||{}).textContent.includes('tower up')", 120000);
   say(played, "a world program plays in the new tab, by itself", played ? "" : await output(P).catch(() => ""));

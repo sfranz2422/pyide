@@ -2144,6 +2144,24 @@ LESSON_FILE = "lesson.md"
 # code at all is refused everywhere else (publish_assignment).
 NEW_ASSIGNMENT_CODE = "# %s\n"
 
+# A block-world assignment (Add to class → Block world): a Pi Minecraft
+# starter, and the world file. The world is only for projects a teacher
+# started this way — a program that imports mcpi gets it only where there is
+# a world.mcpi (app.js hasWorld) — and the file is how every copy (a
+# student's draft, a turn-in, a share, the new tab) knows it is one. Empty is
+# the standard world, the same for everyone.
+WORLD_FILE = "world.mcpi"
+NEW_WORLD_CODE = """# %s
+from mcpi.minecraft import Minecraft
+from mcpi import block
+
+mc = Minecraft.create()
+mc.postToChat("Hello, world!")
+
+x, y, z = mc.player.getTilePos()
+mc.setBlock(x + 2, y, z, block.STONE.id)
+"""
+
 LESSON_STARTER = """# {title}
 
 Write your notes here. A line with only `---` on it starts a new slide.
@@ -4549,6 +4567,7 @@ def class_new_assignment(class_id):
             return bounce
         data = request.get_json(silent=True) or {}
         lesson = data.get("kind") == "lesson"
+        world = data.get("kind") == "world"
         title = clean(data.get("title"), 200) or ("Untitled lesson" if lesson
                                                   else "Untitled assignment")
         if lesson:
@@ -4556,6 +4575,11 @@ def class_new_assignment(class_id):
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, kind="lesson", code="",
                 files=json.dumps({LESSON_FILE: LESSON_STARTER.format(title=title)}))
+        elif world:
+            item = accounts.Assignment(
+                slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+                teacher_id=user.id, title=title, code=NEW_WORLD_CODE % title,
+                files=json.dumps({WORLD_FILE: ""}))
         else:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,

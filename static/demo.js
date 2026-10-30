@@ -259,13 +259,21 @@
     }
 
     var isGame = window.PyIDEGame.looksLikeGame(loaded.code);
-    var isWorld = !isGame && window.PyIDEWorldModel.looksLikeWorld(loaded.code);
+    // As in the editor (app.js hasWorld): the block world only for a project
+    // that has a world file, i.e. one from a teacher's block-world assignment.
+    var hasWorldFile = Object.prototype.hasOwnProperty.call(loaded.files, WORLD_FILE);
+    var isWorld = !isGame && hasWorldFile && window.PyIDEWorldModel.looksLikeWorld(loaded.code);
     // A world fills the page as a game does.
     document.body.classList.toggle("is-game", isGame || isWorld);
     document.body.classList.toggle("is-world", isWorld);
     if (worldView) worldView.hidden = !isWorld;
     if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : "Game";
     if (fullBtn) fullBtn.hidden = !(isGame || isWorld) || !stage.requestFullscreen;
+    if (!isGame && !isWorld && window.PyIDEWorldModel.looksLikeWorld(loaded.code)) {
+      write("The block world (mcpi) comes with block-world assignments from a teacher.\n", "err");
+      setBusy(false, "console");
+      return;
+    }
     return isGame ? runGame(loaded) : isWorld ? runWorld(loaded) : runConsole(loaded);
   }
 

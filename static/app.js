@@ -531,6 +531,12 @@
         return;
       }
       if (name.toLowerCase() === MAIN) { switchTo(MAIN); return; }
+      // The world's own file: making it by hand would make any project a
+      // block-world one, which only a teacher's assignment is meant to be.
+      if (name.toLowerCase() === WORLD_FILE) {
+        write("\n'" + name + "' is kept for block-world assignments. Choose another name.\n", "err");
+        return;
+      }
       if (docs[name]) { switchTo(name); return; }
 
       var clash = shadowedLibrary(name);
@@ -692,9 +698,14 @@
 
   if (runTabBtn) runTabBtn.addEventListener("click", runInNewTab);
 
-  // kaypy before mcpi: a program that somehow imports both stays the game it was.
+  /* kaypy before mcpi: a program that somehow imports both stays the game it
+     was. And the block world only in a project that has a world file: the
+     teacher's choice is that it comes with block-world assignments they set
+     (Add to class → Block world, which makes the file), never a project a
+     student starts. Every copy of such an assignment carries the file. */
+  function hasWorld() { return Object.prototype.hasOwnProperty.call(docs, WORLD_FILE); }
   function currentMode(source) {
-    return window.PyIDEGame.looksLikeGame(source) ? "game" : window.PyIDEWorldModel.looksLikeWorld(source) ? "world" : "console";
+    return window.PyIDEGame.looksLikeGame(source) ? "game" : window.PyIDEWorldModel.looksLikeWorld(source) && hasWorld() ? "world" : "console";
   }
 
   // Before paintMode, which runs straight away and shows or hides its button.
@@ -1057,6 +1068,16 @@
        instead of a game engine loading only to fail. Python's own message
        still goes in the output, where it always was. */
     syntaxCard.clear();
+    // mcpi outside a block-world assignment: said plainly, rather than
+    // "No module named 'mcpi'", which reads as a mistake in their code.
+    if (mode === "console" && window.PyIDEWorldModel.looksLikeWorld(source)) {
+      stage.hidden = true;
+      showOutput();
+      clearOutput();
+      write("The block world (mcpi) comes with block-world assignments from your teacher.\n" +
+            "Open one from your class page to build in it.\n", "err");
+      return;
+    }
     var bad = window.PyIDESyntax.check(pyodide, source, dataFiles());
     if (bad) {
       stage.hidden = true;
@@ -1432,7 +1453,9 @@
       // The rescue keeps everything in one localStorage item, and a full one
       // fails without a word — so a big world is left out, and the student's
       // code is always what's kept.
-      if (all[WORLD_FILE] && all[WORLD_FILE].length > 400000) delete all[WORLD_FILE];
+      // Its name is kept, empty: the file is what makes this a block-world
+      // project, and dropped altogether a restored project would stop being one.
+      if (all[WORLD_FILE] && all[WORLD_FILE].length > 400000) all[WORLD_FILE] = "";
       return all;
     },
     writeAll: function (incoming) {
