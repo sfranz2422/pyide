@@ -44,7 +44,7 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by twenty-four of these: `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by twenty-five of these: `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
@@ -542,6 +542,28 @@ saves the same week to the teacher's other classes in this editor, and one
 that isn't theirs refuses the whole save. The calendar is not copied by
 Duplicate class: a week is out of date by next semester. `test_calendar.py`
 (the same in all three) runs calendar.js in node.
+
+**The A+ lab** (`static/lab/`; "A+ labs in a class" in `app.py`;
+`lab_checks.py`). A simulated PC for CompTIA A+ practice: a bench of real
+parts photos (`bench.js`, Wikimedia Commons, credited at `/lab/credits` and
+on each spec card — `test_lab_machine.py` fails on a photo without its
+credit), a faked Windows (`desktop.js`, `apps.js`) and Command Prompt
+(`cmd.js`), all driving one plain-JSON machine (`machine.js`, pure, no DOM).
+**Faked, never emulated, and nothing of Microsoft's.** `/lab/sandbox` is open
+to anyone (`?start=windows` skips the building). The tickets
+(`static/lab/scenarios/*.json`) are **teachers only** — their tasks and
+hints are the answers — at `/lab/scenarios`, where Assign makes a
+`kind = "lab"` assignment (`lab.json` names the ticket, Out of its points;
+class page Add to class → Lab (A+) goes there). A student's machine is
+saved to `lab_states` (PyIDE's own table, like `teacher_decks`) and marked
+**on the server** by `lab_checks.py`; `lab_checks.js` is only the instant
+✓, and `test_lab_checks.py` holds the two together. A save is never
+believed about what a part is (`sanitize` puts the ticket's own parts
+back) and every placement is checked again, so a forged save that passes
+is a correct machine. Marks are a TestResult "verified", so `_earned` and
+every total already count them; the same machine saved again does nothing,
+so a turn-in time never moves by itself. **Labs are never live**: no live
+link made, not in the chooser, `_assignment_for` refuses them.
 
 ## Style
 

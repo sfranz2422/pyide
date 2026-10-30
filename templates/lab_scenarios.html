@@ -17,9 +17,9 @@
   })();
 </script>
 <style>
-  .tickets { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
-  .ticket-card { display: block; padding: 12px 14px; margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; color: inherit; text-decoration: none; }
-  .ticket-card:hover { border-color: var(--accent); }
+  .ticket-card { padding: 12px 14px; margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; }
+  .ticket-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+  .ticket-actions select { max-width: 260px; }
   .ticket-card h3 { margin: 2px 0 4px; font-size: 17px; }
   .ticket-card p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
   .ticket-meta { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -33,15 +33,56 @@
   <div class="meta"><span class="pagetitle">A+ lab · tickets</span></div>
   <div class="actions"><a class="btn" href="{{ url_for('lab_sandbox') }}">Sandbox</a></div>
 </header>
-<main class="tickets">
-  <p>Each ticket is a computer with something wrong with it. Fix it: each task is marked as you go. What you do is kept in this browser.</p>
+{# .sheet: the page itself never scrolls (style.css), its sheet does. #}
+<main class="sheet tickets">
+  <p>Each ticket is a computer with something wrong with it. <strong>Try it</strong> to see what students get (kept in this browser),
+     or <strong>Assign</strong> it to a class: it goes on top of the class's page, students do it there, and each task is
+     marked on the server as they work and added to their grade.</p>
+  {% if not classes %}<p class="dim">Make a class first (your dashboard), and each ticket can be assigned to it here.</p>{% endif %}
   {% for s in rows %}
-  <a class="ticket-card" href="{{ url_for('lab_try', sid=s.id) }}">
+  <article class="ticket-card" data-scenario="{{ s.id }}">
     <div class="ticket-meta">{{ s.area }} · {{ "starts in Windows" if s.start == "windows" else "starts on the bench" }} · {{ s.points }} points</div>
     <h3>{{ s.title }}</h3>
     <p>{{ s.ticket }}</p>
-  </a>
+    <div class="ticket-actions">
+      <a class="btn" href="{{ url_for('lab_try', sid=s.id) }}" title="Try it yourself: kept in this browser">Try it</a>
+      {% if classes %}
+        {#  Assign: made as a lab assignment in that class, on top of its
+            page, graded on the server as students work. #}
+        <select class="field js-class" aria-label="Class to assign {{ s.title }} to">
+          {% for c in classes %}<option value="{{ c.id }}" {{ "selected" if c.id == chosen }}>{{ c.name }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary js-assign" type="button">Assign</button>
+        <span class="js-state small dim" role="status"></span>
+      {% endif %}
+    </div>
+  </article>
   {% endfor %}
 </main>
+<script>
+  (function () {
+    "use strict";
+    document.querySelectorAll(".js-assign").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var card = btn.closest(".ticket-card"), pick = card.querySelector(".js-class"), state = card.querySelector(".js-state");
+        var name = pick.options[pick.selectedIndex].textContent;
+        btn.disabled = true;
+        state.textContent = "Assigning…";
+        fetch("/api/class/" + pick.value + "/new", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "lab", scenario: card.getAttribute("data-scenario") })
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }).then(function (x) {
+          btn.disabled = false;
+          state.textContent = "";
+          if (!x.ok) { state.textContent = x.d.error || "Not assigned"; return; }
+          state.appendChild(document.createTextNode("Assigned to " + name + " · "));
+          var a = document.createElement("a");
+          a.href = x.d.url; a.textContent = "its page";
+          state.appendChild(a);
+        }).catch(function () { btn.disabled = false; state.textContent = "Not assigned: no connection"; });
+      });
+    });
+  })();
+</script>
 </body>
 </html>

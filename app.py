@@ -31,7 +31,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 import accounts
@@ -156,6 +156,26 @@ engine = create_engine(
     else {},
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+class LabState(Base):
+    """A student's machine in an A+ lab assignment: the simulated PC as
+    plain JSON (static/lab/machine.js), saved as they work and marked by
+    lab_checks.py on the way in. One row per student per lab.
+
+    PyIDE's own table, like teacher_decks, so accounts.py is untouched; no
+    foreign keys for the same reason (different metadata). The marking is
+    stored where every other check's is (TestResult, kind "verified"), so
+    grades, Classroom and Skyward need nothing new."""
+    __tablename__ = "lab_states"
+
+    id = Column(Integer, primary_key=True)
+    assignment_id = Column(Integer, index=True, nullable=False)
+    student_id = Column(Integer, index=True, nullable=False)
+    state = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, nullable=False,
+                        default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
+
+
 Base.metadata.create_all(engine)
 
 # Signing in, saved work, assignments and turning in. Its own metadata, so it
@@ -1453,11 +1473,15 @@ def open_assignment(slug):
         if (user is not None and user.id == item.teacher_id
                 and request.args.get("preview") != "1"):
             return redirect(url_for("edit_lesson" if _is_lesson(item)
+                                    else "teacher_assignment" if _is_lab(item)
                                     else "edit_assignment", slug=item.slug))
 
         # A lesson has no code to copy, so no draft: the page is the lesson.
         if _is_lesson(item):
             return _lesson_page(db, item, user)
+        # Nor a lab: the page is the lab, and the machine is saved apart.
+        if _is_lab(item):
+            return _lab_page(db, item, user)
 
         if user is None:
             ctx = user_context(db)
@@ -2201,6 +2225,23 @@ def _is_lesson(item):
     return item is not None and (item.kind or "code") == "lesson"
 
 
+#: A lab's own file: which built-in scenario it is ({"scenario": id}).
+LAB_FILE = "lab.json"
+
+
+def _is_lab(item):
+    return item is not None and (item.kind or "code") == "lab"
+
+
+def _lab_of(item):
+    """The scenario an A+ lab assignment is, or None."""
+    try:
+        sid = json.loads(item.file_map().get(LAB_FILE) or "{}").get("scenario")
+    except (ValueError, AttributeError):
+        return None
+    return lab_checks.scenario(sid) if isinstance(sid, str) else None
+
+
 def _lesson_notes(item):
     return item.file_map().get(LESSON_FILE, "")
 
@@ -2624,6 +2665,8 @@ def edit_assignment(slug):
             abort(404)
         if _is_lesson(item):
             return redirect(url_for("edit_lesson", slug=item.slug))
+        if _is_lab(item):                  # nothing to edit: its page is its results
+            return redirect(url_for("teacher_assignment", slug=item.slug))
 
         # Not the author's own draft, if one is lying about from before the
         # redirect in open_assignment existed — that is not a student who
@@ -2782,6 +2825,13 @@ def delete_assignment(slug):
         # Its answer keys go with it. Left behind they point at a deleted
         # assignment, which Postgres refuses outright — the delete would fail.
         (db.query(accounts.QuizQuestion).filter_by(assignment_id=item.id)
+           .delete(synchronize_session=False))
+        # And its checked results (a student's own Check my work makes one
+        # without turning anything in), and a lab's saved machines: the
+        # same Postgres refusal otherwise.
+        (db.query(accounts.TestResult).filter_by(assignment_id=item.id)
+           .delete(synchronize_session=False))
+        (db.query(LabState).filter_by(assignment_id=item.id)
            .delete(synchronize_session=False))
         # Off its class's page too, for the same reason — and the same for
         # its live lesson and its Classroom posts. Every assignment whose
@@ -3026,6 +3076,9 @@ def teacher_assignment(slug):
         possible = _quiz_possible(item)
         answers = _answers_for_teacher(db, item)
         tests, test_errors = autograde.file_tests(item.file_map())
+        # An A+ lab's tasks are marked on the server as the student works
+        # (lab_state_save); its page shows them where tests would be.
+        lab = _lab_of(item) if _is_lab(item) else None
         results = {}
         for r in db.query(accounts.TestResult).filter_by(assignment_id=item.id):
             results.setdefault(r.student_id, {})[r.kind] = r
@@ -3093,12 +3146,16 @@ def teacher_assignment(slug):
         ctx.update(classroom_on=classroom_configured(),
                    classroom_connected=(classroom_configured()
                                         and _classroom_link(db, user) is not None))
-        # The lesson's link, under the handout link, for posting ahead.
-        lesson = _lesson_for(db, user, item)
-        ctx.update(live_url=url_for("live_page", code=lesson.code,
-                                    _external=True, _scheme=_scheme()),
-                   live_on=not lesson.ended,
-                   live_waiting=_waiting(lesson))
+        # The lesson's link, under the handout link, for posting ahead —
+        # except a lab's: labs are never taught live.
+        if lab is None:
+            lesson = _lesson_for(db, user, item)
+            ctx.update(live_url=url_for("live_page", code=lesson.code,
+                                        _external=True, _scheme=_scheme()),
+                       live_on=not lesson.ended,
+                       live_waiting=_waiting(lesson))
+        lab_points = sum(t["points"] for t in lab["tasks"]) if lab else 0
+        ctx.update(lab=lab, lab_points=lab_points)
         ctx.update(quiz_count=len(possible),
                    quiz_points=_score_text(sum(q["points"] for q in possible)))
         ctx.update(waiting=_ungraded(db, [item.id]).get(item.id, 0))
@@ -3109,7 +3166,7 @@ def teacher_assignment(slug):
         # teacher gives, so Out of has to count them — and adding them up by
         # hand was a step teachers missed. Rounded up: Out of is whole.
         ctx.update(points_auto=math.ceil(sum(q["points"] for q in possible)
-                                         + sum(t["points"] for t in tests)))
+                                         + sum(t["points"] for t in tests) + lab_points))
         ctx.update(assignment=item, handed_in=handed_in, not_yet=not_yet,
                    share_url=url_for("open_assignment", slug=item.slug,
                                      _external=True, _scheme=_scheme()))
@@ -3715,7 +3772,8 @@ def classroom_post(slug):
             return jsonify(error=_google_message(course, "Google couldn't find "
                                                  "that class.")), 502
 
-        live = asked.get("link") == "live"
+        # A lab has no live link: it always posts its own page.
+        live = asked.get("link") == "live" and not _is_lab(item)
         if live:
             link = url_for("live_page", code=_lesson_for(db, user, item).code,
                            _external=True, _scheme=_scheme())
@@ -4275,7 +4333,8 @@ def _place(db, course, item):
     row.class_id, row.position, row.hidden = course.id, top, 0
     db.commit()
     teacher = db.query(accounts.User).filter_by(id=course.teacher_id).first()
-    _lesson_for(db, teacher, item)
+    if not _is_lab(item):                  # a lab has no live link to make ahead
+        _lesson_for(db, teacher, item)
     return row
 
 
@@ -4532,7 +4591,7 @@ def duplicate_class(class_id):
                 copied += 1
             db.add(row)
             db.commit()
-            if row.assignment_id:
+            if row.assignment_id and not _is_lab(copy):
                 _lesson_for(db, user, copy)     # its live link, made ahead
         return jsonify(ok=True, id=new.id, assignments=copied,
                        url=url_for("teacher_class", class_id=new.id))
@@ -4570,9 +4629,21 @@ def class_new_assignment(class_id):
         data = request.get_json(silent=True) or {}
         lesson = data.get("kind") == "lesson"
         world = data.get("kind") == "world"
-        title = clean(data.get("title"), 200) or ("Untitled lesson" if lesson
+        lab = data.get("kind") == "lab"
+        sc = lab_checks.scenario(str(data.get("scenario") or "")) if lab else None
+        if lab and sc is None:
+            return jsonify(error="No such lab."), 400
+        title = clean(data.get("title"), 200) or (sc["title"] if sc else "Untitled lesson" if lesson
                                                   else "Untitled assignment")
-        if lesson:
+        if lab:
+            # An A+ lab: graded on the server as the student works, so it is
+            # out of its tasks' points from the start.
+            item = accounts.Assignment(
+                slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+                teacher_id=user.id, title=title, kind="lab", code="",
+                files=json.dumps({LAB_FILE: json.dumps({"scenario": sc["id"]})}),
+                out_of=sum(t["points"] for t in sc["tasks"]))
+        elif lesson:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, kind="lesson", code="",
@@ -4592,7 +4663,8 @@ def class_new_assignment(class_id):
         _store_quiz_keys(db, item.id, item.file_map().values())
         _place(db, course, item)
         return jsonify(slug=item.slug, url=url_for(
-            "edit_lesson" if lesson else "edit_assignment", slug=item.slug))
+            "edit_lesson" if lesson else "teacher_assignment" if lab else "edit_assignment",
+            slug=item.slug))
     finally:
         db.close()
 
@@ -5100,6 +5172,10 @@ def class_view_item(token, slug):
                        submitted_at="", live=None, waiting=False, is_host=False,
                        attend_class=None)
             return render_template("lesson.html", **ctx)
+        if _is_lab(item) and _lab_of(item) is not None:
+            # The lab, kept in the visitor's browser and saved nowhere.
+            ctx.update(scenario=_lab_of(item), lab_item=item, lab_saves=False, attend_class=None)
+            return render_template("lab_sandbox.html", **ctx)
         ctx.update(code=item.code, files=quiz.redact_files(item.file_map()),
                    title=item.title, author="", readonly=True, authoring=False,
                    slug=None, shared_at=None)
@@ -6575,7 +6651,7 @@ def live_assignments():
         rows = (db.query(accounts.Assignment)
                   .filter_by(teacher_id=user.id, app=APP_NAME,
                              archived=0, closed=0)
-                  .filter(accounts.Assignment.kind != "lesson")
+                  .filter(accounts.Assignment.kind.notin_(("lesson", "lab")))
                   .order_by(func.coalesce(accounts.Assignment.updated_at,
                                           accounts.Assignment.created_at).desc())
                   .limit(40).all())
@@ -6626,6 +6702,8 @@ def _assignment_for(db, user, slug):
     if item.closed:
         return None, "That assignment is closed, so nothing could be "\
                      "turned in to it."
+    if _is_lab(item):
+        return None, "A lab isn't taught live: students do it on its own page."
     return item, None
 
 
@@ -6749,6 +6827,8 @@ def teach_assignment_live(slug):
             abort(404)
         if _is_lesson(item):
             return redirect(url_for("edit_lesson", slug=item.slug, go="live"))
+        if _is_lab(item):                  # no live mode for labs
+            return redirect(url_for("teacher_assignment", slug=item.slug))
         live = _lesson_for(db, user, item)
         return redirect(url_for("index", teach=live.code, a=item.slug))
     finally:
@@ -7668,24 +7748,160 @@ def lab_sandbox():
 
 @app.get("/lab/scenarios")
 def lab_scenarios():
-    """The A+ lab's built-in tickets (static/lab/scenarios/), to try here in
-    this browser. Open to anyone, like the sandbox; a lab set in a class is
-    graded on the server (lab_checks.py) instead."""
-    rows = [lab_checks.scenario(sid) for sid in lab_checks.scenario_ids()]
-    rows.sort(key=lambda s: s.get("order", 99))
-    for s in rows:
-        s["points"] = sum(t["points"] for t in s["tasks"])
-    return render_template("lab_scenarios.html", rows=rows)
+    """The A+ lab's built-in tickets (static/lab/scenarios/): teachers only,
+    to try each and assign it to a class (class_new_assignment, kind "lab").
+    The tickets' tasks and hints are the answers, so students get a ticket
+    only as an assignment. ?class=<id> starts the class choice on that one
+    (the class page's Add to class → Lab (A+) comes here)."""
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        rows = [lab_checks.scenario(sid) for sid in lab_checks.scenario_ids()]
+        rows.sort(key=lambda s: s.get("order", 99))
+        for s in rows:
+            s["points"] = sum(t["points"] for t in s["tasks"])
+        ctx = user_context(db)
+        ctx.update(rows=rows, classes=_my_classes(db, user),
+                   chosen=request.args.get("class", type=int))
+        return render_template("lab_scenarios.html", **ctx)
+    finally:
+        db.close()
 
 
 @app.get("/lab/try/<sid>")
 def lab_try(sid):
-    """One ticket, to try: the bench and the computer, with its tasks marked
-    as they're done (lab_checks.js). Kept in this browser only."""
-    sc = lab_checks.scenario(sid)
+    """One ticket, for a teacher to try: the bench and the computer, with
+    its tasks marked as they're done (lab_checks.js). Kept in this browser."""
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        sc = lab_checks.scenario(sid)
+        if sc is None:
+            abort(404)
+        ctx = user_context(db)
+        ctx.update(scenario=sc)
+        return render_template("lab_sandbox.html", **ctx)
+    finally:
+        db.close()
+
+
+# ------------------------------------------------------------ A+ labs in a class
+
+#: A saved machine is a few KB; anything near this is not one.
+MAX_LAB_STATE = 200_000
+
+
+def _lab_page(db, item, user):
+    """A student's lab: the ticket, the bench and the computer (page.js),
+    saving to the server as they work. Signed out, or the teacher trying
+    their own with ?preview=1, it is kept in the browser and turned in
+    nowhere."""
+    sc = _lab_of(item)
     if sc is None:
         abort(404)
-    return render_template("lab_sandbox.html", scenario=sc)
+    saves = (user is not None and user.id != item.teacher_id)
+    ctx = user_context(db)
+    ctx.update(scenario=sc, lab_item=item, lab_saves=saves,
+               attend_class=_attend_item(db, user, item))
+    return render_template("lab_sandbox.html", **ctx)
+
+
+def _lab_for_student(db, slug):
+    """(user, item, error response) for a student's own lab."""
+    user = current_user(db)
+    item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+    if item is None or not _is_lab(item) or _lab_of(item) is None:
+        return None, None, (jsonify(error="No such lab."), 404)
+    if user is None:
+        return None, None, (jsonify(error="Sign in to save your work."), 401)
+    return user, item, None
+
+
+@app.get("/api/lab/<slug>/state")
+def lab_state_load(slug):
+    """The student's own saved machine for this lab, or null. Only their
+    own: there is no way to ask for anyone else's."""
+    db = SessionLocal()
+    try:
+        user, item, bad = _lab_for_student(db, slug)
+        if bad:
+            return bad
+        row = db.query(LabState).filter_by(assignment_id=item.id, student_id=user.id).first()
+        return jsonify(state=json.loads(row.state) if row is not None else None)
+    finally:
+        db.close()
+
+
+def _lab_unchanged(old, new):
+    """The same machine, apart from whether it's on and for how long: what
+    changes by itself (the bench's clock) is not work, and must not turn
+    anything in again."""
+    def strip(s):
+        s = dict(s or {})
+        s.pop("power", None)
+        s.pop("post", None)
+        return json.dumps(s, sort_keys=True)
+    return old is not None and strip(old) == strip(new)
+
+
+@app.post("/api/lab/<slug>/state")
+def lab_state_save(slug):
+    """Save the student's machine, mark it here (lab_checks.py — the page's
+    own marking is only the instant ✓), and turn it in for them.
+
+    What's kept is the machine as lab_checks.sanitize makes it: the
+    scenario's own parts, whatever the page said they were. The marks are a
+    TestResult of kind "verified", which every total already adds
+    (_earned), so the assignment page, My work, Classroom and Skyward count
+    it with nothing new. Each task pays XP once, the first time it passes
+    (_tests_xp). Nothing changed — the same machine saved again — does
+    nothing at all, so a turn-in time never moves on its own."""
+    db = SessionLocal()
+    try:
+        user, item, bad = _lab_for_student(db, slug)
+        if bad:
+            return bad
+        if user.id == item.teacher_id:
+            return jsonify(ok=True, saved=False)          # trying their own
+        if item.closed:
+            return jsonify(error="This lab is closed."), 403
+        data = request.get_json(silent=True) or {}
+        posted = data.get("state")
+        if not isinstance(posted, dict):
+            return jsonify(error="Nothing to save."), 400
+        if len(json.dumps(posted)) > MAX_LAB_STATE:
+            return jsonify(error="That's too big to be a lab's machine."), 413
+        sc = _lab_of(item)
+        state = lab_checks.sanitize(sc, posted)
+        state["scenario"] = sc["id"]
+        row = db.query(LabState).filter_by(assignment_id=item.id, student_id=user.id).first()
+        if row is not None and _lab_unchanged(json.loads(row.state or "{}"), state):
+            return jsonify(ok=True, saved=False)
+        if row is None:
+            row = LabState(assignment_id=item.id, student_id=user.id)
+            db.add(row)
+        row.state = json.dumps(state)
+        row.updated_at = datetime.now(timezone.utc)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()                               # the other tab's save stands
+            return jsonify(ok=True, saved=False)
+        marks = lab_checks.grade(sc, state)
+        text = {t["id"]: t["text"] for t in sc["tasks"]}
+        _auto_turn_in(db, item, user)
+        result = _keep_result(db, item, user.id, "verified", {"results": [
+            {"label": text[m["id"]], "ok": m["ok"], "points": m["points"], "detail": ""} for m in marks]})
+        _tests_xp(db, item, user.id, result)
+        _full_marks_xp(db, item, user.id)
+        return jsonify(ok=True, saved=True, marks=marks,
+                       earned=result.earned, possible=result.possible)
+    finally:
+        db.close()
 
 
 @app.get("/lab/credits")

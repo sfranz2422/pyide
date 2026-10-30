@@ -109,7 +109,7 @@
         {% else %}
           <article class="card {{ 'card-done' if r.turned_in }}">
             <div class="card-head">
-              <span class="card-icon" aria-hidden="true">{{ "📘" if r.kind == "lesson" else "📝" }}</span>
+              <span class="card-icon" aria-hidden="true">{{ "📘" if r.kind == "lesson" else "🛠" if r.kind == "lab" else "📝" }}</span>
               <a class="card-title" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) if visitor else r.open_url }}"
                  {% if r.turned_in %}title="What you turned in"{% endif %}>{{ r.title }}</a>
               <span class="card-badges">
@@ -129,10 +129,10 @@
               {% endif %}
               {% if visitor %}
                 <a class="btn btn-primary" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) }}"
-                   title="A preview: nothing is saved or turned in">{{ "Open the lesson" if r.kind == "lesson" else "Open the assignment" }}</a>
+                   title="A preview: nothing is saved or turned in">{{ "Open the lesson" if r.kind == "lesson" else "Open the lab" if r.kind == "lab" else "Open the assignment" }}</a>
               {% else %}
                 <a class="btn btn-primary" href="{{ url_for('open_assignment', slug=r.slug) }}"
-                   title="Your own copy, to work in">{{ "Open the lesson" if r.kind == "lesson" else "Open the assignment" }}</a>
+                   title="Your own copy, to work in">{{ "Open the lesson" if r.kind == "lesson" else "Open the lab" if r.kind == "lab" else "Open the assignment" }}</a>
               {% endif %}
             </div>
           </article>

@@ -14,7 +14,9 @@
 import WebSocket from "ws";
 import { spawn } from "node:child_process";
 
-const [base, chromePath, profile] = process.argv.slice(2);
+import fs from "node:fs";
+const [base, chromePath, profile, setupPath] = process.argv.slice(2);
+const setup = JSON.parse(fs.readFileSync(setupPath, "utf8"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const port = 9400 + Math.floor(Math.random() * 500);
 
@@ -272,6 +274,9 @@ try {
   quick.forEach(([label, ok, detail]) => say(ok, label, detail));
 
   // ------------------------------------------------------------ a ticket, tried
+  // The tickets and try pages are the teacher's: signed in as one from here.
+  const signIn = (who) => send("Network.setCookie", { name: "session", value: setup[who], domain: "127.0.0.1", path: "/" }, P);
+  await signIn("teacher");
   await go("/lab/scenarios");
   say(await ev("document.querySelectorAll('.ticket-card').length >= 10"), "the tickets page lists the built-in scenarios");
   await go("/lab/try/overheat");
@@ -306,6 +311,32 @@ try {
     return out;
   })()`);
   t2.forEach(([label, ok, detail]) => say(ok, label, detail));
+
+  // ------------------------------------------------------------ a lab in a class
+  await go("/lab/scenarios?class=" + setup.cls);
+  await ev(`T.click(document.querySelector('[data-scenario="overheat"] .js-assign'))`);
+  await until(`/Assigned to/.test(document.querySelector('[data-scenario="overheat"] .js-state').textContent)`, 10000);
+  const slug = await ev(`(document.querySelector('[data-scenario="overheat"] .js-state a') || {}).href.split("/teacher/")[1]`);
+  say(!!slug, "Assign on the tickets page puts it in the class, with a link to it", slug);
+  await signIn("student");
+  await go("/a/" + slug);
+  await ev("localStorage.clear()");
+  await go("/a/" + slug);
+  await until("/points/.test((document.getElementById('lab-score') || {}).textContent || '')", 10000);
+  const c1 = await ev(`(async () => {
+    const out = [];
+    out.push(["the student's link opens the lab with its ticket, and no answers' Tickets link", T.q("#lab-score").textContent.startsWith("0 / 6") && !T.has("a.btn", "Tickets")]);
+    T.click(T.spot("cooler")); T.click(T.btn("Reseat")); T.click(T.btn("⏻ Power on"));
+    out.push(["fixing it says Saving…", /Saving/.test(T.q("#lab-saved").textContent), T.q("#lab-saved").textContent]);
+    return out;
+  })()`);
+  c1.forEach(([label, ok, detail]) => say(ok, label, detail));
+  const saved = await until("document.getElementById('lab-saved').textContent === 'Saved and turned in'", 10000);
+  say(saved, "…then Saved and turned in", await ev("document.getElementById('lab-saved').textContent"));
+  await ev("localStorage.clear()");
+  await go("/a/" + slug);
+  const back = await until("(document.getElementById('lab-score') || {}).textContent === '6 / 6 points · fixed!'", 10000);
+  say(back, "a reload with this browser's storage cleared brings it back from the server", await ev("(document.getElementById('lab-score') || {}).textContent"));
   say(!errors.length, "no errors in the page", errors.slice(0, 3));
 } catch (e) {
   say(false, "the browser run finished", String(e).slice(0, 400));

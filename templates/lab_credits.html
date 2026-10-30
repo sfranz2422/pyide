@@ -17,7 +17,6 @@
   })();
 </script>
 <style>
-  .credits { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
   .credit-row { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
   .credit-row img { width: 120px; height: 80px; object-fit: contain; background: #fff; border-radius: 6px; }
   .credit-row p { margin: 2px 0; font-size: 14px; }
@@ -31,7 +30,8 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
   <div class="meta"><span class="pagetitle">A+ lab · photo credits</span></div>
 </header>
-<main class="credits">
+{# .sheet: the page itself never scrolls (style.css), its sheet does. #}
+<main class="sheet credits">
   <p>The parts in the A+ lab are real photographs from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a>,
      used under the licence shown for each. They were trimmed and made smaller for the lab; nothing else was changed.
      Brand names and logos on the parts belong to their makers, and the lab is not connected with any of them.</p>

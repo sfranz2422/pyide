@@ -36,7 +36,11 @@
     {#  The whole project — code, data files and notes — in the editor, for
         when the code needs changing too; this page saves the notes alone.
         A lesson has no code: its notes page is the link below. #}
-    {% if assignment.kind != 'lesson' %}
+    {% if lab %}
+      {#  A lab has no code: Try it is the student's page, kept in this browser. #}
+      <a class="btn btn-primary" id="lab-try" href="{{ url_for('open_assignment', slug=assignment.slug, preview=1) }}"
+         target="_blank" rel="noopener" title="The lab as a student sees it; nothing you do there is saved">Try it ↗</a>
+    {% elif assignment.kind != 'lesson' %}
       <a class="btn btn-primary" id="edit-project" href="{{ url_for('edit_assignment', slug=assignment.slug) }}"
          title="Open the code, files and notes in the editor">Edit project</a>
     {% endif %}
@@ -136,6 +140,7 @@
       (_lesson_for), so it can be posted in Google Classroom the day before.
       It is the same link every time: students who open it early are told
       the lesson hasn't started, and their page picks it up when it does. #}
+  {% if not lab %}
   <section class="handout">
     <h2>The live lesson link</h2>
     <div class="linkrow">
@@ -158,6 +163,7 @@
         <span id="live-reset-state" class="dim"></span></p>
     {% endif %}
   </section>
+  {% endif %}
 
   {#  Grading. Points first, because everything after depends on them: the
       score boxes only appear on a graded assignment, and Google Classroom
@@ -177,11 +183,12 @@
       <button id="out-of-save" class="btn{{ ' btn-primary' if filled }}">Save</button>
       <span id="out-of-state" class="dim small">{% if filled %}Not saved yet{% endif %}</span>
     </div>
-    {% if quiz_count or tests %}
+    {% if quiz_count or tests or lab %}
       <p class="small dim" id="points-from">
         {%- if quiz_count %}{{ quiz_count }} question{{ "" if quiz_count == 1 else "s" }}: {{ quiz_points }} pt{{ "" if quiz_points == "1" else "s" }}{% endif -%}
-        {%- if quiz_count and tests %} · {% endif -%}
+        {%- if quiz_count and (tests or lab) %} · {% endif -%}
         {%- if tests %}{{ tests|length }} test{{ "" if tests|length == 1 else "s" }}: {{ tests_points }} pt{{ "" if tests_points == "1" else "s" }}{% endif -%}
+        {%- if lab %}{{ lab.tasks|length }} lab task{{ "" if lab.tasks|length == 1 else "s" }}: {{ lab_points }} pt{{ "" if lab_points == 1 else "s" }}{% endif -%}
         , added to the score you give.
         {%- if assignment.out_of and assignment.out_of < points_auto %} <strong>That's more than Out of.</strong>{% endif %}</p>
     {% endif %}
@@ -202,7 +209,17 @@
     {#  Tests (autograde.py): students check their own work as often as they
         like; Check all runs every turned-in project here, in this browser,
         and only that result counts toward the grade. #}
-    {% if tests or test_errors %}
+    {% if lab %}
+      {#  An A+ lab (lab_state_save): each task is marked on the server every
+          time the student's machine changes, and turned in for them. #}
+      <div class="tests-teacher" id="lab-teacher">
+        <p class="small"><strong>A+ lab: {{ lab.title }}</strong> ({{ lab.area }}, {{ "starts in Windows" if lab.start == "windows" else "starts on the bench" }}).
+          Each task is checked on the server as students work, and their work is turned in for them.</p>
+        <ol class="small lab-teacher-tasks">
+          {% for t in lab.tasks %}<li>{{ t.text }} <span class="dim">({{ t.points }} pt{{ "" if t.points == 1 else "s" }})</span></li>{% endfor %}
+        </ol>
+      </div>
+    {% elif tests or test_errors %}
       <div class="tests-teacher" id="tests-teacher">
         <p class="small dim">Students check their own work as often as they like; only
           <strong>Check all</strong>, run here on what they turned in, counts toward the grade.
@@ -216,7 +233,7 @@
           </div>
         {% endif %}
       </div>
-    {% elif assignment.kind != 'lesson' %}
+    {% elif assignment.kind not in ('lesson', 'lab') %}
       <p class="small dim">Want the code checked automatically? Put a <code>tests</code> block in the
         notes — <a href="{{ url_for('help_questions') }}#tests" target="_blank" rel="noopener">how to write tests</a>.</p>
     {% endif %}
@@ -376,7 +393,7 @@
                     {% endfor %}
                   </ol>
                 {% elif assignment.kind == 'lesson' %}<p class="dim small">No questions answered.</p>{% endif %}
-                {% if tests %}
+                {% if tests or lab %}
                   <ul class="tests-lines small" {% if not s.test_lines %}hidden{% endif %}>
                     {% for t in s.test_lines %}<li class="{{ 'is-right' if t.ok else 'is-wrong' }}">{{ '✓' if t.ok else '✗' }} {{ t.label }}{% if t.detail and not t.ok %} <span class="dim">— {{ t.detail }}</span>{% endif %}</li>{% endfor %}
                   </ul>
@@ -391,7 +408,10 @@
                   {% if s.quiz %}
                     <span class="fb-quiz small" title="Points from the questions in the notes">Questions {{ s.quiz }}{% if quiz_points %}/{{ quiz_points }}{% endif %}{% if assignment.out_of %} +{% endif %}</span>
                   {% endif %}
-                  {% if tests %}
+                  {% if lab %}
+                    {#  The lab's tasks, as the server last marked them. #}
+                    <span class="fb-tests small" title="Marked on the server as they work">Lab {{ s.tests or "not started" }}{% if assignment.out_of and s.tests %} +{% endif %}</span>
+                  {% elif tests %}
                     {#  Your Check all's result, which counts; theirs beside
                         it, which doesn't. Stale when they turned in again
                         after you checked. #}
@@ -402,7 +422,7 @@
                   {% if assignment.out_of %}
                     <input class="field fb-score" type="number" step="any" min="0"
                            value="{{ s.score }}" aria-label="Score for {{ s.name }}">
-                    {% if s.quiz or tests %}<span class="dim">= <span class="fb-total">{{ s.total }}</span></span>{% endif %}
+                    {% if s.quiz or tests or lab %}<span class="dim">= <span class="fb-total">{{ s.total }}</span></span>{% endif %}
                     <span class="dim">/ {{ assignment.out_of }}</span>
                   {% endif %}
                   <button class="btn fb-save">Save</button>

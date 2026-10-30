@@ -250,8 +250,10 @@ check("  with Describe on an assignment's row and a heading's",
 
 # What each is, and whether it is in Google Classroom.
 # Block world: a Raspberry Pi Minecraft project (the block world), PyIDE only.
-check("the Add form's kinds are Code, Block world, Lesson and Material",
+# Lab (A+): goes to the tickets to pick one (lab_scenarios), PyIDE only.
+check("the Add form's kinds are Code, Block world, Lab (A+), Lesson and Material",
       re.search(r'<option value="code">Code</option>\s*<option value="world">Block world \(Minecraft\)</option>'
+                r'\s*<option value="lab">Lab \(A\+\)</option>'
                 r'\s*<option value="lesson">Lesson</option>'
                 r'\s*<option value="material">Material</option>', page) is not None)
 _quiz_row = [int(i) for i, s_, _ in order() if s_ == QUIZ][0]

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ "A+ lab · " + scenario.title if scenario else "A+ lab sandbox" }} — PyIDE</title>
+<title>{{ lab_item.title if lab_item else "A+ lab · " + scenario.title if scenario else "A+ lab sandbox" }} — PyIDE</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -20,17 +20,29 @@
 <body class="lab-page">
 
 {#  The A+ lab (static/lab/page.js): the sandbox (lab_sandbox in app.py:
-    every part, nothing checked) or a scenario to try (lab_try: its ticket
-    and tasks above the same bench). What's done is kept in this browser.
-    A lab set in a class is lab.html, which saves to the server. #}
+    every part, nothing checked), a scenario for a teacher to try (lab_try:
+    its ticket and tasks above the same bench), or a lab set in a class
+    (_lab_page: `lab_item`, saved to the server and marked there when
+    `lab_saves`). Otherwise what's done is kept in this browser. #}
 <header class="bar">
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ "A+ lab · " + scenario.title if scenario else "A+ lab · sandbox" }}</span></div>
+  <div class="meta"><span class="pagetitle">{{ lab_item.title if lab_item else "A+ lab · " + scenario.title if scenario else "A+ lab · sandbox" }}</span></div>
   <div class="actions">
+    {% if lab_item %}
+      {% if lab_saves %}
+        {#  Saved as they work, and turned in with each save: no button. #}
+        <span id="lab-saved" class="savestate" role="status"></span>
+      {% elif user and user.id == lab_item.teacher_id %}
+        <span class="chip" title="Trying your own lab: nothing is saved or turned in">Preview</span>
+      {% elif login_enabled %}
+        <a class="btn btn-primary" href="{{ url_for('login', next=request.path) }}"
+           title="Sign in with your school account so your work is saved and turned in">Sign in</a>
+      {% endif %}
+    {% endif %}
     {% if not scenario %}
     <button id="lab-windows" class="btn btn-primary" type="button" title="A working PC, already put together, switched on to the Windows desktop">🖥 Start in Windows</button>
     {% endif %}
-    <a class="btn" href="{{ url_for('lab_scenarios') }}">Tickets</a>
+    {% if is_teacher and not lab_item %}<a class="btn" href="{{ url_for('lab_scenarios') }}">Tickets</a>{% endif %}
     <a class="btn" href="{{ url_for('lab_credits') }}" target="_blank" rel="noopener">Photo credits</a>
     <button id="lab-reset" class="btn" type="button" title="{{ 'Start this ticket again' if scenario else 'Put every part back on the shelf' }}">Start over</button>
   </div>
@@ -63,8 +75,40 @@
     imgBase: "{{ url_for('static', filename='lab/img/') }}",
     scenario: {{ (scenario.id if scenario else none)|tojson }},
     // What's done is kept in this browser, so a reload doesn't undo it.
-    key: {{ ("pyide-lab-try:" + scenario.id if scenario else "pyide-lab-sandbox")|tojson }}
+    key: {{ ("pyide-lab-a:" + lab_item.slug if lab_item else "pyide-lab-try:" + scenario.id if scenario else "pyide-lab-sandbox")|tojson }}
+    {% if lab_saves %},
+    /* Saved to the server, which marks it (lab_checks.py) and turns it in.
+       A save waits for a moment's quiet, so a run of clicks is one request;
+       one still waiting goes as the page closes. */
+    load: function () {
+      return fetch("/api/lab/{{ lab_item.slug }}/state").then(function (r) { return r.ok ? r.json() : { state: null }; })
+        .then(function (d) { return d.state; });
+    },
+    save: (function () {
+      var url = "/api/lab/{{ lab_item.slug }}/state", timer = null, last = null, said = document.getElementById("lab-saved");
+      function send() {
+        timer = null;
+        var body = JSON.stringify({ state: last });
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (x) { said.textContent = x.ok ? "Saved and turned in" : (x.d.error || "Not saved"); })
+          .catch(function () { said.textContent = "Not saved: no connection"; });
+      }
+      window.addEventListener("pagehide", function () {
+        if (!timer) return;
+        clearTimeout(timer);
+        navigator.sendBeacon(url, new Blob([JSON.stringify({ state: last })], { type: "application/json" }));
+      });
+      return function (s) {
+        last = s;
+        said.textContent = "Saving…";
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(send, 1200);
+      };
+    })()
+    {% endif %}
   });
 </script>
+{% if lab_item %}{% include "_idle.html" %}{% endif %}
 </body>
 </html>
