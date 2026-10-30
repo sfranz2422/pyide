@@ -75,6 +75,12 @@ try {
     const d = JSON.parse(m);
     if (d.id && waiting[d.id]) { waiting[d.id](d); delete waiting[d.id]; }
     if (d.method === "Runtime.exceptionThrown") errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
+    // A confirm() or alert() nobody expected would hold the page — and this
+    // run — until the .py gives up minutes later. Dismiss it, and say so.
+    if (d.method === "Page.javascriptDialogOpening") {
+      errors.push("an unexpected " + d.params.type + "(): " + d.params.message);
+      ws.send(JSON.stringify({ id: ++next, method: "Page.handleJavaScriptDialog", params: { accept: false }, sessionId: d.sessionId }));
+    }
   });
   const send = (method, params = {}, sessionId) => new Promise((res, rej) => {
     const i = ++next;
@@ -244,6 +250,26 @@ try {
     return out;
   })()`);
   desk.forEach(([label, ok, detail]) => say(ok, label, detail));
+
+  // ------------------------------------------------------------ Start in Windows
+  await ev("localStorage.clear()");
+  await go("/lab/sandbox?start=windows");
+  await until("!!document.querySelector('.ld-taskbar')", 10000);
+  const quick = await ev(`(async () => {
+    const out = [];
+    out.push(["?start=windows opens on the desktop, with a PC put together for you", !T.q("#lab-monitor").hidden && !!T.q(".ld-taskbar") && T.saved().power.on
+              && T.saved().shelf.length < Object.keys(T.saved().items).length]);
+    T.start("Disk Management");
+    await T.sleep(50);
+    out.push(["…with a blank disk to work on", /Initialize Disk/.test((T.dialog() || {}).textContent || "")]);
+    T.click(T.btn("OK", T.dialog()));
+    T.click(T.q(".ld-startbtn")); T.click(T.btn("⏻ Shut down"));
+    T.click(T.btn("🖥 Start in Windows"));
+    out.push(["Start in Windows keeps a build that starts: the same Windows, started again",
+              !T.q("#lab-monitor").hidden && T.saved().os.bootCount === 2 && T.saved().os.disks[Object.keys(T.saved().os.disks)[1]].style === "GPT", T.saved().os.bootCount]);
+    return out;
+  })()`);
+  quick.forEach(([label, ok, detail]) => say(ok, label, detail));
   say(!errors.length, "no errors in the page", errors.slice(0, 3));
 } catch (e) {
   say(false, "the browser run finished", String(e).slice(0, 400));

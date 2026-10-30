@@ -26,6 +26,7 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
   <div class="meta"><span class="pagetitle">A+ lab · sandbox</span></div>
   <div class="actions">
+    <button id="lab-windows" class="btn btn-primary" type="button" title="A working PC, already put together, switched on to the Windows desktop">🖥 Start in Windows</button>
     <a class="btn" href="{{ url_for('lab_credits') }}" target="_blank" rel="noopener">Photo credits</a>
     <button id="lab-reset" class="btn" type="button" title="Put every part back on the shelf">Start over</button>
   </div>
@@ -89,6 +90,33 @@
         }
       });
       document.getElementById("lab-to-bench").addEventListener("click", toBench);
+      /* Start in Windows: straight to the desktop, for practising the tools
+         and the Command Prompt without building a PC first. A build of the
+         student's own that starts Windows is used as it is; anything else
+         (nothing built yet, or a build that doesn't start) is replaced by
+         the ready-made one. ?start=windows opens the page this way, for a
+         link posted to a class. */
+      function startInWindows(ask) {
+        var s = bench.state();
+        if (desktop) { desktop.destroy(); desktop = null; }
+        window.PyIDELab.powerOff(s);
+        var probe = JSON.parse(JSON.stringify(s)), r = window.PyIDELab.powerOn(cat, probe);
+        var boots = r.stage === "windows" && !r.dark;
+        if (!boots) {
+          var built = s.shelf.length < Object.keys(s.items).length;
+          if (ask && built && !confirm("Your build doesn't start Windows. Put a ready-made PC on the bench instead? (Your build will be taken apart.)")) return;
+          s = window.PyIDELab.ready(cat);
+        }
+        // On before the bench takes it, so the bench keeps the machine's
+        // time (a loose cooler still overheats while the desktop is up).
+        window.PyIDELab.powerOn(cat, s);
+        bench.setState(s);
+        save(s);
+        showScreen();
+      }
+      document.getElementById("lab-windows").addEventListener("click", function () { startInWindows(true); });
+      if (/[?&]start=windows\b/.test(location.search)) startInWindows(false);
+
       document.getElementById("lab-reset").addEventListener("click", function () {
         if (!confirm("Put every part back on the shelf?")) return;
         var fresh = window.PyIDELab.sandbox(cat);

@@ -16,6 +16,8 @@ everything around it a student touches on /lab/sandbox:
     with the wrong gateway, a runaway process ended, a start-up app turned
     off, Event Viewer, File Explorer, a window dragged, the bench and back,
     and Shut down
+  * Start in Windows: ?start=windows opens on the desktop with a PC put
+    together, and the button keeps a student's own build when it starts
   * no errors in the page
 
 Needs Chrome and node; says "skip" without Chrome rather than failing.
@@ -38,7 +40,7 @@ sys.path.insert(0, PYIDE)
 import app as P                                              # noqa: E402
 
 # Each line lab_browser.mjs prints is a check; this many, or one went missing.
-EXPECTED = 37
+EXPECTED = 40
 
 results = []
 

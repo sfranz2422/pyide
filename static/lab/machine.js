@@ -86,6 +86,27 @@ window.PyIDELab = (function () {
     return create(cat, items);
   }
 
+  /* "Start in Windows": the sandbox with a working PC already put together
+     from its parts — the AM4 build (its CPU has graphics, so no card is
+     needed), Windows on the SATA SSD, and the 500 GB hard drive connected
+     but blank, for Disk Management and diskpart to work on. Not switched
+     on: the page presses the button. Everything else stays on the shelf. */
+  var READY = [["case", "case-atx"], ["board", "mb-am4-matx"], ["cpu", "cpu-am4-6g"], ["cooler", "cooler-stock"],
+               ["ram", "ram-ddr4-8", 0], ["ram", "ram-ddr4-8", 1], ["psu", "psu-650"], ["sata", "windows-drive", 0], ["sata", "hdd-500", 1]];
+  function ready(cat) {
+    var state = sandbox(cat);
+    READY.forEach(function (step) {
+      var uid = step[1] === "windows-drive" ? step[1]
+              : state.shelf.find(function (u) { return state.items[u].part === step[1] && !state.items[u].windows; });
+      install(cat, state, step[0], uid, step[2]);
+    });
+    ["atx24", "cpu8"].forEach(function (c) { connect(cat, state, c, true); });
+    connect(cat, state, "sata", true, 0);
+    connect(cat, state, "sata", true, 1);
+    setMonitor(state, "board");
+    return state;
+  }
+
   function partOf(cat, state, uid) {
     var it = uid && state.items[uid];
     return it ? catalogOf(cat)[it.part] : null;
@@ -818,7 +839,7 @@ window.PyIDELab = (function () {
 
   return {
     CODES: CODES, OVERHEAT_SECONDS: OVERHEAT_SECONDS,
-    catalogOf: catalogOf, create: create, sandbox: sandbox, partOf: partOf, ramSlots: ramSlots,
+    catalogOf: catalogOf, create: create, sandbox: sandbox, ready: ready, partOf: partOf, ramSlots: ramSlots,
     install: install, remove: remove, connect: connect, setMonitor: setMonitor,
     reseatCooler: reseatCooler, replaceCmosBattery: replaceCmosBattery,
     watts: watts, powerOn: powerOn, powerOff: powerOff, tick: tick, cpuTemp: cpuTemp,

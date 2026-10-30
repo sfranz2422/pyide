@@ -292,6 +292,14 @@ function goodBuild(extra) {
         && Object.values(s.items).filter((i) => i.part === "ram-ddr5-16").length === 2 && s.items["windows-drive"].windows);
 }
 {
+  const s = L.ready(CAT);
+  const r = L.powerOn(CAT, s);
+  check("Start in Windows: the ready PC starts Windows, with a picture", r.stage === "windows" && !r.dark && L.running(s), r);
+  const dk = L.disks(CAT, s);
+  check("…with a blank second disk for Disk Management to start on", dk.length === 2 && dk[1].disk.style === null && dk[1].part.id === "hdd-500", dk.map((d) => d.uid));
+  check("…and the spare parts still on the shelf", s.shelf.length === Object.keys(s.items).length - 9, s.shelf.length);
+}
+{
   // The photos: a part's picture is the real part, so its card must match it, and each must exist and be credited.
   const credits = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
   const missing = CAT.parts.filter((p) => p.photo && !(credits[p.photo] && fs.existsSync(process.argv[4] + "/" + p.photo + ".jpg")));
