@@ -163,8 +163,8 @@ attempt. Its snapshot is rewritten in place by the next automatic one
 copied into every snapshot, and a project with books in it made a few MB per
 student per period. A copy made by pressing Turn in is never rewritten.
 
-**Data files** may be 1.5 MB each and 5 MB together in PyIDE (a teacher's
-project reads three novels). WebIDE and FlaskIDE keep 200 KB / 600 KB on
+**Data files** may be 4 MB each and 10 MB together in PyIDE (a teacher's
+project reads three novels; a 1.7 MB Netflix CSV was refused at 1.5 MB). WebIDE and FlaskIDE keep 200 KB / 600 KB on
 purpose: there the same constants cap what a live lesson sends, and WebIDE
 inlines every file into the page each student polls.
 

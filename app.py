@@ -51,10 +51,11 @@ LIVE_OUTPUT_BYTES = 20_000        # the tail of a Run, sent to the class
 MAX_FILES = 12
 # A book is the large case: a novel's 8,000 lines is 400-600 KB, and a
 # teacher had a project with three of them refused as "too large to save"
-# under the old 100 KB / 400 KB. Kept finite because every autosave sends
-# the whole project, and so does every turn-in.
-MAX_FILE_BYTES = 1_500_000        # per attached data file
-MAX_FILES_TOTAL = 5_000_000       # all attached files together
+# under the old 100 KB / 400 KB. A dataset is the next case: a 1.7 MB
+# Netflix CSV was refused at 1.5 MB. Kept finite because every autosave
+# sends the whole project, and so does every turn-in.
+MAX_FILE_BYTES = 4_000_000        # per attached data file
+MAX_FILES_TOTAL = 10_000_000      # all attached files together
 ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alike characters
 ID_LENGTH = 7
 
