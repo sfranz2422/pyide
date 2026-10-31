@@ -123,7 +123,7 @@ window.PyIDEPiBoard = (function () {
       toolBtn("resistor", "▭ Resistor", "A 330Ω resistor"),
       toolBtn("button", "◉ Button", "A push button"),
       toolBtn("buzzer", "🔊 Buzzer", "An active buzzer: its + leg goes in first"),
-      toolBtn("wire", "〰 Wire", "A jumper wire: click one end, then the other"),
+      toolBtn("wire", "〰 Wire", "A jumper wire: drag from one end to the other, or click one end, then the other"),
       rotateBtn, flipBtn, delBtn, clearBtn
     ]);
     var status = html("div", { class: "pi-status", "aria-live": "polite" });
@@ -230,6 +230,12 @@ window.PyIDEPiBoard = (function () {
       var off = { red: "#7f1d1d", yellow: "#713f12", green: "#14532d", blue: "#1e3a8a", white: "#94a3b8" }[colour] || "#7f1d1d";
       return glow ? on : off;
     }
+    // Where a loose end is, in the words a student can check against the board.
+    function looseText(p) {
+      var r = rowOf(p), col = colOf(p);
+      if (r.length === 2) return pointName(p);
+      return p + " (column " + col + ", rows " + (C.ROWS_TOP.indexOf(r) >= 0 ? "a–e" : "f–j") + ")";
+    }
     function pointName(p) {
       var m = /^P(\d+)$/.exec(p);
       if (m) return "pin " + m[1] + " (" + roleText(C.HEADER[+m[1]]) + ")";
@@ -254,7 +260,7 @@ window.PyIDEPiBoard = (function () {
       Object.keys(tools).forEach(function (k) { tools[k].classList.toggle("on", k === t); });
       svg.classList.toggle("is-placing", !!t);
       ghost();
-      say(t === "wire" ? "Click where the wire starts: a pin on the Pi or a hole."
+      say(t === "wire" ? "Drag from where the wire starts to where it ends (a pin on the Pi or a hole), or click one end, then the other."
         : t ? "Click a hole to plug it in. " + (t === "led" || t === "buzzer" ? "The + (long) leg goes in the hole you click." : "")
         : "");
     }
@@ -286,10 +292,39 @@ window.PyIDEPiBoard = (function () {
       status.textContent = "";
       if (text) status.appendChild(html("div", { class: "pi-hint", text: text }));
       warn.forEach(function (w) { status.appendChild(html("div", { class: "pi-warn", text: "⚠ " + w })); });
+      var loose = (state.result && state.result.loose) || [];
+      if (loose.length) {
+        status.appendChild(html("div", { class: "pi-loose", text: "○ Loose end" + (loose.length > 1 ? "s" : "") + ": " +
+          loose.map(looseText).join("; ") + ". Nothing else is plugged in beside " + (loose.length > 1 ? "them" : "it") +
+          ", so " + (loose.length > 1 ? "they join" : "it joins") + " nothing." }));
+      }
     }
+    /* The hole or pin nearest the pointer, within about half a hole's
+       spacing. The holes are drawn 6 units across with 16 between them, and
+       the board is usually shown smaller than it's drawn, so aiming at the
+       hole itself was touchy: a click between two holes did nothing, and one
+       a little off went in the next column with no sign it had. */
+    var POINTS = [];
+    (function () {
+      for (var n = 1; n <= 40; n++) POINTS.push({ name: "P" + n, at: xy("P" + n) });
+      ROWS.forEach(function (r) { for (var col = 1; col <= C.COLS; col++) POINTS.push({ name: r + col, at: xy(r + col) }); });
+    })();
     function pointAt(e) {
-      var t = e.target.closest ? e.target.closest("[data-point]") : null;
-      return t ? t.getAttribute("data-point") : null;
+      if (typeof e.clientX !== "number" || !svg.getScreenCTM) return null;
+      var m = svg.getScreenCTM();
+      if (!m) return null;
+      var pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      var q = pt.matrixTransform(m.inverse()), best = null, bestD = (P * 0.6) * (P * 0.6);
+      POINTS.forEach(function (o) {
+        var dx = o.at.x - q.x, dy = o.at.y - q.y, d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = o.name; }
+      });
+      return best;
+    }
+    function shortName(p) {
+      var m = /^P(\d+)$/.exec(p);
+      return m ? "pin " + m[1] + " · " + roleText(C.HEADER[+m[1]]) : pointName(p).replace(/^hole /, "");
     }
     function itemAt(e) {
       var t = e.target.closest ? e.target.closest("[data-id]") : null;
@@ -299,8 +334,23 @@ window.PyIDEPiBoard = (function () {
       var u = C.used(circuit());
       return points.every(function (p) { return p && !u[p]; });
     }
+    function label(p) {
+      var q = xy(p), text = shortName(p);
+      var w = text.length * 5 + 8, left = q.x + 8 + w > WIDTH ? q.x - 8 - w : q.x + 8;
+      layers.ghost.appendChild(el("rect", { x: left, y: q.y - 20, width: w, height: 13, rx: 3, class: "pi-tag" }));
+      layers.ghost.appendChild(el("text", { x: left + 4, y: q.y - 10.5, class: "pi-label pi-tag-text" }, [document.createTextNode(text)]));
+    }
     function ghost() {
       layers.ghost.textContent = "";
+      (state.result && state.result.loose || []).forEach(function (p) {
+        var q = xy(p);
+        layers.ghost.appendChild(el("circle", { cx: q.x, cy: q.y, r: 6, class: "pi-loose-ring" }));
+      });
+      if (drag && drag.moved && state.hover) {
+        var a0 = xy(drag.from), b0 = xy(state.hover);
+        layers.ghost.appendChild(el("line", { x1: a0.x, y1: a0.y, x2: b0.x, y2: b0.y, class: "pi-ghost-wire" }));
+      }
+      if (state.hover && (state.tool || drag)) label(state.hover);
       if (!state.tool || !state.hover) return;
       if (state.tool === "wire") {
         if (state.wireFrom) {
@@ -321,23 +371,52 @@ window.PyIDEPiBoard = (function () {
       });
     }
 
-    svg.addEventListener("mousemove", function (e) {
+    /* A wire can be dragged from one end to the other — with Wire picked,
+       or with no tool picked at all, from any hole or pin — as well as
+       clicked one end, then the other. */
+    var drag = null, swallowClick = false;
+    function addWire(from, to) {
+      var c = circuit();
+      C.addWire(c, from, to, WIRE_COLOURS[c.wires.length % WIRE_COLOURS.length]);
+      state.wireFrom = null;
+      changed();
+      say("Wire added: " + shortName(from) + " to " + shortName(to) + "." +
+          (state.tool === "wire" ? " Drag or click the next one, or press Wire again to stop." : ""));
+    }
+    svg.addEventListener("pointermove", function (e) {
       var p = pointAt(e);
-      if (p !== state.hover) { state.hover = p; ghost(); }
+      if (drag && p && p !== drag.from) drag.moved = true;
+      if (p !== state.hover || drag) { state.hover = p; ghost(); }
     });
-    svg.addEventListener("mouseleave", function () { state.hover = null; ghost(); });
+    svg.addEventListener("pointerleave", function () { if (!drag) { state.hover = null; ghost(); } });
+    svg.addEventListener("pointerdown", function (e) {
+      if (opts.readonly || e.button > 0) return;
+      if (state.tool && state.tool !== "wire") return;
+      if (!state.tool && itemAt(e)) return;          // a part or wire: select it, or press a button
+      var p = pointAt(e);
+      if (!p) return;
+      drag = { from: p, moved: false };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* not everywhere */ }
+    });
+    svg.addEventListener("pointerup", function (e) {
+      if (!drag) return;
+      var d = drag, p = pointAt(e);
+      drag = null;
+      if (d.moved) {
+        swallowClick = true;
+        if (p && p !== d.from) addWire(d.from, p);
+        else ghost();
+      }
+    });
     svg.addEventListener("click", function (e) {
+      if (swallowClick) { swallowClick = false; return; }
       if (opts.readonly) return;
       var p = pointAt(e);
       if (state.tool === "wire") {
         if (!p) return;
-        if (!state.wireFrom) { state.wireFrom = p; say("Now click where the wire ends."); ghost(); return; }
+        if (!state.wireFrom) { state.wireFrom = p; say("From " + shortName(p) + ". Now click where the wire ends."); ghost(); return; }
         if (p === state.wireFrom) { state.wireFrom = null; say("Click where the wire starts."); ghost(); return; }
-        var c = circuit();
-        C.addWire(c, state.wireFrom, p, WIRE_COLOURS[c.wires.length % WIRE_COLOURS.length]);
-        state.wireFrom = null;
-        changed();
-        say("Wire added. Click where the next one starts, or press Wire again to stop.");
+        addWire(state.wireFrom, p);
         return;
       }
       if (state.tool) {
@@ -347,6 +426,7 @@ window.PyIDEPiBoard = (function () {
         if (!free([p, second])) { say("Something is already plugged into one of those holes."); return; }
         C.addPart(circuit(), state.tool, [p, second], { colour: state.colour });
         changed();
+        say("In " + p + " and " + second + ".");
         return;
       }
       var id = itemAt(e);
@@ -394,6 +474,7 @@ window.PyIDEPiBoard = (function () {
       paint: function (result) {
         state.result = result;
         drawParts();
+        ghost();
         say(hint);
       },
       redraw: function () { state.selected = null; drawParts(); },

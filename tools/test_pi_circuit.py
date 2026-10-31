@@ -63,6 +63,10 @@ out.used = C.used(c);
 out.addTwice = (() => { const k = C.create(); C.addPart(k, "led", ["c1", "c2"]); C.addPart(k, "led", ["c3", "c4"]);
   return k.parts.map(p => p.id); })();
 out.removed = (() => { const k = C.load(JSON.stringify(HELLO)); const ok = C.remove(k, "res"); return [ok, k.parts.length]; })();
+// Loose ends: Steve's first try, the ground wire one column over (a13, beside a resistor ending in c14).
+out.offByOne = ev({ parts: [led(["e10", "e11"]), res(["c11", "c14"])], wires: [wire("w1", "P1", "a10"), wire("w2", "a13", "P6")] }, {});
+out.helloLoose = ev(HELLO, ON).loose;
+out.railLoose = ev({ parts: [], wires: [wire("w1", "P6", "t-3")] }, {}).loose;
 out.header = [C.HEADER[1], C.HEADER[6], C.HEADER[22], C.HEADER[3], C.HEADER[40], C.physicalOf(25), C.physicalOf(2)];
 console.log(JSON.stringify(out));
 """
@@ -111,6 +115,10 @@ def main():
     check("used() knows every leg and wire end", o["used"].get("c10") == "led" and o["used"].get("d14") == "res" and o["used"].get("a14"), o["used"])
     check("new parts get new ids", len(set(o["addTwice"])) == 2, o["addTwice"])
     check("remove takes the part out", o["removed"] == [True, 1], o["removed"])
+    check("a wire one column over: both loose ends named, and the LED stays dark",
+          o["offByOne"]["loose"] == ["a13", "c14"] and not o["offByOne"]["lit"], o["offByOne"])
+    check("a circuit with every end joined has no loose ends", o["helloLoose"] == [], o["helloLoose"])
+    check("a wire to a rail with nothing else on it is loose too (a pin never is)", o["railLoose"] == ["t-3"], o["railLoose"])
     check("the header: pin 1 3V3, 6 GND, 22 is GPIO25, 3 is GPIO2, 40 is GPIO21; GPIO25 is pin 22",
           o["header"] == ["3V3", "GND", 25, 2, 21, 22, 3], o["header"])
     print("%d checks, %s" % (count, "all ok" if not failures else "%d FAILED" % failures))

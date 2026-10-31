@@ -248,7 +248,26 @@ window.PyIDEPiCircuit = (function () {
       if (pins[bcm].pull === "down") reads[bcm] = high[net] ? 1 : 0;
       else reads[bcm] = low[net] ? 0 : 1;
     });
-    return { lit: lit, sounding: sounding, reads: reads, warnings: unique(warnings) };
+    return { lit: lit, sounding: sounding, reads: reads, warnings: unique(warnings), loose: loose(c) };
+  }
+
+  /* Loose ends: a leg or a wire end alone in its strip of five (or alone on
+     a rail) joins nothing. It's what a click one hole over looks like — a
+     wire in column 13 beside a resistor ending in column 14 — and the board
+     otherwise just stays dark with no word why. Pins aren't strips: a wire
+     on a pin is joined to the Pi. */
+  function loose(c) {
+    var count = {}, first = {};
+    function touch(p) {
+      if (/^P/.test(p)) return;
+      var s = stripOf(p);
+      count[s] = (count[s] || 0) + 1;
+      if (!first[s]) first[s] = p;
+    }
+    c.parts.forEach(function (p) { p.legs.forEach(touch); });
+    c.wires.forEach(function (w) { touch(w.from); touch(w.to); });
+    return Object.keys(count).filter(function (s) { return count[s] === 1; })
+      .map(function (s) { return first[s]; }).sort();
   }
 
   function unique(list) {
