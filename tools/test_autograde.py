@@ -205,6 +205,14 @@ out.casing = await window.PyIDETests.run(py, { "main.py": "print('The area is  1
 // Operators: a student's print(3+4) failed `uses +` while plainly using it.
 out.ops = await window.PyIDETests.run(py, { "main.py": "print(3+4)\nif 2 == 2 and True:\n    x = 'a-b'\n" },
   window.PyIDETests.parse("```tests\nuses +\nuses ==\nuses and\nuses -\navoids *\n```").tests);
+// Words uses never found before: +=, finally, a keyword argument, pass,
+// global, del, not in — in code that has them, and code that hasn't.
+const WORDS = "```tests\nuses +=\nuses finally\nuses sep\nuses pass\nuses global\nuses del\nuses not in\nuses <=\n```";
+out.words = await window.PyIDETests.run(py, { "main.py": "n = 0\ndef f():\n    global n\n    n += 1\n    pass\n"
+  + "try:\n    f()\nfinally:\n    print(1, 2, sep='-')\nx = [1]\ndel x[0]\nprint(3 not in x, n <= 1)\n" },
+  window.PyIDETests.parse(WORDS).tests);
+out.nowords = await window.PyIDETests.run(py, { "main.py": "n = 0\nn = n + 1\nprint('sep pass global del finally', n in [1], n < 2)\n" },
+  window.PyIDETests.parse(WORDS).tests);
 process.stdout.write(JSON.stringify(out));
 """ % {"pyodide": json.dumps(PYODIDE), "runtime": json.dumps(RUNTIME),
        "autograde": json.dumps(AUTOGRADE), "notes": json.dumps(NOTES),
@@ -217,7 +225,7 @@ try:
     ran = json.loads(out.stdout)
 except ValueError:
     ran = {}
-check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 2, out.stderr[-400:])
+check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 4, out.stderr[-400:])
 
 
 def lines(name):
@@ -270,6 +278,12 @@ check("uses import math sees the import", lines("right")["Uses import math"]["ok
 ops = [x.get("ok") for x in ran.get("ops", {}).get("results", [])]
 check("uses + sees 3+4, == and and too — operators, read from the code's tree",
       ops[:3] == [True, True, True], ran.get("ops"))
+words = [x.get("ok") for x in ran.get("words", {}).get("results", [])]
+nowords = [x.get("ok") for x in ran.get("nowords", {}).get("results", [])]
+check("uses +=, finally, sep (a keyword argument), pass, global, del, not in are found in code that has them",
+      words == [True] * 8, ran.get("words"))
+check("  and not in code that only says them in a string, or uses + and in and < instead",
+      nowords == [False] * 8, ran.get("nowords"))
 check("  a - inside a string isn't a minus, and avoids * holds", ops[3:] == [False, True], ran.get("ops"))
 
 # ------------------------------- Pi, turtle and block-world programs
