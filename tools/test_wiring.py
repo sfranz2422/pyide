@@ -261,9 +261,9 @@ app_js = (ROOT / "static" / "app.js").read_text()
 demo_js = (ROOT / "static" / "demo.js").read_text()
 app_py = (ROOT / "app.py").read_text()
 check("the editor has the New tab button", 'id="run-tab"' in index_html)
-# A block world (mcpi) plays in a new tab too, as a game does.
-check("  shown only for a game or a block world",
-      'runTabBtn.hidden = !(isGame || mode === "world")' in app_js and 'id="run-tab" class="btn" type="button" hidden' in index_html)
+# A block world (mcpi) and the simulated Pi play in a new tab too, as a game does.
+check("  shown only for a game, a block world or the Pi",
+      'runTabBtn.hidden = !(isGame || mode === "world" || mode === "pi")' in app_js and 'id="run-tab" class="btn" type="button" hidden' in index_html)
 check("  which opens /play in one named tab",
       'window.open("/play", "pyide-play")' in app_js)
 _key = re.search(r'var PLAY_KEY = "([^"]+)"', app_js)
@@ -295,9 +295,9 @@ check("on a demo page the editor's height cap is lifted",
 check("  the stage takes the column and the output is a strip",
       re.search(r"flex:\s*1 1 0", _rule("body.is-demo.is-game .stage")) is not None
       and re.search(r"flex:\s*0 0 \d+px", _rule("body.is-demo.is-game .pane-right #output-view")) is not None)
-check("there is a Full screen button, for a game or a block world",
+check("there is a Full screen button, for a game, a block world or the Pi",
       'id="fullscreen" class="btn" type="button" hidden' in demo_html
-      and "fullBtn.hidden = !(isGame || isWorld)" in demo_js)
+      and "fullBtn.hidden = !(isGame || isWorld || isPi)" in demo_js)
 check("  and it puts the stage, not the page, full screen",
       "stage.requestFullscreen()" in demo_js)
 check("the canvas is refitted on resize, full screen, and a new game size",

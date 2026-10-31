@@ -44,7 +44,7 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by twenty-five of these: `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by twenty-eight of these: `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
@@ -528,6 +528,29 @@ program (`holdsEscape`). The new tab and hide-my-code links play it, saving
 nothing back. Not on the live page, by the teacher's choice. Tests:
 `test_world_model.py`, `test_world_python.py` (real Pyodide, with and
 without JSPI), `test_world_editor.py`.
+
+**The Raspberry Pi** (`static/pi.js`, `pi_circuit.js`, `pi_board.js`,
+`static/py/pi/`, `_pyide_run_pi` in `runtime.js`). A program that imports
+`gpiozero` (later `sense_hat`, `picamera`) drives a simulated Pi 3 B+ in the
+stage, for the Hardware class's Pi lessons, which follow the Beginner's
+Guide (1st ed.). **Same calls as on a real Pi**, so code written here runs on
+the classroom's Pis — and those run Raspbian Jessie, **Python 3.4: lesson code
+has no f-strings.** Students **wire the breadboard themselves** (the
+teacher's choice): `pi_circuit.js` is the model (strips of five, the centre
+gap, rails; an LED lights only the right way round and is flagged with no
+resistor; a pulled-up button reads pressed only when it joins its pin to
+GND), saved with the project as `circuit.pi` — hidden like `world.mcpi`
+(`hidden()` in app.js), but no marker: any project can use the Pi. It takes
+turns with the page exactly as the block world does — `_pyide_run_world` and
+`_pyide_run_pi` are both `_pyide_run_turns` — and two things a Pi program
+needs that a world one doesn't: callbacks (`when_pressed`) run at the
+program's turns, and a program whose last line set one **keeps running until
+Stop** (`_pyide_pi.linger`), as it does in Thonny, or the book's Quick
+Reaction Game does nothing; and `os._exit` ends the run instead of Python.
+Rebuild `static/py/pi_bundle.json` with `tools/build_pi.py` after any change
+there. Add to class → Raspberry Pi starts one with an empty breadboard.
+Tests: `test_pi_circuit.py`, `test_pi_python.py` (real Pyodide, with and
+without JSPI), `test_pi_editor.py`.
 
 **The week's calendar** (`static/calendar.js`, the same file in all three;
 `Course.calendar`; `/api/class/<id>/calendar`). The teacher pastes one block

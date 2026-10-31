@@ -80,9 +80,12 @@ check("Escape while the world holds the mouse doesn't stop the program",
       esc is not None and "holdsEscape()" in esc.group(0), esc and esc.group(0))
 
 print("the world file")
-check("world.mcpi is no tab", "n !== WORLD_FILE" in body(app, "fileNames"))
+# hidden() is the world file and the Pi's circuit.pi: the files that are no tab.
+hidden_fn = re.search(r"function hidden\(name\) \{(.*?)\}", app)
+hides_world = bool(hidden_fn) and "name === WORLD_FILE" in hidden_fn.group(1)
+check("world.mcpi is no tab", "!hidden(n)" in body(app, "fileNames") and hides_world)
 check("…never written into Python's files", "delete files[WORLD_FILE]" in body(app, "pushFilesToPython"))
-check("…nor read back as a new file", "name === WORLD_FILE" in body(app, "pullFilesFromPython"))
+check("…nor read back as a new file", "hidden(name)" in body(app, "pullFilesFromPython") and hides_world)
 rescue = app[app.find("readAll: function"):app.find("writeAll: function")]
 check("the rescue leaves a big world out, so the code is always kept — keeping its name, which makes it a world project",
       'all[WORLD_FILE] = ""' in rescue and "delete all[WORLD_FILE]" not in rescue)

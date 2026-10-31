@@ -254,6 +254,9 @@
         <canvas id="canvas" tabindex="0" width="800" height="600"></canvas>
         {#  The block world (world.js), for a program that imports mcpi. #}
         <div id="world-view" class="world-view" hidden></div>
+        {#  The simulated Raspberry Pi (pi.js), for a program that imports
+            gpiozero, the Sense HAT or the camera: a breadboard students wire. #}
+        <div id="pi-view" class="pi-view" hidden></div>
       </div>
     </div>
     <div class="resizer resizer-y" data-split="editor-stage"></div>
@@ -446,6 +449,9 @@
 <script src="{{ url_for('static', filename='game.js') }}"></script>
 <script src="{{ url_for('static', filename='world_model.js') }}"></script>
 <script src="{{ url_for('static', filename='world.js') }}"></script>
+<script src="{{ url_for('static', filename='pi_circuit.js') }}"></script>
+<script src="{{ url_for('static', filename='pi_board.js') }}"></script>
+<script src="{{ url_for('static', filename='pi.js') }}"></script>
 <script src="{{ url_for('static', filename='sprites.js') }}"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='snippets.js') }}"></script>

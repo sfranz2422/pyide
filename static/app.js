@@ -237,6 +237,11 @@
      the rescue, shares, the new tab — but it is no tab and never reaches
      Python: nobody edits it as text, and it can be 1.4 MB. */
   var WORLD_FILE = "world.mcpi";
+  /* The simulated Raspberry Pi's breadboard, as the student wired it
+     (pi_circuit.js). Kept with the project the same way as the world file:
+     no tab, never written into Python's files. */
+  var CIRCUIT_FILE = "circuit.pi";
+  function hidden(name) { return name === WORLD_FILE || name === CIRCUIT_FILE; }
   var PROJECT_DIR = "/project";
   var NAME_OK = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$/;
 
@@ -329,7 +334,7 @@
 
   function fileNames() {
     return [MAIN].concat(Object.keys(docs).filter(function (n) {
-      return n !== MAIN && n !== WORLD_FILE;
+      return n !== MAIN && !hidden(n);
     }).sort());
   }
 
@@ -533,6 +538,10 @@
       if (name.toLowerCase() === MAIN) { switchTo(MAIN); return; }
       // The world's own file: making it by hand would make any project a
       // block-world one, which only a teacher's assignment is meant to be.
+      if (name.toLowerCase() === CIRCUIT_FILE) {
+        write("\n'" + name + "' is where the Pi's breadboard is kept. Choose another name.\n", "err");
+        return;
+      }
       if (name.toLowerCase() === WORLD_FILE) {
         write("\n'" + name + "' is kept for block-world assignments. Choose another name.\n", "err");
         return;
@@ -705,7 +714,12 @@
      student starts. Every copy of such an assignment carries the file. */
   function hasWorld() { return Object.prototype.hasOwnProperty.call(docs, WORLD_FILE); }
   function currentMode(source) {
-    return window.PyIDEGame.looksLikeGame(source) ? "game" : window.PyIDEWorldModel.looksLikeWorld(source) && hasWorld() ? "world" : "console";
+    if (window.PyIDEGame.looksLikeGame(source)) return "game";
+    if (window.PyIDEWorldModel.looksLikeWorld(source) && hasWorld()) return "world";
+    // The simulated Pi needs no file to run: gpiozero, the Sense HAT and the
+    // camera work in any project, and the breadboard is made when wired.
+    if (window.PyIDEPi && window.PyIDEPi.looksLikePi(source)) return "pi";
+    return "console";
   }
 
   // Before paintMode, which runs straight away and shows or hides its button.
@@ -715,28 +729,32 @@
   });
 
   function paintMode(mode) {
-    modeTag.textContent = mode === "game" ? "Game" : mode === "world" ? "World" : "Console";
+    modeTag.textContent = mode === "game" ? "Game" : mode === "world" ? "World" : mode === "pi" ? "Pi" : "Console";
     modeTag.className = "mode mode-" + mode;
     modeTag.title = mode === "game"
       ? "Your code imports kaypy, so Run opens a game window."
       : mode === "world"
         ? "Your code imports mcpi, so Run builds in the block world."
-        : "Run will run this in the console. Import kaypy to make it a game.";
+        : mode === "pi"
+          ? "Your code uses a Raspberry Pi's parts, so Run drives the simulated Pi."
+          : "Run will run this in the console. Import kaypy to make it a game.";
     // A world lays out as a game does (a picture above, the output under it).
-    document.body.classList.toggle("is-game", mode === "game" || mode === "world");
+    document.body.classList.toggle("is-game", mode === "game" || mode === "world" || mode === "pi");
     document.body.classList.toggle("is-world", mode === "world");
+    document.body.classList.toggle("is-pi", mode === "pi");
 
     // Sprites are only meaningful to a game, so the button appears with one.
     // So is the engine's documentation: in console mode it would be a link
     // to the wrong manual.
     var isGame = mode === "game";
     spritePanel.showFor(isGame);
-    if (runTabBtn) runTabBtn.hidden = !(isGame || mode === "world");
+    if (runTabBtn) runTabBtn.hidden = !(isGame || mode === "world" || mode === "pi");
     var docs = $("kaypy-docs");
     if (docs) docs.hidden = !isGame;
     var worldDocs = $("world-docs");
     if (worldDocs) worldDocs.hidden = mode !== "world";
     paintWorld(mode === "world");
+    paintPi(mode === "pi");
     relayout();
   }
 
@@ -828,6 +846,54 @@
     });
   }
 
+  // ------------------------------------------------------ the simulated Pi
+  /* The breadboard (and later the Sense HAT and camera) shows whenever the
+     code is a Pi program, before any Run, so it can be wired first — the
+     order a real one is built in. Wiring is saved into circuit.pi as it
+     changes; nothing is saved by just looking at it. */
+  var piView = $("pi-view");
+  var piUp = false, piShowing = null;
+
+  function circuitText() { return docs[CIRCUIT_FILE] ? docs[CIRCUIT_FILE].getValue() : ""; }
+
+  function paintPi(on) {
+    if (!piView || !window.PyIDEPi) return;
+    if (!on) {
+      if (piUp) {
+        piUp = false;
+        window.PyIDEPi.hide();
+        if (stageLabel) stageLabel.textContent = "Game";
+        if (!running) stage.hidden = true;
+      }
+      return;
+    }
+    var uses = window.PyIDEPi.usesOf(mainSource());
+    if (!piUp) window.PyIDEPi.setReadonly(!!window.PYIDE.readonly);
+    if (!piUp || piShowing !== circuitText()) {
+      piShowing = circuitText();
+      window.PyIDEPi.load(piShowing);
+    }
+    piUp = true;
+    stage.hidden = false;
+    if (stageLabel) stageLabel.textContent = "Raspberry Pi";
+    window.PyIDEPi.show(piView, uses);
+  }
+
+  function setCircuitFile(text) {
+    if (circuitText() === text) return;
+    if (docs[CIRCUIT_FILE]) docs[CIRCUIT_FILE].setValue(text);
+    else docs[CIRCUIT_FILE] = makeDoc(text);
+    piShowing = text;
+    // Not the open document, so no change event tells anyone: say so here.
+    if (account) account.noteEdit();
+    if (rescue) rescue.noteEdit();
+  }
+  if (window.PyIDEPi) {
+    window.PyIDEPi.onEdit(function () {
+      if (!window.PYIDE.readonly) setCircuitFile(window.PyIDEPi.save());
+    });
+  }
+
   editor.on("change", function () { if (!running) refreshMode(); });
 
   /* What goes in the brackets, above the line while a call is typed
@@ -916,6 +982,7 @@
     pyodide.FS.mkdirTree(PROJECT_DIR);
     var files = dataFiles();
     delete files[WORLD_FILE];      // the world's own; no program reads it
+    delete files[CIRCUIT_FILE];    // the breadboard's, likewise
     Object.keys(files).forEach(function (name) {
       pyodide.FS.writeFile(PROJECT_DIR + "/" + name,
                            new TextEncoder().encode(files[name]));
@@ -929,7 +996,7 @@
     var appeared = [];
 
     entries.forEach(function (name) {
-      if (name === "." || name === ".." || name === MAIN || name === WORLD_FILE) return;
+      if (name === "." || name === ".." || name === MAIN || hidden(name)) return;
       var path = PROJECT_DIR + "/" + name;
       try {
         if (pyodide.FS.isDir(pyodide.FS.stat(path).mode)) return;
@@ -964,7 +1031,7 @@
      console program that is simply computing, where the time limit is what
      ends a runaway. */
   function paintStop() {
-    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || consoleIO.isWaiting()));
+    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || runMode === "pi" || consoleIO.isWaiting()));
   }
 
   function setBusy(isRunning, mode) {
@@ -1090,7 +1157,8 @@
       syntaxCard.show(bad);
       return;
     }
-    return mode === "game" ? runGame(source) : mode === "world" ? runWorld(source) : runConsole(source);
+    return mode === "game" ? runGame(source) : mode === "world" ? runWorld(source)
+      : mode === "pi" ? runPi(source) : runConsole(source);
   }
 
   async function runConsole(source) {
@@ -1333,8 +1401,70 @@
     }
   }
 
+  /* A program that drives the simulated Pi: the same turns as the block
+     world (_pyide_pi; _pyide_run_pi in runtime.js), and the same Stop. Its
+     pins are let go as it ends, as gpiozero's cleanup does on a Pi. */
+  async function runPi(source) {
+    var token = ++runToken;
+    setBusy(true, "pi");
+    showOutput();
+    clearOutput();
+    paintPi(true);
+    await repaint();
+
+    try {
+      await ensureRequests(source);
+    } catch (e) {
+      setBusy(false);
+      return;
+    }
+    try {
+      await window.PyIDERuntime.loadImports(pyodide, source, dataFiles());
+      await window.PyIDEPi.loadPackage(pyodide);
+    } catch (e) {
+      write("The Raspberry Pi could not load.\n" + (e && e.message || e) + "\n", "err");
+      if (token === runToken) setBusy(false, "pi");
+      return;
+    }
+    pushFilesToPython();
+    consoleIO.setEnabled(true);
+    var id = window.PyIDEPi.beginRun();
+    try {
+      pyodide.globals.set("_pyide_source", source);
+      var result = await pyodide.runPythonAsync("_pyide_run_pi(_pyide_source, " + id + ")");
+      if (token === runToken) {
+        if (result === "ok") write("\n— finished —\n", "dim");
+        if (result === "stopped") write("\n— stopped —\n", "dim");
+        if (result === "ok" || result === "stopped" || result === "cancelled") reportRun();
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      if (token === runToken) {
+        window.PyIDEPi.endRun();
+        pullFilesFromPython();
+        setBusy(false, "pi");
+      }
+    }
+  }
+
   function stopRun() {
     if (!running) return;
+    if (runMode === "pi") {
+      if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
+      // As for the world, below.
+      window.PyIDEPi.requestStop();
+      var piToken = runToken;
+      setTimeout(function () {
+        if (!running || runMode !== "pi" || piToken !== runToken) return;
+        runToken += 1;
+        window.PyIDEPi.endRun();
+        write("\n— stopped —\n", "dim");
+        setBusy(false);
+        pullFilesFromPython();
+      }, 1500);
+      return;
+    }
     if (runMode === "world") {
       if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
       /* Asked, and heard at the program's next turn — within a frame. If it

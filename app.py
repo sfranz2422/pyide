@@ -2188,6 +2188,26 @@ x, y, z = mc.player.getTilePos()
 mc.setBlock(x + 2, y, z, block.STONE.id)
 """
 
+# A Raspberry Pi assignment (Add to class → Raspberry Pi): the book's first
+# physical-computing program, and an empty breadboard for the student to
+# wire. Unlike the world, the simulated Pi needs no file to run — any
+# program that imports gpiozero gets it — so circuit.pi here only starts the
+# project with its breadboard, and every copy keeps the student's wiring.
+# No f-strings: the classroom's Pis run Raspbian Jessie, which is Python 3.4.
+CIRCUIT_FILE = "circuit.pi"
+NEW_PI_CODE = """# %s
+from gpiozero import LED
+from time import sleep
+
+led = LED(25)
+
+while True:
+    led.on()
+    sleep(1)
+    led.off()
+    sleep(1)
+"""
+
 LESSON_STARTER = """# {title}
 
 Write your notes here. A line with only `---` on it starts a new slide.
@@ -4676,6 +4696,7 @@ def class_new_assignment(class_id):
         data = request.get_json(silent=True) or {}
         lesson = data.get("kind") == "lesson"
         world = data.get("kind") == "world"
+        pi = data.get("kind") == "pi"
         lab = data.get("kind") == "lab"
         sc = lab_checks.scenario(str(data.get("scenario") or "")) if lab else None
         if lab and sc is None:
@@ -4705,6 +4726,11 @@ def class_new_assignment(class_id):
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, code=NEW_WORLD_CODE % title,
                 files=json.dumps({WORLD_FILE: ""}))
+        elif pi:
+            item = accounts.Assignment(
+                slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+                teacher_id=user.id, title=title, code=NEW_PI_CODE % title,
+                files=json.dumps({CIRCUIT_FILE: ""}))
         else:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,

@@ -27,6 +27,9 @@
   var worldView = $("world-view");
   // The block world's file in a project (app.js keeps it; world.js reads it).
   var WORLD_FILE = "world.mcpi";
+  // The simulated Pi's breadboard (app.js keeps it; pi.js reads it).
+  var CIRCUIT_FILE = "circuit.pi";
+  var piView = $("pi-view");
   var canvas = $("canvas");
 
   // ----------------------------------------------------------------- output
@@ -230,7 +233,7 @@
   // Stop is offered for a game, and for a program sitting on an unanswered
   // input(); a console program that is merely computing has the time limit.
   function paintStop() {
-    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || consoleIO.isWaiting()));
+    stopBtn.hidden = !(running && (runMode === "game" || runMode === "world" || runMode === "pi" || consoleIO.isWaiting()));
   }
 
   function setBusy(isRunning, mode) {
@@ -263,18 +266,63 @@
     // that has a world file, i.e. one from a teacher's block-world assignment.
     var hasWorldFile = Object.prototype.hasOwnProperty.call(loaded.files, WORLD_FILE);
     var isWorld = !isGame && hasWorldFile && window.PyIDEWorldModel.looksLikeWorld(loaded.code);
-    // A world fills the page as a game does.
-    document.body.classList.toggle("is-game", isGame || isWorld);
+    var isPi = !isGame && !isWorld && !!window.PyIDEPi && window.PyIDEPi.looksLikePi(loaded.code);
+    // A world, or a Pi, fills the page as a game does.
+    document.body.classList.toggle("is-game", isGame || isWorld || isPi);
     document.body.classList.toggle("is-world", isWorld);
+    document.body.classList.toggle("is-pi", isPi);
     if (worldView) worldView.hidden = !isWorld;
-    if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : "Game";
-    if (fullBtn) fullBtn.hidden = !(isGame || isWorld) || !stage.requestFullscreen;
+    if (piView) piView.hidden = !isPi;
+    if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : isPi ? "Raspberry Pi" : "Game";
+    if (fullBtn) fullBtn.hidden = !(isGame || isWorld || isPi) || !stage.requestFullscreen;
     if (!isGame && !isWorld && window.PyIDEWorldModel.looksLikeWorld(loaded.code)) {
       write("The block world (mcpi) comes with block-world assignments from a teacher.\n", "err");
       setBusy(false, "console");
       return;
     }
-    return isGame ? runGame(loaded) : isWorld ? runWorld(loaded) : runConsole(loaded);
+    return isGame ? runGame(loaded) : isWorld ? runWorld(loaded) : isPi ? runPi(loaded) : runConsole(loaded);
+  }
+
+  /* A program that drives the simulated Pi, as in the editor (runPi in
+     app.js), on the project's breadboard. The breadboard can be rewired
+     here to try something, but nothing is saved back: the editor's is the
+     one that's kept. */
+  async function runPi(loaded) {
+    var token = ++runToken;
+    setBusy(true, "pi");
+    clearOutput();
+    await repaint();
+    try {
+      await window.PyIDERuntime.loadImports(pyodide, loaded.code, loaded.files);
+      stage.hidden = false;
+      window.PyIDEPi.load(loaded.files[CIRCUIT_FILE] || "");
+      window.PyIDEPi.show(piView, window.PyIDEPi.usesOf(loaded.code));
+      await window.PyIDEPi.loadPackage(pyodide);
+    } catch (e) {
+      write("The Raspberry Pi could not load.\n" + (e && e.message || e) + "\n", "err");
+      if (token === runToken) setBusy(false, "pi");
+      return;
+    }
+    var files = {};
+    Object.keys(loaded.files).forEach(function (n) { if (n !== WORLD_FILE && n !== CIRCUIT_FILE) files[n] = loaded.files[n]; });
+    pushFilesToPython(files);
+    consoleIO.setEnabled(true);
+    var id = window.PyIDEPi.beginRun();
+    try {
+      pyodide.globals.set("_pyide_source", loaded.code);
+      var result = await pyodide.runPythonAsync("_pyide_run_pi(_pyide_source, " + id + ", False)");
+      if (token === runToken) {
+        if (result === "ok") write("\n— finished —\n", "dim");
+        if (result === "stopped") write("\n— stopped —\n", "dim");
+      }
+    } catch (e) {
+      write(String(e) + "\n", "err");
+    } finally {
+      if (token === runToken && running) {
+        window.PyIDEPi.endRun();
+        setBusy(false, "pi");
+      }
+    }
   }
 
   /* A program that drives the block world, as in the editor (runWorld in
@@ -423,6 +471,18 @@
     // what ends it
     if (consoleIO.isWaiting()) { consoleIO.cancel(); return; }
     if (!pyodide) return;
+    if (runMode === "pi") {
+      window.PyIDEPi.requestStop();
+      var piToken = runToken;
+      setTimeout(function () {
+        if (!running || runMode !== "pi" || piToken !== runToken) return;
+        runToken += 1;
+        window.PyIDEPi.endRun();
+        write("\n— stopped —\n", "dim");
+        setBusy(false, "pi");
+      }, 1500);
+      return;
+    }
     if (runMode === "world") {
       // Heard at the program's next turn; the buttons back after 1.5 s regardless.
       window.PyIDEWorld.requestStop();

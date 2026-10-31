@@ -3440,6 +3440,63 @@ body.is-demo.is-world .world-view { height: 100%; }
 .world-slot.on { border-color: #fff; }
 .world-slot canvas { width: 24px; height: 24px; image-rendering: pixelated; }
 
+/* ------------------------------------------------------- the simulated Pi
+   In the editor's stage, for a program that imports gpiozero (the Sense HAT
+   and camera later): pi_board.js's breadboard in place of the game's canvas.
+   The board's own colours are fixed, like the world's: a green circuit board
+   and a white breadboard read the same in every theme, and a student
+   matching the book's photos needs them to. */
+body.is-pi #canvas { display: none; }
+body.is-pi .stage-frame { padding: 0; }
+.pi-view { width: 100%; max-height: 52vh; overflow: auto; }
+.pi-view[hidden] { display: none; }
+.stage.is-sized .pi-view { max-height: none; height: 100%; }
+body.is-demo.is-pi .pi-view { max-height: none; height: 100%; }
+.mode-pi { color: #c51a4a; border-color: #c51a4a; }
+.pi-board { outline: none; }
+.pi-tray { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); }
+.pi-tool, .pi-colour { font: inherit; font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--bg-panel); color: var(--text); cursor: pointer; }
+.pi-tool.on { background: #c51a4a; border-color: #c51a4a; color: #fff; }
+.pi-clear { margin-left: auto; }
+.pi-svg { display: block; width: 100%; height: auto; background: #f5f5f0; user-select: none; touch-action: none; }
+.pi-svg.is-placing { cursor: crosshair; }
+.pi-pcb { fill: #1f7a3a; stroke: #14532d; }
+.pi-bb { fill: #fbfbf7; stroke: #d6d3c4; }
+.pi-pin { stroke: #e5e7eb; stroke-width: 1; cursor: pointer; }
+.pi-hole { fill: #3f3f46; cursor: pointer; }
+.pi-point:hover { stroke: #c51a4a; stroke-width: 2; }
+.pi-label { font: 7.5px ui-monospace, Menlo, monospace; fill: #374151; pointer-events: none; }
+.pi-header .pi-label { fill: #f9fafb; }
+.pi-title { font-weight: bold; }
+.pi-end { text-anchor: end; } .pi-start { text-anchor: start; } .pi-mid { text-anchor: middle; }
+.pi-row, .pi-num { fill: #9ca3af; }
+.pi-plus { fill: #b91c1c; font-weight: bold; }
+.pi-rail-plus { stroke: #dc2626; stroke-width: 1.2; }
+.pi-rail-minus { stroke: #2563eb; stroke-width: 1.2; }
+.pi-part { cursor: pointer; }
+.pi-leg { stroke: #9ca3af; stroke-width: 2; }
+.pi-foot { fill: #6b7280; }
+.pi-led-body { stroke: rgba(0, 0, 0, 0.35); }
+.pi-led-glow { pointer-events: none; }
+.pi-res-body { fill: #e7c99a; stroke: #a16207; stroke-width: 0.6; }
+.pi-btn-body { fill: #27272a; } .pi-btn-cap { fill: #52525b; }
+.pi-button.is-pressed .pi-btn-cap { fill: #c51a4a; }
+.pi-buzz-body { fill: #18181b; } .pi-buzz-hole { fill: #52525b; }
+.pi-sound { font-size: 14px; fill: #c51a4a; }
+.pi-part.is-selected .pi-leg, .pi-wire.is-selected .pi-wire-line { stroke-dasharray: 3 2; }
+.pi-part.is-selected { filter: drop-shadow(0 0 3px #c51a4a); }
+.pi-wire-line { fill: none; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+.pi-wire-hit { fill: none; stroke: transparent; stroke-width: 10; cursor: pointer; }
+.pi-wire-end { stroke: #111827; stroke-width: 0.6; }
+.pi-ghost { pointer-events: none; }
+.pi-ghost-dot { fill: rgba(197, 26, 74, 0.35); stroke: #c51a4a; }
+.pi-ghost-bad { fill: rgba(0, 0, 0, 0.15); stroke: #6b7280; stroke-dasharray: 2 2; }
+.pi-ghost-wire { stroke: #c51a4a; stroke-width: 2; stroke-dasharray: 4 3; }
+.pi-status { padding: 4px 8px; font-size: 12px; min-height: 1.4em; }
+.pi-hint { color: var(--muted); }
+.pi-warn { color: #b45309; font-weight: 600; }
+
 /* The block world's help page (/help/world). */
 .help-table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
 .help-table th, .help-table td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }
