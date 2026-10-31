@@ -576,7 +576,7 @@ Minecraft's last program uses one). Tests: `test_pi_circuit.py`,
 **Checks on a Pi or block-world program run headless** (`turnsFor` in
 autograde.js): on a Pi of their own (`PyIDEPi.headless(circuit.pi)` — pi.js
 is a factory, so the student's panels are never touched) or a world built
-from the project's `world.mcpi`, with no turns, `time.sleep` counted on a
+from the project's `world.mcpi` (built once per check, put back as it was, player at the spawn, before every run of the program — a run that moved the player made the next test fail), with no turns, `time.sleep` counted on a
 clock of its own, and a `while True:` stopped after 30 of its seconds as
 Stop would stop it — so a lesson's loop is checked on what it printed and
 did. Before, every such check failed with "No module named gpiozero". The

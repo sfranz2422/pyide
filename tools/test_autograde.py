@@ -301,6 +301,11 @@ TURNS = [
     ("world", {"main.py": "from mcpi.minecraft import Minecraft\nimport time\nmc = Minecraft.create()\nmc.setBlock(1, 2, 3, 1)\n"
                "mc.postToChat('built')\nwhile True:\n    time.sleep(0.5)\n"},
      "```tests\nmc.getBlock(1, 2, 3) == 1\nuses while\nprints built\n```"),
+    # Each test runs the program again: every run starts in the world as it
+    # was, the player back at the spawn.
+    ("rerun", {"main.py": "from mcpi.minecraft import Minecraft\nmc = Minecraft.create()\nstart = mc.player.getTilePos()\n"
+               "mc.setBlock(start.x + 1, start.y, start.z, 1)\nmc.player.setTilePos(start.x + 5, start.y, start.z)\n"},
+     "```tests\nstart.x == 0\nstart.x == 0\nmc.getBlock(start.x + 1, start.y, start.z) == 1\n```"),
     ("thread", {"main.py": "from mcpi.minecraft import Minecraft\nimport threading\nmc = Minecraft.create()\n"
                 "threading.Thread(target=print).start()\nprint('after')\n"},
      "```tests\nprints after\n```"),
@@ -359,6 +364,7 @@ check("the Sense HAT in a check: a pixel, the readings, show_message", all_ok("s
 check("turtle in a check: where the turtle ended up", all_ok("turtle"), tlines("turtle"))
 check("the book's `while True: pass` after a joystick callback still gets checked", all_ok("joystick"), tlines("joystick"))
 check("a block-world program's checks run, on a world of their own", all_ok("world"), tlines("world"))
+check("every run of a check starts in the world as it was, the player at the spawn", all_ok("rerun"), tlines("rerun"))
 check("a thread in a check is the plain sentence, not a hang", tr.get("thread", {}).get("results")
       and not tr["thread"]["results"][0]["ok"] and "Threads can't run here" in tr["thread"]["results"][0]["detail"],
       tlines("thread"))

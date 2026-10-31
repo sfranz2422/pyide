@@ -419,9 +419,19 @@ window.PyIDETests = (function () {
     if (M && M.looksLikeWorld(source)) {
       await loadBundle(pyodide, paths.mcpiBundle || "/static/py/mcpi_bundle.json", "/lib/mcpi/");
       // One world for the whole check, built once: making one is the slow part.
+      // Every run of the program starts from it as it was built, with the
+      // player at the spawn: a check runs the program once per test, and a
+      // run that moved the player or placed blocks made the next run's
+      // checks fail on a right program.
       var world = await M.decode(files["world.mcpi"] || null, null);
+      var ids0 = world.ids().slice(), data0 = world.datas().slice();
       var bridge = M.makeBridge(world, function (cb) { setTimeout(cb, 0); });
-      pyodide.globals.set("_ag_new_page", function () { return bridge; });
+      pyodide.globals.set("_ag_new_page", function () {
+        world.ids().set(ids0);
+        world.datas().set(data0);
+        world.spawn();
+        return bridge;
+      });
       return "world";
     }
     if (window.PyIDEPi && window.PyIDEPi.looksLikePi(source)) {
