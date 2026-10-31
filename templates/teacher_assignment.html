@@ -1089,6 +1089,12 @@
     if (!window.loadPyodide) await load("https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js");
     if (!window.PyIDERuntime) await load({{ url_for('static', filename='runtime.js')|tojson }});
     if (!window.PyIDETests) await load({{ url_for('static', filename='autograde.js')|tojson }});
+    // A Raspberry Pi or block-world assignment's work is checked on a Pi,
+    // or a world, of its own (autograde.js turnsFor): these make them.
+    if (!window.PyIDEWorldModel) await load({{ url_for('static', filename='world_model.js')|tojson }});
+    if (!window.PyIDEPiCircuit) await load({{ url_for('static', filename='pi_circuit.js')|tojson }});
+    if (!window.PyIDEPiCamera) await load({{ url_for('static', filename='pi_camera.js')|tojson }});
+    if (!window.PyIDEPi) await load({{ url_for('static', filename='pi.js')|tojson }});
     pyodide = await loadPyodide();
     // A program's print() goes nowhere here; the tests catch what they need.
     pyodide.setStdout({ batched: function () {} });

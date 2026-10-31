@@ -47,6 +47,8 @@ def check(label, ok, detail=""):
 
 HEAD = "from mcpi.minecraft import Minecraft\nfrom mcpi import block\nimport time\nmc = Minecraft.create()\n"
 
+STUFF = HEAD + "import mcpi.minecraftstuff as minecraftstuff\nmcdrawing = minecraftstuff.MinecraftDrawing(mc)\n"
+
 RUNS = [
     # name, source, stop after (ms) or None, extra Python arguments
     ("turns", HEAD + "import mcpi._pyide as w\nprint('turns', w.can_yield())\n", None, ""),
@@ -130,6 +132,38 @@ while True:
     # A program that changes mcpi itself: the next run gets the package as it is.
     ("meddle", HEAD + "block.STONE.id = 99\nprint('changed', block.STONE)\n", None, ""),
     ("after_meddle", HEAD + "print('stone is', block.STONE)\n", None, ""),
+    # Adventures in Minecraft, Adventure 6: minecraftstuff's drawing.
+    ("stuff_face", STUFF + """
+points = minecraftstuff.Points()
+points.add(0, 10, 0)
+points.add(20, 10, 0)
+points.add(10, 30, 0)
+mcdrawing.drawFace(points, True, block.WOOL.id, 6)
+b = mc.getBlockWithData(10, 12, 0)
+print(b.id, b.data, mc.getBlock(10, 30, 0))
+""", None, ""),
+    ("stuff_shapes", STUFF + """
+mcdrawing.drawLine(0, 40, 0, 10, 40, 0, block.STONE.id)
+print(all(mc.getBlock(x, 40, 0) == 1 for x in range(11)))
+mcdrawing.drawCircle(0, 60, 0, 5, block.WOOL.id, 4)
+print(mc.getBlock(5, 60, 0), mc.getBlock(0, 60, 0))
+mcdrawing.drawSphere(30, 60, 30, 3, block.WOOL.id, 5)
+print(mc.getBlock(30, 60, 30), mc.getBlock(30, 62, 30), mc.getBlock(32, 62, 32))
+""", None, ""),
+    # Adventure 9: a MinecraftShape moved as Crafty Crossing moves its wall.
+    ("stuff_move", STUFF + """
+from mcpi.vec3 import Vec3
+wall = minecraftstuff.MinecraftShape(mc, Vec3(50, 40, 50))
+wall.setBlocks(-1, 0, 0, 1, 0, 0, block.BRICK_BLOCK.id)
+wall.moveBy(0, 1, 0)
+print(mc.getBlock(50, 40, 50), mc.getBlock(50, 41, 50), mc.getBlock(51, 41, 50))
+""", None, ""),
+    ("threads", HEAD + """
+import threading
+def move():
+    pass
+threading.Thread(target=move).start()
+""", None, ""),
 ]
 
 HARNESS = r"""
@@ -225,11 +259,26 @@ def main():
         bundled = json.load(f)
     check("static/py/mcpi_bundle.json is the package as it is (python3 tools/build_mcpi.py)",
           bundled == build_mcpi.bundle(), sorted(set(bundled) ^ set(build_mcpi.bundle())))
-    check("…our own code: no one else's copyright notice in it",
-          not any("Copyright" in t or "All rights reserved" in t for t in bundled.values()))
+    check("…our own code: no one else's copyright notice in it (minecraftstuff is MIT, credited in its file)",
+          not any("Copyright" in t or "All rights reserved" in t for t in bundled.values())
+          and "MIT License" in bundled.get("minecraftstuff.py", "") and "Martin" in bundled.get("minecraftstuff.py", ""))
 
     got = run_node(RUNS, jspi=True)
     r = got["runs"]
+
+    print("minecraftstuff (Adventures in Minecraft)")
+    sf = r.get("stuff_face", {})
+    check("drawFace fills a triangle of Points with the wool colour given", sf.get("text", "").strip() == "35 6 35", sf)
+    ss = r.get("stuff_shapes", {}).get("text", "").split("\n")
+    check("drawLine lays every block between the ends", ss[:1] == ["True"], ss)
+    check("drawCircle draws the ring, not the middle", ss[1:2] == ["35 0"], ss)
+    check("drawSphere fills a ball of that radius, no further", ss[2:3] == ["35 35 0"], ss)
+    sm = r.get("stuff_move", {})
+    check("MinecraftShape.moveBy moves its blocks (Crafty Crossing's wall)", sm.get("text", "").strip() == "0 45 45", sm)
+    th = r.get("threads", {})
+    check("a thread says plainly that it can't run here, and what to do instead",
+          th.get("status") == "error" and "Threads can't run here" in th.get("text", "")
+          and "main loop" in th.get("text", ""), th)
     print("with stack switching (Chrome, Edge)")
     check("a world program can take turns with the page here", "turns True" in r.get("turns", {}).get("text", ""), r.get("turns"))
     h = r.get("house", {})

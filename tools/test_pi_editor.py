@@ -55,12 +55,13 @@ if look:
 const re = %s;
 const cases = { "from gpiozero import LED": true, "import gpiozero": true, "from sense_hat import SenseHat": true,
   "from sense_emu import SenseHat": true, "from picamera import PiCamera": true, "  from gpiozero import Button": true,
-  "# from gpiozero import LED": false, "print('gpiozero')": false, "import gpiozeroo": false, "x = 1": false };
+  "# from gpiozero import LED": false, "print('gpiozero')": false, "import gpiozeroo": false, "x = 1": false,
+  "import turtle": true, "from turtle import *": true, "import turtles": false, "# import turtle": false };
 let bad = [];
 for (const [src, want] of Object.entries(cases)) if (re.test(src) !== want) bad.push(src);
 console.log(JSON.stringify(bad));
 """ % look.group(1)], capture_output=True, text=True)
-    check("…matches gpiozero, sense_hat, sense_emu and picamera imports, not comments or strings",
+    check("…matches gpiozero, sense_hat, sense_emu, picamera and turtle imports, not comments or strings",
           probe.stdout.strip() == "[]", probe.stdout + probe.stderr)
 
 print("running and stopping")
@@ -95,10 +96,23 @@ check("…and keeps circuit.pi out of Python's files", "n !== CIRCUIT_FILE" in d
 print("the pages")
 for page in ("index.html", "demo.html"):
     html = (ROOT / "templates" / page).read_text()
-    order = [html.find("filename='%s'" % f) for f in ("world_model.js", "pi_circuit.js", "pi_board.js", "pi.js")]
-    check("%s loads world_model.js, then pi_circuit.js, pi_board.js and pi.js" % page,
+    order = [html.find("filename='%s'" % f) for f in ("world_model.js", "pi_circuit.js", "pi_board.js", "pi_sense.js", "pi_camera.js", "pi.js")]
+    check("%s loads world_model.js, then pi_circuit.js, pi_board.js, pi_sense.js, pi_camera.js and pi.js" % page,
           all(i >= 0 for i in order) and order == sorted(order), order)
     check("%s has the Pi's panel in the stage" % page, 'id="pi-view"' in html)
+show = body(pi_js, "show")
+check("a program that uses the Sense HAT gets its panel (and only then)",
+      "hatHost.hidden = !uses.sense" in show and "PyIDEPiSense.mount(" in show)
+check("…its joystick's pushes are queued for the program", "stick: stickEvent" in show)
+check("a program that uses the camera gets its panel", "camHost.hidden = !uses.camera" in show
+      and "PyIDEPiCamera.mount(camHost)" in show)
+check("…and the webcam is let go after every run (its light goes off)", "PyIDEPiCamera.reset()" in pi_js[pi_js.find("endRun:"):])
+cam_js = (ROOT / "static" / "pi_camera.js").read_text()
+check("the webcam is asked for only by the program (start_preview, capture, recording), never on opening",
+      cam_js.count("askWebcam();") == 3 and "function preview(" in cam_js)
+check("a turtle program gets the turtle's canvas", "turtleHost.hidden = !uses.turtle" in show and "PyIDETurtle.mount(turtleHost)" in show)
+check("…and the stage says Turtle, not Raspberry Pi, when that's all it is", '"Turtle" : "Raspberry Pi"' in app)
+check("turtle is imported fresh every run, as the Pi's packages are", "'turtle'" in runtime[runtime.find("_PI_PACKAGES ="):runtime.find("_PI_PACKAGES =") + 200])
 check("the stage swaps the canvas for the board in Pi mode", "body.is-pi #canvas { display: none; }" in css)
 
 print("Raspberry Pi assignments")

@@ -875,7 +875,7 @@
     }
     piUp = true;
     stage.hidden = false;
-    if (stageLabel) stageLabel.textContent = "Raspberry Pi";
+    if (stageLabel) stageLabel.textContent = uses.turtle && !uses.gpio && !uses.sense && !uses.camera ? "Turtle" : "Raspberry Pi";
     window.PyIDEPi.show(piView, uses);
   }
 

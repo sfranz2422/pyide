@@ -46,12 +46,31 @@ class StopNow(BaseException):
 # _pyide_run_turns (runtime.js) reads these two names, as it does mcpi's.
 WorldStopped = PiStopped
 
-state = {"run": 0, "last": 0.0, "suspended": False, "stopped_at": None}
+state = {"run": 0, "last": 0.0, "suspended": False, "stopped_at": None, "callback_failed": False}
+
+
+# ---------------------------------------------------------------- headless
+# Check my work and Check all run the program with no one watching
+# (autograde.js): on a page of their own (PyIDEPi.headless(circuit), or a
+# block world of their own), never the student's screen, with no turns —
+# time.sleep takes no time, counted on a clock of its own — and a program
+# still going after HEADLESS_SECONDS of that clock is stopped, as if Stop had
+# been pressed, so a lesson's `while True:` loop can still be checked on
+# what it printed and did.
+HEADLESS_SECONDS = 30
+_page = [None]
+
+
+def use_page(page):
+    """Run on `page` instead of the page's own, headless."""
+    _page[0] = page
+    state["virtual"] = 0.0
 
 
 def begin(run_id):
     """A new run: its id (from PyIDEPi.beginRun) and a fresh clock."""
-    state.update(run=int(run_id), last=time.monotonic(), suspended=False, stopped_at=None)
+    state.update(run=int(run_id), last=time.monotonic(), suspended=False, stopped_at=None,
+                 callback_failed=False)
     _after_turn.clear()
     _keepers.clear()
     _in_callback[0] = False
@@ -60,10 +79,12 @@ def begin(run_id):
 
 
 def can_yield():
-    return run_sync is not None and bool(can_run_sync())
+    return _page[0] is None and run_sync is not None and bool(can_run_sync())
 
 
 def pi():
+    if _page[0] is not None:
+        return _page[0]
     p = getattr(js, "PyIDEPi", None)
     if p is None:
         raise ConnectionError("There is no Raspberry Pi on this page to connect to.")
@@ -105,7 +126,13 @@ def _run_after_turn():
     _in_callback[0] = True
     try:
         for f in list(_after_turn):
-            f()
+            try:
+                f()
+            except Exception:
+                # Marked, so the loop guard (runtime.js) passes it on to
+                # the student rather than taking it for a broken turn.
+                state["callback_failed"] = True
+                raise
     finally:
         _in_callback[0] = False
 
@@ -140,6 +167,8 @@ def pause():
 
 
 def _stop():
+    if state["stopped_at"] is not None and _page[0] is not None:
+        raise StopNow()          # headless: no clock to wait 2 s on
     if state["stopped_at"] is None:
         state["stopped_at"] = time.monotonic()
         raise PiStopped()
@@ -161,7 +190,11 @@ def sleep(secs):
     secs = float(secs)       # the TypeError time.sleep would give for sleep("1")
     if secs < 0:
         raise ValueError("sleep length must be non-negative")
-    if can_yield():
+    if _page[0] is not None:
+        state["virtual"] = state.get("virtual", 0.0) + secs
+        if state["virtual"] > HEADLESS_SECONDS:
+            _stop()
+    elif can_yield():
         _yield(pi().sleep(secs * 1000, state["run"]))
     else:
         _real_sleep(secs)

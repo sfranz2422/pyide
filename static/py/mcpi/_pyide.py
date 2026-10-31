@@ -56,16 +56,36 @@ class StopNow(BaseException):
 state = {"run": 0, "last": 0.0, "suspended": False, "stopped_at": None}
 
 
+# ---------------------------------------------------------------- headless
+# Check my work and Check all run the program with no one watching
+# (autograde.js): on a page of their own (a block world of their own, made
+# from the project's world.mcpi), never the student's screen, with no turns —
+# time.sleep takes no time, counted on a clock of its own — and a program
+# still going after HEADLESS_SECONDS of that clock is stopped, as if Stop had
+# been pressed, so a lesson's `while True:` loop can still be checked on
+# what it printed and did.
+HEADLESS_SECONDS = 30
+_page = [None]
+
+
+def use_page(page):
+    """Run on `page` instead of the page's own, headless."""
+    _page[0] = page
+    state["virtual"] = 0.0
+
+
 def begin(run_id):
     """A new run: its id (from PyIDEWorld.beginRun) and a fresh clock."""
     state.update(run=int(run_id), last=time.monotonic(), suspended=False, stopped_at=None)
 
 
 def can_yield():
-    return run_sync is not None and bool(can_run_sync())
+    return _page[0] is None and run_sync is not None and bool(can_run_sync())
 
 
 def world():
+    if _page[0] is not None:
+        return _page[0]
     w = getattr(js, "PyIDEWorld", None)
     if w is None:
         raise ConnectionError("There is no block world on this page to connect to.")
@@ -84,6 +104,8 @@ def _yield(promise):
 
 
 def _stop():
+    if state["stopped_at"] is not None and _page[0] is not None:
+        raise StopNow()          # headless: no clock to wait 2 s on
     if state["stopped_at"] is None:
         state["stopped_at"] = time.monotonic()
         raise WorldStopped()
@@ -104,7 +126,11 @@ def sleep(secs):
     secs = float(secs)       # the TypeError time.sleep would give for sleep("1")
     if secs < 0:
         raise ValueError("sleep length must be non-negative")
-    if can_yield():
+    if _page[0] is not None:
+        state["virtual"] = state.get("virtual", 0.0) + secs
+        if state["virtual"] > HEADLESS_SECONDS:
+            _stop()
+    elif can_yield():
         _yield(world().sleep(secs * 1000, state["run"]))
     else:
         _real_sleep(secs)
@@ -113,5 +139,10 @@ def sleep(secs):
 def command(line):
     """One line of the Pi's protocol, answered by the world; then a turn if one is due."""
     reply = str(world().command(line))
+    if _page[0] is not None and line.startswith("chat.post(") and line.endswith(")"):
+        # On screen, chat is shown in the output (world.js); headless, nothing
+        # shows it, so a check couldn't see what a lesson told students
+        # they'd see. Printed here instead, as the output pane would.
+        print(line[len("chat.post("):-1])
     breathe()
     return reply

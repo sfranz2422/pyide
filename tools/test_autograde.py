@@ -272,6 +272,105 @@ check("uses + sees 3+4, == and and too — operators, read from the code's tree"
       ops[:3] == [True, True, True], ran.get("ops"))
 check("  a - inside a string isn't a minus, and avoids * holds", ops[3:] == [False, True], ran.get("ops"))
 
+# ------------------------------- Pi, turtle and block-world programs
+# Before, every check in a Raspberry Pi or block-world assignment failed with
+# "No module named gpiozero" (or mcpi): the checks never loaded them. Now
+# they run headless, on a Pi or world of their own, with time.sleep taking
+# no time and a `while True:` stopped as Stop would.
+print("\nPi, turtle and block-world programs (real Pyodide, headless)")
+LED25 = json.dumps({"v": 1, "parts": [
+    {"id": "led", "type": "led", "legs": ["c10", "c11"]}, {"id": "res", "type": "resistor", "legs": ["d11", "d14"]}],
+    "wires": [{"id": "w1", "from": "P22", "to": "a10"}, {"id": "w2", "from": "a14", "to": "P6"}]})
+TURNS = [
+    ("led", {"main.py": "from gpiozero import LED\nfrom time import sleep\nled = LED(25)\nled.on()\nsleep(1)\nprint('on')\n",
+             "circuit.pi": LED25},
+     "```tests\nprints on\nled.is_lit == True\nuses sleep\n```"),
+    ("blink", {"main.py": "from gpiozero import LED\nfrom time import sleep\nled = LED(25)\nwhile True:\n    led.on()\n"
+               "    print('blink')\n    sleep(1)\n    led.off()\n    sleep(1)\n"},
+     "```tests\nprints blink\n```"),
+    ("button", {"main.py": "from gpiozero import Button\nbutton = Button(2)\nbutton.wait_for_press()\nprint('pressed')\n"},
+     "```tests\nprints pressed\n```"),
+    ("sense", {"main.py": "from sense_hat import SenseHat\nsense = SenseHat()\nsense.show_message('Hi')\n"
+               "sense.set_pixel(0, 0, 255, 0, 0)\nprint(round(sense.get_temperature()))\n"},
+     "```tests\nsense.get_pixel(0, 0) == [248, 0, 0]\nprints 25\n```"),
+    ("turtle", {"main.py": "import turtle\nt = turtle.Turtle()\nt.forward(100)\nt.left(90)\nt.forward(50)\nturtle.done()\n"},
+     "```tests\nt.xcor() == 100\nt.ycor() == 50\n```"),
+    ("joystick", {"main.py": "from sense_hat import SenseHat\nsense = SenseHat()\ndef red():\n    sense.clear(255, 0, 0)\n"
+                  "sense.stick.direction_up = red\nprint('ready')\nwhile True:\n    pass\n"},
+     "```tests\nprints ready\n```"),
+    ("world", {"main.py": "from mcpi.minecraft import Minecraft\nimport time\nmc = Minecraft.create()\nmc.setBlock(1, 2, 3, 1)\n"
+               "mc.postToChat('built')\nwhile True:\n    time.sleep(0.5)\n"},
+     "```tests\nmc.getBlock(1, 2, 3) == 1\nuses while\nprints built\n```"),
+    ("thread", {"main.py": "from mcpi.minecraft import Minecraft\nimport threading\nmc = Minecraft.create()\n"
+                "threading.Thread(target=print).start()\nprint('after')\n"},
+     "```tests\nprints after\n```"),
+]
+turns_harness = r"""
+import { loadPyodide } from %(pyodide)s;
+import fs from "fs";
+globalThis.window = globalThis;
+globalThis.getSelection = () => null;
+// The bundles, from this checkout, where the page would fetch them.
+globalThis.fetch = async (url) => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(%(root)s + url, "utf8")) });
+for (const f of %(files)s) eval(fs.readFileSync(f, "utf8"));
+const py = await loadPyodide();
+py.setStdout({ batched: () => {} });
+py.runPython(window.PyIDERuntime.BOOTSTRAP);
+const out = {};
+for (const [name, files, notes] of %(cases)s) {
+  const t0 = Date.now();
+  out[name] = await window.PyIDETests.run(py, files, window.PyIDETests.parse(notes).tests);
+  out[name].ms = Date.now() - t0;
+}
+// The page's own Pi was never touched: the checks ran on their own.
+out.page = { pins: Object.keys(window.PyIDEPi.state().pins).length, fb: window.PyIDEPi.sense().fb };
+out.sleep = py.runPython("import time\ntime.sleep.__module__");
+process.stdout.write(JSON.stringify(out));
+""" % {"pyodide": json.dumps(PYODIDE), "root": json.dumps(ROOT),
+       "files": json.dumps([os.path.join(ROOT, "static", f) for f in
+                            ("runtime.js", "world_model.js", "pi_circuit.js", "pi_camera.js", "pi.js", "autograde.js")]),
+       "cases": json.dumps(TURNS)}
+path = os.path.join(tempfile.mkdtemp(), "turns.mjs")
+with open(path, "w") as f:
+    f.write(turns_harness)
+out = subprocess.run([node, "--experimental-wasm-jspi", path], capture_output=True, text=True, timeout=600)
+try:
+    tr = json.loads(out.stdout)
+except ValueError:
+    tr = {}
+    print(out.stdout[-500:], out.stderr[-1500:])
+
+
+def tlines(name):
+    return [(x["ok"], x["label"], x["detail"]) for x in tr.get(name, {}).get("results", [])]
+
+
+def all_ok(name):
+    got = tr.get(name, {})
+    return bool(got.get("results")) and got.get("earned") == got.get("possible")
+
+
+check("a Pi program's checks run: its output, and its LED lit on its own breadboard", all_ok("led"), tlines("led"))
+check("  time.sleep takes no time in a check (sleep(1) didn't wait)", tr.get("led", {}).get("ms", 9999) < 800, tr.get("led", {}).get("ms"))
+check("a blink loop that runs for ever is stopped, as Stop would, and checked on what it printed",
+      all_ok("blink") and tr.get("blink", {}).get("ms", 9999) < 2000, (tlines("blink"), tr.get("blink", {}).get("ms")))
+check("wait_for_press doesn't wait for a press no one can make", all_ok("button"), tlines("button"))
+check("the Sense HAT in a check: a pixel, the readings, show_message", all_ok("sense"), tlines("sense"))
+check("turtle in a check: where the turtle ended up", all_ok("turtle"), tlines("turtle"))
+check("the book's `while True: pass` after a joystick callback still gets checked", all_ok("joystick"), tlines("joystick"))
+check("a block-world program's checks run, on a world of their own", all_ok("world"), tlines("world"))
+check("a thread in a check is the plain sentence, not a hang", tr.get("thread", {}).get("results")
+      and not tr["thread"]["results"][0]["ok"] and "Threads can't run here" in tr["thread"]["results"][0]["detail"],
+      tlines("thread"))
+check("the page's own Pi is left alone: no pin set, no LED lit on its Sense HAT",
+      tr.get("page", {}).get("pins") == 0 and tr.get("page", {}).get("fb") == "0" * 256, tr.get("page"))
+check("time.sleep is Python's own again after the checks", tr.get("sleep") == "time", tr.get("sleep"))
+check("the teacher's Check all loads what a Pi or world check needs",
+      all(("filename='%s'" % f) in open(os.path.join(ROOT, "templates", "teacher_assignment.html")).read()
+          for f in ("world_model.js", "pi_circuit.js", "pi_camera.js", "pi.js")))
+check("  and so does the live page", all(("filename='%s'" % f) in open(os.path.join(ROOT, "templates", "live.html")).read()
+                                         for f in ("world_model.js", "pi_circuit.js", "pi_camera.js", "pi.js")))
+
 # ---------------------------------------------------------------- server
 print("\nThe server")
 import app as P                                              # noqa: E402

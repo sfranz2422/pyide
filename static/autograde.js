@@ -168,8 +168,29 @@ window.PyIDETests = (function () {
     "class _AgNoInput(Exception): pass",
     "class _AgTimeUp(Exception): pass",
     "",
-    "def _ag_run(source, inputs, seconds):",
+    "def _ag_turns_begin(kind):",
+    "    '''A Pi (or turtle) or block-world program: its packages fresh, on a",
+    "    page of its own with no one watching (_ag_new_page, from run() in",
+    "    autograde.js). None for any other program.'''",
+    "    if kind not in ('pi', 'world'):",
+    "        return None",
+    "    import importlib",
+    "    packages = _PI_PACKAGES if kind == 'pi' else ('mcpi',)",
+    "    for name in [n for n in _ag_sys.modules if n.split('.')[0] in packages]:",
+    "        del _ag_sys.modules[name]",
+    "    w = importlib.import_module('_pyide_pi' if kind == 'pi' else 'mcpi._pyide')",
+    "    w.use_page(_ag_new_page())",
+    "    w.begin(0)",
+    "    return w",
+    "",
+    "def _ag_run(source, inputs, seconds, turns=''):",
     "    '''Run main.py once, typing `inputs`. (output, problem, scope).'''",
+    "    w = _ag_turns_begin(turns)",
+    "    # A Pi or world program that is still going (its `while True:`) is",
+    "    # stopped as Stop would stop it, and checked on what it did by then.",
+    "    stops = (w.WorldStopped, w.StopNow) if w else ()",
+    "    if w:",
+    "        seconds = min(seconds, 3)",
     "    feed = list(inputs)",
     "    out = _ag_io.StringIO()",
     "    def fake_input(prompt=''):",
@@ -189,6 +210,12 @@ window.PyIDETests = (function () {
     "    problem = None",
     "    real_input = _ag_b.input",
     "    _ag_b.input = fake_input",
+    "    import threading as _ag_threading",
+    "    real_sleep, real_exit, real_start = _ag_time.sleep, _ag_os._exit, _ag_threading.Thread.start",
+    "    if w:",
+    "        _ag_time.sleep = w.sleep",
+    "        _ag_os._exit = _pyide_exit",
+    "        _ag_threading.Thread.start = _pyide_no_thread",
     "    try:",
     "        code = compile(source, 'main.py', 'exec')",
     "        with _ag_ctx.redirect_stdout(out):",
@@ -199,8 +226,11 @@ window.PyIDETests = (function () {
     "                _ag_sys.settrace(None)",
     "    except _AgNoInput:",
     "        problem = 'It asked for more input than this test types (%d).' % len(inputs)",
+    "    except stops:",
+    "        pass",
     "    except _AgTimeUp:",
-    "        problem = 'Still running after %d seconds. Is there a loop that never ends?' % seconds",
+    "        if not w:",
+    "            problem = 'Still running after %d seconds. Is there a loop that never ends?' % seconds",
     "    except SystemExit:",
     "        pass",
     "    except SyntaxError as e:",
@@ -209,6 +239,7 @@ window.PyIDETests = (function () {
     "        problem = '%s: %s' % (type(e).__name__, e)",
     "    finally:",
     "        _ag_b.input = real_input",
+    "        _ag_time.sleep, _ag_os._exit, _ag_threading.Thread.start = real_sleep, real_exit, real_start",
     "    return out.getvalue(), problem, scope",
     "",
     "def _ag_norm(text):",
@@ -271,7 +302,7 @@ window.PyIDETests = (function () {
     "                return True",
     "    return False",
     "",
-    "def _pyide_autograde(files_json, tests_json, seconds=5):",
+    "def _pyide_autograde(files_json, tests_json, seconds=5, turns=''):",
     "    files = _ag_json.loads(files_json)",
     "    tests = _ag_json.loads(tests_json)",
     "    _ag_os.makedirs(PROJECT_DIR, exist_ok=True)",
@@ -298,7 +329,7 @@ window.PyIDETests = (function () {
     "            if unreadable:",
     "                detail = unreadable",
     "            elif t['kind'] == 'output':",
-    "                out, problem, _ = _ag_run(source, t['inputs'], seconds)",
+    "                out, problem, _ = _ag_run(source, t['inputs'], seconds, turns)",
     "                if problem:",
     "                    detail = problem",
     "                elif t['exact']:",
@@ -309,7 +340,7 @@ window.PyIDETests = (function () {
     "                if not ok and not detail:",
     "                    detail = 'It printed: ' + (_ag_short(out) or '(nothing)')",
     "            elif t['kind'] == 'call':",
-    "                _, _, scope = _ag_run(source, [], seconds)",
+    "                _, _, scope = _ag_run(source, [], seconds, turns)",
     "                deadline = _ag_time.monotonic() + seconds",
     "                def guard(frame, event, arg):",
     "                    if _ag_time.monotonic() > deadline:",
@@ -356,6 +387,53 @@ window.PyIDETests = (function () {
 
   var ready = typeof WeakSet === "function" ? new WeakSet() : null;
 
+  /* A Pi (or turtle) program, or a block-world one, is checked on a page of
+     its own with no one watching: a headless Pi with the project's own
+     wiring (circuit.pi) — the student's, in the teacher's Check all — or a
+     block world made from its world.mcpi. Without these the checks in a Pi
+     or world assignment all failed with "No module named gpiozero". Pages
+     that don't load pi.js / world_model.js check as before. */
+  var bundles = typeof WeakMap === "function" ? new WeakMap() : null;
+  function loadBundle(pyodide, url, under) {
+    var done = bundles && bundles.get(pyodide) || {};
+    if (!done[url]) {
+      done[url] = fetch(url).then(function (r) {
+        if (!r.ok) throw new Error("Couldn't load " + url + " (" + r.status + ")");
+        return r.json();
+      }).then(function (files) {
+        Object.keys(files).forEach(function (rel) {
+          var path = under + rel;
+          pyodide.FS.mkdirTree(path.split("/").slice(0, -1).join("/"));
+          pyodide.FS.writeFile(path, files[rel]);
+        });
+        pyodide.runPython("import sys\nif '/lib' not in sys.path:\n    sys.path.insert(0, '/lib')\n");
+      });
+      done[url].catch(function () { delete done[url]; });
+      if (bundles) bundles.set(pyodide, done);
+    }
+    return done[url];
+  }
+  async function turnsFor(pyodide, source, files) {
+    var paths = window.PyIDEPaths || {};
+    var M = window.PyIDEWorldModel;
+    if (M && M.looksLikeWorld(source)) {
+      await loadBundle(pyodide, paths.mcpiBundle || "/static/py/mcpi_bundle.json", "/lib/mcpi/");
+      // One world for the whole check, built once: making one is the slow part.
+      var world = await M.decode(files["world.mcpi"] || null, null);
+      var bridge = M.makeBridge(world, function (cb) { setTimeout(cb, 0); });
+      pyodide.globals.set("_ag_new_page", function () { return bridge; });
+      return "world";
+    }
+    if (window.PyIDEPi && window.PyIDEPi.looksLikePi(source)) {
+      await loadBundle(pyodide, paths.piBundle || "/static/py/pi_bundle.json", "/lib/");
+      var circuit = files["circuit.pi"] || "";
+      // A fresh Pi for every run of the program, so no LED is left on by the one before.
+      pyodide.globals.set("_ag_new_page", function () { return window.PyIDEPi.headless(circuit); });
+      return "pi";
+    }
+    return "";
+  }
+
   /* Run `tests` against `files` (name → text) in `pyodide`, which has had
      runtime.js's BOOTSTRAP. Resolves {results, earned, possible}. Imports the
      packages the program needs first, as Run does. */
@@ -368,9 +446,11 @@ window.PyIDETests = (function () {
     if (window.PyIDERuntime && window.PyIDERuntime.loadImports) {
       try { await window.PyIDERuntime.loadImports(pyodide, source, files); } catch (e) {}
     }
+    var turns = "";
+    try { turns = await turnsFor(pyodide, source, files); } catch (e) { turns = ""; }
     pyodide.globals.set("_ag_files", JSON.stringify(files));
     pyodide.globals.set("_ag_tests", JSON.stringify(tests));
-    var out = await pyodide.runPythonAsync("_pyide_autograde(_ag_files, _ag_tests)");
+    var out = await pyodide.runPythonAsync("_pyide_autograde(_ag_files, _ag_tests, 5, " + JSON.stringify(turns) + ")");
     return JSON.parse(out);
   }
 

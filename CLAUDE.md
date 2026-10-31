@@ -44,7 +44,7 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by twenty-eight of these: `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by twenty-nine of these: `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
@@ -510,6 +510,9 @@ Pi's own text protocol (`command("world.setBlock(1,2,3,4)")`), so floats and
 ints come back where a Pi gives them; `static/py/mcpi` is OUR package, written
 from the API reference (no Mojang code or textures), bundled by
 `tools/build_mcpi.py` — rebuild after any change, the tests load the bundle.
+The one file that isn't ours is `mcpi/minecraftstuff.py`, Martin O'Hanlon's
+MIT-licensed drawing and shape helpers that Adventures in Minecraft uses,
+unchanged and credited in the file.
 The program runs on the page's own thread, so it **takes turns with the page**
 (`mcpi/_pyide.py`): every call, a patched `time.sleep`, and the trace guard in
 a loop that does neither, `run_sync` a frame's promise (JSPI, as `input()`).
@@ -549,8 +552,36 @@ Stop** (`_pyide_pi.linger`), as it does in Thonny, or the book's Quick
 Reaction Game does nothing; and `os._exit` ends the run instead of Python.
 Rebuild `static/py/pi_bundle.json` with `tools/build_pi.py` after any change
 there. Add to class → Raspberry Pi starts one with an empty breadboard.
-Tests: `test_pi_circuit.py`, `test_pi_python.py` (real Pyodide, with and
-without JSPI), `test_pi_editor.py`.
+
+The stage shows only the boards the program imports (`usesOf`): the
+breadboard, the **Sense HAT** (`pi_sense.js`: the 8×8 LEDs, sliders for the
+sensors as the official emulator has them, a joystick on the arrow keys;
+`sense_emu` is the same package), the **camera** (`pi_camera.js`: the
+webcam, asked for only when a program starts the preview or takes a picture
+and let go after every run, else a drawn test scene; photos are real JPEGs in
+Python's files but not project files — a project holds text — so the panel
+keeps them with Downloads and a flipbook), and **turtle** (`turtle.js`,
+`static/py/pi/turtle.py`: Pyodide has no turtle, it needs Tk, so `import
+turtle` is in the mode rule and any program can draw). Each copies the real
+library's behaviour a program can see, errors included — a Sense HAT colour
+reads back in 5-6-5 bits, its LEDs stay lit after a run, a joystick callback
+fires for press *and* release, picamera rounds a rotation down to 90s. A
+callback's own error goes to the student: the loop guard once ate it, and
+`while True: pass` froze for 10 s saying nothing. Threads can't run in a
+browser page, so `Thread.start` says so in a sentence (Adventures in
+Minecraft's last program uses one). Tests: `test_pi_circuit.py`,
+`test_pi_python.py` (real Pyodide, with and without JSPI), `test_turtle.py`,
+`test_pi_editor.py`.
+
+**Checks on a Pi or block-world program run headless** (`turnsFor` in
+autograde.js): on a Pi of their own (`PyIDEPi.headless(circuit.pi)` — pi.js
+is a factory, so the student's panels are never touched) or a world built
+from the project's `world.mcpi`, with no turns, `time.sleep` counted on a
+clock of its own, and a `while True:` stopped after 30 of its seconds as
+Stop would stop it — so a lesson's loop is checked on what it printed and
+did. Before, every such check failed with "No module named gpiozero". The
+teacher's page and the live page load pi.js and world_model.js for this
+only. `test_autograde.py` runs them.
 
 **The week's calendar** (`static/calendar.js`, the same file in all three;
 `Course.calendar`; `/api/class/<id>/calendar`). The teacher pastes one block

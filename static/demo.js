@@ -273,7 +273,7 @@
     document.body.classList.toggle("is-pi", isPi);
     if (worldView) worldView.hidden = !isWorld;
     if (piView) piView.hidden = !isPi;
-    if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : isPi ? "Raspberry Pi" : "Game";
+    if ($("stage-label")) $("stage-label").textContent = isWorld ? "World" : isPi ? (window.PyIDEPi.usesOf(loaded.code).turtle && !/\b(?:gpiozero|sense_hat|sense_emu|picamera)\b/.test(loaded.code) ? "Turtle" : "Raspberry Pi") : "Game";
     if (fullBtn) fullBtn.hidden = !(isGame || isWorld || isPi) || !stage.requestFullscreen;
     if (!isGame && !isWorld && window.PyIDEWorldModel.looksLikeWorld(loaded.code)) {
       write("The block world (mcpi) comes with block-world assignments from a teacher.\n", "err");
