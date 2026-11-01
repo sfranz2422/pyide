@@ -327,6 +327,13 @@ var tick = function () { return new Promise(function (r) { setTimeout(r, 0); });
   cs[1].click(); await tick();
   out.cAll = { next: k1.next.disabled, kept: store["pyide-unlocked:cards"] || null };
   k1.pane.remove();
+  // Check my work's jump (reach) never skips a held slide: cards, or an HTML pick.
+  var rdeck = "locked: yes\n# One\n---\n```cards\na -> b\n```\n---\n# Three\n---\n```html predict\n<p>x</p>\n# choice: a\n# answer: a\n```\n---\n# Five";
+  var rv = await viewer(rdeck, { locked: true, key: "reach" });
+  out.reach = { pastCards: rv.v.reach(2), toCards: rv.v.reach(1) };
+  rv.v.go(2);
+  out.reach.pastPick = rv.v.reach(4);
+  rv.pane.remove();
   var k2 = await cardsViewer({ locked: false }, "cards2");
   out.cFree = k2.next.disabled;
   k2.pane.remove();
@@ -409,6 +416,9 @@ if "error" not in got:
     check("  one card turned (and turned back) isn't enough", got["cOne"] is True)
     check("  all turned: open, and kept", got["cAll"]["next"] is False and got["cAll"]["kept"] == "1", got["cAll"])
     check("  and cards hold nothing where the page doesn't lock", got["cFree"] is False)
+    rc = got["reach"]
+    check("Check my work's jump never skips past a cards slide or an HTML pick (but can reach the slide itself)",
+          rc == {"pastCards": False, "toCards": True, "pastPick": False}, rc)
     ph = got["pHeld"]
     check("a slide with a python predict block holds the next one, saying why",
           ph["next"] is True and ph["title"] == "Get this slide's prediction right first" and ph["run"] is True, ph)
