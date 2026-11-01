@@ -89,6 +89,7 @@
      each question instead of taking an answer it would lose. */
   window.PyIDENotes.setQuizContext({ assignment: L.assignment,
                                      signedIn: L.signedIn });
+  if (window.IDESnippets) window.IDESnippets.configure({ assignment: L.assignment, signedIn: L.signedIn });
 
   // ------------------------------------------------------------ the editors
 

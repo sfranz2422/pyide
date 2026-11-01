@@ -261,6 +261,10 @@
   window.PyIDENotes.setQuizContext({ assignment: window.PYIDE.assignmentSlug,
                                      signedIn: window.PYIDE.signedIn,
                                      viewOnly: window.PYIDE.viewOnly });
+  // Predictions in the notes: XP for a first-try one, and the teacher
+  // writing them is never held by one (snippets.js).
+  if (window.IDESnippets) window.IDESnippets.configure({ assignment: window.PYIDE.assignmentSlug,
+    signedIn: window.PYIDE.signedIn, viewOnly: window.PYIDE.viewOnly, teacher: !!window.PYIDE.authoring });
 
   /* A STUDENT SEES BOTH: the output and the notes, the notes under it, as
      on the live page. They took turns, and a student told to check after
