@@ -120,13 +120,14 @@ check("  after the deck's own script, so the first slide is drawn",
       shown.index("go()") < shown.index("deck_show.js") < shown.index("</body>"))
 check("  and a student can't open it that way either",
       amy.get("/teacher/hw1/slides?show=1").status_code in (302, 403, 404))
-add(accounts.Assignment(slug="lab1", app=P.APP_NAME, teacher_id=TEACHER, title="Lab",
-                        code="", files="{}", kind="lab"))
-teacher.post("/api/assignment/lab1/slides",
-             json={"name": "d.html", "data": base64.b64encode(DECK.encode()).decode()})
-check("a lab has none: labs are never live",
-      "deck_show.js" not in teacher.get("/teacher/lab1/slides?show=1").get_data(as_text=True)
-      and 'id="deck-show"' not in teacher.get("/teacher/lab1").get_data(as_text=True))
+if hasattr(P, "_is_lab"):          # only PyIDE has labs; this file is the same in all three
+    add(accounts.Assignment(slug="lab1", app=P.APP_NAME, teacher_id=TEACHER, title="Lab",
+                            code="", files="{}", kind="lab"))
+    teacher.post("/api/assignment/lab1/slides",
+                 json={"name": "d.html", "data": base64.b64encode(DECK.encode()).decode()})
+    check("a lab has none: labs are never live",
+          "deck_show.js" not in teacher.get("/teacher/lab1/slides?show=1").get_data(as_text=True)
+          and 'id="deck-show"' not in teacher.get("/teacher/lab1").get_data(as_text=True))
 
 print("who can put things on the class's screens")
 for label, c in (("another teacher", other), ("a student", amy), ("someone signed out", nobody)):
