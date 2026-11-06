@@ -264,7 +264,7 @@ check("it takes no clicks", re.search(
 check("it sits above the line, where completion's list never opens",
       "box.style.top = (c.top - h - 2)" in sighint)
 check("Escape puts it away", 'e.key === "Escape" && box' in sighint)
-for page, js, ed in (("editor", "app.js", "editor"), ("live page", "live.js", "mine")):
+for page, js, ed in (("editor", "runners/python.js", "editor"), ("live page", "live.js", "mine")):
     src = open(os.path.join(ROOT, "static", js)).read()
     check("the %s attaches it" % page,
           "window.PyIDESigHint.attach(%s, {" % ed in src
@@ -331,7 +331,7 @@ check("mcpi's hints are only for a program that imports mcpi",
       "var mcpiOn = !opts.flask && MCPI.test(cm.getValue());" in sighint
       and "mcpiOn ? mcpiSigs : null" in sighint)
 check("the editor tells it where mcpi's are",
-      'mcpiUrl: "/static/py/mcpi_sigs.json"' in open(os.path.join(ROOT, "static", "app.js")).read())
+      'mcpiUrl: "/static/py/mcpi_sigs.json"' in open(os.path.join(ROOT, "static", "runners", "python.js")).read())
 
 failed = results.count(False)
 print("\n%s (%d checks, %d failed)" % ("ALL PASSED" if not failed else "SOME FAILED",

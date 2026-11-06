@@ -52,8 +52,8 @@ template = (ROOT / "templates" / "index.html").read_text()
 ids = set(re.findall(r'id="([^"]+)"', template))
 check("the template was read", len(ids) > 25, "%d ids" % len(ids))
 
-SCRIPTS = ["app.js", "account.js", "notes.js", "sprites.js", "game.js",
-           "runtime.js", "complete.js"]
+SCRIPTS = ["app.js", "runners/python.js", "account.js", "notes.js", "sprites.js",
+           "game.js", "runtime.js", "complete.js"]
 present = [n for n in SCRIPTS if (ROOT / "static" / n).is_file()]
 check("  and the editor's scripts are there", len(present) >= 5, str(present))
 
@@ -114,7 +114,10 @@ check("the mode chip exists", chip is not None)
 if chip:
     check("  and is not a button", chip.group(1) != "button", chip.group(1))
 
-app_js = (ROOT / "static" / "app.js").read_text()
+# The editor's shell (app.js) and its Python runner (runners/python.js),
+# which owns the mode chip now.
+runner_js = (ROOT / "static" / "runners" / "python.js").read_text()
+app_js = (ROOT / "static" / "app.js").read_text() + "\n" + runner_js
 check("nothing can override the detected mode",
       "modeOverride" not in app_js)
 check("  and the chip has no click handler",
@@ -153,14 +156,16 @@ check("  with one shared update function",
 # The .html is playable and NOT editable: the program is inside it, but so is
 # the whole engine, base64'd. A student left with only the page has a game
 # they can play and can never change again.
-editor = (ROOT / "static" / "app.js").read_text()
+editor = runner_js        # Download is the Python runner's
 
 # Only the GAME branch. The console download builds its zip with the very
 # same `{ name: MAIN, data: source }` line, so a check against the whole file
 # stays true while the game path is gutted — which is exactly what happened
 # the first time this was written, and it passed.
 start = editor.find('if (currentMode(source) === "game") {')
-end = editor.find("\n      return;\n    }", start)
+# its closing brace is one level in from the `if`, wherever that sits
+_ind = editor[editor.rfind("\n", 0, start) + 1:start] if start >= 0 else ""
+end = editor.find("\n" + _ind + "  return;\n" + _ind + "}", start)
 game_branch = editor[start:end] if start >= 0 and end > start else ""
 check("the game branch of onDownload was found", len(game_branch) > 200,
       "%d chars" % len(game_branch))
@@ -243,7 +248,11 @@ check("  and the search bar is given a usable width",
 # frame and then nothing moved, which read as "the keys do nothing". And its
 # ensureReady was not given the program, so the sprites it named never came.
 print("\nEvery page that runs a game")
-for name in ("app.js", "live.js", "demo.js"):
+# The editor's game runs in its Python runner. A page without a game is
+# skipped, so the runner is held to having one: when this read app.js and
+# the game moved out of it, the editor would have left this loop silently.
+check("the editor's runner runs games", "_pyide_run_game(" in runner_js)
+for name in ("runners/python.js", "live.js", "demo.js"):
     src = (ROOT / "static" / name).read_text()
     if "_pyide_run_game(" not in src:
         continue
@@ -257,7 +266,7 @@ for name in ("app.js", "live.js", "demo.js"):
 print("\nA game in a new tab")
 index_html = (ROOT / "templates" / "index.html").read_text()
 demo_html = (ROOT / "templates" / "demo.html").read_text()
-app_js = (ROOT / "static" / "app.js").read_text()
+app_js = runner_js        # the New tab button is the Python runner's
 demo_js = (ROOT / "static" / "demo.js").read_text()
 app_py = (ROOT / "app.py").read_text()
 check("the editor has the New tab button", 'id="run-tab"' in index_html)

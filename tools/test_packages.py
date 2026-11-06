@@ -94,7 +94,7 @@ check("data files and notes are not scanned as Python",
 # Each Run path must go through loadImports, with the project's files, and
 # none may call loadPackagesFromImports itself — a direct call is how the
 # main.py-only scan would come back.
-for page, call in (("app.js", "loadImports(pyodide, source, dataFiles())"),
+for page, call in (("runners/python.js", "loadImports(pyodide, source, dataFiles())"),
                    ("live.js", "loadImports(pyodide, source, dataFiles())"),
                    ("demo.js", "loadImports(pyodide, loaded.code, loaded.files)")):
     js = read(page)
@@ -114,8 +114,8 @@ check("live.js scans imports before running console code",
 
 # requests is installed by the editor, not by Pyodide, so it has its own
 # detector — which must look past main.py as well.
-app = read("app.js")
-m = re.search(r"function wantsRequests\(source\) \{(.*?)\n  \}", app, re.S)
+app = read("runners/python.js")     # the editor's Python runner
+m = re.search(r"function wantsRequests\(source\) \{(.*?)\n    \}", app, re.S)
 check("the editor looks for `import requests` in every .py file",
       m is not None and "dataFiles()" in m.group(1)
       and ".py" in m.group(1))

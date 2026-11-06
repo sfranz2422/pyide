@@ -32,19 +32,26 @@ def check(label, ok, detail=""):
 
 
 def body(source, name):
-    m = re.search(r"(?:async )?function %s\(.*?\n  \}\n" % re.escape(name), source, re.S)
-    return m.group(0) if m else ""
+    """The text of `function name(` to its own closing brace, at whatever
+    depth it is written: the Python runner's functions sit inside attach()."""
+    m = re.search(r"\n( *)(?:async )?function %s\(" % re.escape(name), source)
+    if not m:
+        return ""
+    end = source.find("\n" + m.group(1) + "}\n", m.end())
+    return source[m.start() + 1:end + len(m.group(1)) + 3] if end > -1 else ""
 
 
-app = (ROOT / "static" / "app.js").read_text()
+# The editor: its shell (app.js) and the Python runner it attaches
+# (runners/python.js), where Run, Stop and the stage now live.
+runner_js = (ROOT / "static" / "runners" / "python.js").read_text()
+app = (ROOT / "static" / "app.js").read_text() + "\n" + runner_js
 demo = (ROOT / "static" / "demo.js").read_text()
 pi_js = (ROOT / "static" / "pi.js").read_text()
 runtime = (ROOT / "static" / "runtime.js").read_text()
 css = (ROOT / "static" / "style.css").read_text()
 
 print("which programs are Pi programs")
-mode = re.search(r"function currentMode\(source\)\s*\{(.*?)\n  \}", app, re.S)
-mode = mode.group(1) if mode else ""
+mode = body(app, "currentMode")
 check("the mode rule knows the Pi", "looksLikePi(source)" in mode, mode)
 check("…after kaypy and the block world", mode.find("looksLikeGame") < mode.find("looksLikeWorld") < mode.find("looksLikePi"), mode)
 look = re.search(r"function looksLikePi\(source\) \{\s*return (/.*/m)\.test", pi_js)
@@ -82,8 +89,10 @@ check("circuit.pi is hidden like world.mcpi", bool(hidden_fn) and "CIRCUIT_FILE"
 check("…no tab", "!hidden(n)" in body(app, "fileNames"))
 check("…never written into Python's files", "delete files[CIRCUIT_FILE]" in body(app, "pushFilesToPython"))
 check("…nor read back as a new file", "hidden(name)" in body(app, "pullFilesFromPython"))
-check("…and a student can't make a file by that name", "CIRCUIT_FILE" in app[app.find("function addFile") if "function addFile" in app else 0:]
-      and "where the Pi's breadboard is kept" in app)
+check("…and a student can't make a file by that name",
+      "name.toLowerCase() === CIRCUIT_FILE" in body(app, "refuseName")
+      and "where the Pi's breadboard is kept" in body(app, "refuseName")
+      and "var refused = R.refuseName(name);" in app)
 check("wiring changes are saved into circuit.pi", "PyIDEPi.onEdit(" in app and "setCircuitFile(window.PyIDEPi.save())" in app)
 check("…but never from a read-only snapshot", "if (!window.PYIDE.readonly) setCircuitFile" in app)
 check("the board is read-only on a read-only snapshot", "PyIDEPi.setReadonly(!!window.PYIDE.readonly)" in app)

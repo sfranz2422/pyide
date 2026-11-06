@@ -474,6 +474,8 @@
 <script src="{{ url_for('static', filename='checks_in_notes.js') }}"></script>
 <script src="{{ url_for('static', filename='autograde.js') }}"></script>
 <script src="{{ url_for('static', filename='xp.js') }}"></script>
+{# the runner for this project's IDE, before the shell that attaches it #}
+<script src="{{ url_for('static', filename='runners/python.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% include "_idle.html" %}
 </body>

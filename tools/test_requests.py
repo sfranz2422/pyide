@@ -39,7 +39,8 @@ ROOT = os.path.dirname(HERE)
 WHEELS = os.path.join(ROOT, "static", "py", "wheels")
 MANIFEST = os.path.join(ROOT, "static", "py", "wheels.json")
 RUNTIME = os.path.join(ROOT, "static", "runtime.js")
-APPJS = os.path.join(ROOT, "static", "app.js")
+# The editor's installer is its Python runner's (app.js is the shell).
+APPJS = os.path.join(ROOT, "static", "runners", "python.js")
 
 results = []
 
@@ -129,7 +130,7 @@ check("  reusing one install rather than repeating it",
 # The regex is tested as it ships, by running it in node, rather than by
 # retyping it here — a copy would be a different regex that happens to agree.
 m = re.search(r"var REQUESTS_RE =\s*(/.*?/[a-z]*);", app, re.S)
-check("  the detector was found in app.js", m is not None)
+check("  the detector was found in the editor's runner", m is not None)
 if m:
     probe = """
 const re = %s;

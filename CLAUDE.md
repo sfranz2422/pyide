@@ -103,6 +103,16 @@ switch**: a row whose IDE isn't in it is not found by any editor route, which
 is right until the page has that IDE's runner. A request that leaves `ide`
 out means Python. The tests grammar is picked by IDE too (`_grader`;
 `autograde_web.py` is WebIDE's, unchanged). `test_ide_web.py`.
+On the page, `app.js` is the shell (tabs, notes, theme, saving, sharing,
+live) and **what Run means is the runner's**: `static/runners/python.js`
+(`window.IDERunners.pyide`) holds the console, game, world, Pi, runtime,
+Stop, sprites, completion, the syntax card and Download — moved there
+verbatim, reaching the shell through `ctx`. Its definition answers at once
+(entry file, a tab's mode, hidden files, which names are refused); `attach`
+gives the rest. **A test that reads the editor's code as text must read the
+runner too**: a check that skips a file without the thing it looks for
+(test_wiring's "every page that runs a game") would otherwise drop the
+editor without a sound.
 
 ## Features worth knowing about
 

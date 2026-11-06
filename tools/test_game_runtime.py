@@ -116,9 +116,9 @@ check("every name the guide teaches is in the bundle", not absent,
 runtime_js = (STATIC / "runtime.js").read_text()
 check("runtime.js still defines both halves",
       "_pyide_run_game" in runtime_js and "_pyide_drive_game" in runtime_js)
-check("and app.js calls them in that order",
+check("and the editor's Python runner calls them in that order",
       re.search(r"_pyide_run_game[\s\S]{0,400}_pyide_drive_game",
-                (STATIC / "app.js").read_text()) is not None)
+                (STATIC / "runners" / "python.js").read_text()) is not None)
 game_js_text = (STATIC / "game.js").read_text()
 check("game.js stops by clearing the engine's running flag, not by tearing down",
       "_running = False" in game_js_text)

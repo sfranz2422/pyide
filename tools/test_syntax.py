@@ -166,10 +166,12 @@ console.log(JSON.stringify(out));
 # ------------------------------------------------------------ the wiring
 print("\nThe wiring")
 syntax_js = open(os.path.join(ROOT, "static", "syntax.js")).read()
-for page, js in (("editor", "app.js"), ("live page", "live.js")):
+for page, js in (("editor", "runners/python.js"), ("live page", "live.js")):
     src = open(os.path.join(ROOT, "static", js)).read()
     run = src[src.index("async function run()"):]
-    run = run[:run.index("\n  }\n")]
+    # to the function's own closing brace, at whatever depth it is written
+    _ind = re.search(r"\n( *)async function run\(\)", src).group(1)
+    run = run[:run.index("\n" + _ind + "}\n")]
     at = run.find("window.PyIDESyntax.check(pyodide, source, dataFiles())")
     after = [run.find(s) for s in ("runConsole(source)", "runGame(source)",
                                    "pushFilesToPython()", "runPythonAsync")]
@@ -192,7 +194,7 @@ check("a broken check never stops a Run",
       re.search(r"catch \(e\) \{\s*return null;", syntax_js) is not None)
 # Over the output pane, where Run's result would have gone — not the editor,
 # and not under Python's raw message: one message to read.
-for js, host in {'app.js': 'host: $("output-view"),', 'live.js': 'host: $("output-view"),'}.items():
+for js, host in {'runners/python.js': 'host: $("output-view"),', 'live.js': 'host: $("output-view"),'}.items():
     src = open(os.path.join(ROOT, "static", js)).read()
     at = src.find("window.PyIDESyntax.attach({")
     check("the card covers the output pane (%s)" % js,

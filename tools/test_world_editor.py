@@ -36,12 +36,19 @@ def check(label, ok, detail=""):
 
 
 def body(source, name):
-    """The text of `function name(` … up to the next top-level-ish function."""
-    m = re.search(r"(?:async )?function %s\(.*?\n  \}\n" % re.escape(name), source, re.S)
-    return m.group(0) if m else ""
+    """The text of `function name(` to its own closing brace, at whatever
+    depth it is written: the Python runner's functions sit inside attach()."""
+    m = re.search(r"\n( *)(?:async )?function %s\(" % re.escape(name), source)
+    if not m:
+        return ""
+    end = source.find("\n" + m.group(1) + "}\n", m.end())
+    return source[m.start() + 1:end + len(m.group(1)) + 3] if end > -1 else ""
 
 
-app = (ROOT / "static" / "app.js").read_text()
+# The editor: its shell (app.js) and the Python runner it attaches
+# (runners/python.js), where Run, Stop and the stage now live.
+runner_js = (ROOT / "static" / "runners" / "python.js").read_text()
+app = (ROOT / "static" / "app.js").read_text() + "\n" + runner_js
 template = (ROOT / "templates" / "index.html").read_text()
 world_js = (ROOT / "static" / "world.js").read_text()
 model_js = (ROOT / "static" / "world_model.js").read_text()
@@ -58,8 +65,12 @@ check("…and only in a project with a world file (a teacher's block-world assig
 run_body = body(app, "run")
 check("mcpi anywhere else says the block world comes with a teacher's assignment",
       'looksLikeWorld(source)' in run_body and "comes with block-world assignments" in run_body)
+# The rule is the runner's (refuseName); the shell's New file asks it
+# before a file is made.
 newfile = app[app.find('var newFileBtn = $("new-file");'):app.find("addFile(name, \"\");")]
-check("a student can't make the world file by hand", "name.toLowerCase() === WORLD_FILE" in newfile)
+check("a student can't make the world file by hand",
+      "name.toLowerCase() === WORLD_FILE" in body(app, "refuseName")
+      and "R.refuseName(name)" in newfile)
 check("…and says so on the chip", '"World"' in body(app, "paintMode"))
 
 print("Run and Stop")
@@ -75,9 +86,11 @@ world_stop = stop[stop.find('runMode === "world"'):stop.find('runMode === "game"
 check("Stop asks a world program to stop", "requestStop()" in world_stop, world_stop[:200])
 check("…and puts the toolbar back if it never answers", "setTimeout" in world_stop and "runToken += 1" in world_stop)
 check("the Stop button shows for a world program", 'runMode === "world"' in body(app, "paintStop"))
-esc = re.search(r'if \(e\.key === "Escape" && running[^\n]*\n', app)
+# The shell hands Escape to the runner, which decides what it means.
+esc = re.search(r'escape: function \(\) \{\s*if \(running[^\n]*\n', runner_js)
 check("Escape while the world holds the mouse doesn't stop the program",
-      esc is not None and "holdsEscape()" in esc.group(0), esc and esc.group(0))
+      'if (e.key === "Escape") runner.escape();' in app
+      and esc is not None and "holdsEscape()" in esc.group(0), esc and esc.group(0))
 
 print("the world file")
 # hidden() is the world file and the Pi's circuit.pi: the files that are no tab.
@@ -86,12 +99,20 @@ hides_world = bool(hidden_fn) and "name === WORLD_FILE" in hidden_fn.group(1)
 check("world.mcpi is no tab", "!hidden(n)" in body(app, "fileNames") and hides_world)
 check("…never written into Python's files", "delete files[WORLD_FILE]" in body(app, "pushFilesToPython"))
 check("…nor read back as a new file", "hidden(name)" in body(app, "pullFilesFromPython") and hides_world)
-rescue = app[app.find("readAll: function"):app.find("writeAll: function")]
+# The rescue asks the runner what of the project to keep (forRescue).
+rescue = runner_js[runner_js.find("forRescue: function"):]
+rescue = rescue[:rescue.find("return all;")]
+rescue_read = app[app.find("readAll: function"):app.find("writeAll: function")]
+check("the rescue asks the runner what to keep", "runner.forRescue(all)" in rescue_read)
 check("the rescue leaves a big world out, so the code is always kept — keeping its name, which makes it a world project",
       'all[WORLD_FILE] = ""' in rescue and "delete all[WORLD_FILE]" not in rescue)
 tab = body(app, "runInNewTab")
 check("the new tab gets the program even when the world won't fit", "delete files[WORLD_FILE]" in tab)
-check("saving says so when the world isn't the open document", "account.noteEdit()" in body(app, "setWorldFile"))
+_note = app[app.find("noteEdit: function () {"):]
+_note = _note[:_note.find("}\n")]
+check("saving says so when the world isn't the open document",
+      "ctx.noteEdit()" in body(app, "setWorldFile")
+      and "account.noteEdit()" in _note and "rescue.noteEdit()" in _note)
 
 print("the page")
 scripts = re.findall(r"filename='([\w.]+\.js)'", template)

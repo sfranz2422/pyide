@@ -1327,6 +1327,9 @@ check("  and the game is fitted again once it has set its own size",
 # — which is sized from above, because the game may or may not be shown.
 _editor_page = open(os.path.join(PYIDE, "templates", "index.html")).read()
 _app_js = open(os.path.join(PYIDE, "static", "app.js")).read()
+# The game's stage is the Python runner's (runners/python.js), which the
+# shell asks to fit when a pane is dragged.
+_runner_js = open(os.path.join(PYIDE, "static", "runners", "python.js")).read()
 _ed_splits = re.findall(r'<div class="resizer resizer-([xy])" data-split="([\w-]+)"( data-size="next")?></div>', _editor_page)
 check("the editor has handles too",
       sorted(n for _, n, _ in _ed_splits) == ["editor-class", "editor-left", "editor-right", "editor-stage"]
@@ -1335,8 +1338,9 @@ check("the editor has handles too",
       _ed_splits)
 check("  which tell its editor and its game when a size changes",
       re.search(r"PyIDESplit\.attachAll\(document, \{[^}]*onResize: function \(\) "
-                r"\{ editor\.refresh\(\); fitCanvas\(\); \}", _app_js) is not None
-      and "if (!stage.classList.contains(\"is-sized\"))" in _app_js,
+                r"\{ editor\.refresh\(\); runner\.onResize\(\); \}", _app_js) is not None
+      and "onResize: fitCanvas" in _runner_js
+      and "if (!stage.classList.contains(\"is-sized\"))" in _runner_js,
       "a dragged game pane would keep the canvas at its old size")
 
 # The handles were `.split` once, which is the editor's <main>: every editor
@@ -1488,18 +1492,27 @@ check("  and the stylesheet has a rule for it",
 # `_pyide_drive_game()` never settles, so Run stays disabled on "Running…"
 # with Stop showing until the page is reloaded. Leaving the reset to the
 # promise's finally is leaving it to something that may never run.
+# The editor's is the Python runner's (runners/python.js), a level deeper.
+_runner_code = code_only(open(os.path.join(PYIDE, "static", "runners", "python.js")).read())
 for name, src in (("live.js", live_code),
-                  ("app.js", code_only(app_js))):
+                  ("runners/python.js", _runner_code)):
     stop_fn = src[src.index("function stopRun"):]
-    stop_fn = stop_fn[:stop_fn.index("\n  }")]
+    _ind = re.search(r"\n( *)function stopRun", src).group(1)
+    stop_fn = stop_fn[:stop_fn.index("\n" + _ind + "}")]
+    # What Stop does for a GAME: from the line that picks the game out to
+    # that branch's return. The whole function was looked at once, and a
+    # world or Pi branch's setBusy kept this passing with the game's gutted.
+    game = stop_fn[stop_fn.find('"game"'):]
+    game = game[game.find("\n"):]
+    game = game[:game.find("return;")] if "return;" in game else game
     check("%s: Stop puts the toolbar back without waiting for the promise"
           % name,
-          "setBusy(false" in stop_fn,
+          "setBusy(false" in game,
           "the game stops but the button says Running… for ever")
 
 # And the promise, if it ever does settle, must not reset a LATER run.
 for name, src in (("live.js", live_code),
-                  ("app.js", code_only(app_js))):
+                  ("runners/python.js", _runner_code)):
     check("  %s: and a stale run cannot reset a newer one" % name,
           "runToken" in src and "token === runToken" in src,
           "an old finally would stop the game that is running now")
@@ -1800,8 +1813,11 @@ check("  the arrows' [hidden] really hides them",
       is not None,
       ".btn sets display, so [hidden] alone shows them anyway")
 check("  and no output is sent before the first Run",
-      re.search(r"function liveOutput\(\)\s*\{\s*if \(!hasRun\) return \"\";",
-                _push) is not None,
+      re.search(r"function liveOutput\(\)\s*\{\s*if \(!runner\.hasRun\(\)\) return \"\";",
+                _push) is not None
+      # ...which the Python runner sets on Run, and on nothing before it
+      and "hasRun: function () { return hasRun; }" in _runner_code
+      and re.findall(r"hasRun = (\w+)", _runner_code) == ["false", "true"],
       "every class would be shown 'Python is ready' as if it were a program")
 
 # The splitter, run for real on the notes this feature was asked for.

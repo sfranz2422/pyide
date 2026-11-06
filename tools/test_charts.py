@@ -220,7 +220,8 @@ css = open(os.path.join(ROOT, "static", "style.css")).read()
 check("the pane gives a chart its own line, inside the pane",
       re.search(r"\.output img\.chart\s*\{[^}]*display:\s*block[^}]*max-width:\s*100%",
                 css) is not None)
-for page in ("app.js", "live.js", "demo.js"):
+# The editor's console is the Python runner's (runners/python.js).
+for page in ("runners/python.js", "live.js", "demo.js"):
     src = open(os.path.join(ROOT, "static", page)).read()
     check("%s's pane can take a chart (attachConsole)" % page,
           "PyIDERuntime.attachConsole({" in src and "outputEl: outputEl" in src)
