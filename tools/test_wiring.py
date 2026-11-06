@@ -280,7 +280,8 @@ check("  and hands over the project under the key /play reads",
       _key is not None and 'localStorage.getItem("%s")' % _key.group(1) in demo_js,
       _key.group(1) if _key else "no PLAY_KEY")
 check("/play is the demo page's player, with nothing on the server",
-      re.search(r'@app\.get\("/play"\)\s*def play\(\):[\s\S]{0,600}?render_template\("demo\.html",[^)]*play=True\)',
+      # (a web project's New tab is answered first, in a few lines above it)
+      re.search(r'@app\.get\("/play"\)\s*def play\(\):[\s\S]{0,1000}?render_template\("demo\.html",[^)]*play=True\)',
                 app_py) is not None)
 check("  and the page knows it is playing",
       "{% if play %}" in demo_html and "play: true" in demo_html)

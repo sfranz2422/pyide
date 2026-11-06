@@ -113,6 +113,17 @@ gives the rest. **A test that reads the editor's code as text must read the
 runner too**: a check that skips a file without the thing it looks for
 (test_wiring's "every page that runs a game") would otherwise drop the
 editor without a sound.
+**A web project opens here now** (`EDITOR_IDES` has `webide`): its page is
+`index.html` with `{% if web %}` — WebIDE's preview and console in the right
+pane, its scripts (`static/web/`: runner, autograde, complete, demo, copied
+unchanged, globals kept) and none of Python's — and `runners/web.js` is
+WebIDE's app.js run code. `/new?ide=webide` starts from `WEB_STARTER`;
+`/play?ide=webide` and a web `/d/` are `demo_web.html`. Web styles are all
+under `.ide-webide` (`#preview` is also the avatar page's). Not yet for a web
+project: Go live (the live page has no web runner), and the teacher's pages
+(dashboard, Check all, class pages still filter `app=APP_NAME`).
+`test_web_browser.py` drives it in Chrome; `test_autograde_web.py` is
+WebIDE's test of its tests.
 
 ## Features worth knowing about
 

@@ -1298,9 +1298,12 @@ window.PyIDENotes = (function () {
   function enhanceQuizzes(root) {
     // A ```tests block, as the list of what the code will be checked on —
     // where autograde.js is loaded (the editor, the live page); elsewhere
-    // it stays the code block it was, which still says the same.
-    if (window.PyIDETests) {
-      try { window.PyIDETests.renderBlocks(root); } catch (e) { /* left as code */ }
+    // it stays the code block it was, which still says the same. A web
+    // project's page loads WebIDE's (web/autograde.js) instead: without it
+    // here, a web lesson's tests stayed a bare code block with no ✔ Check.
+    var tests = window.PyIDETests || window.WebIDETests;
+    if (tests) {
+      try { tests.renderBlocks(root); } catch (e) { /* left as code */ }
     }
     // ```lab blocks, where lab_notes.js is loaded (an A+ lab's page): the
     // ticket's tasks for that step, ticked as the machine passes them.

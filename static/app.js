@@ -44,6 +44,11 @@
       "Cmd-/": function (cm) { cm.toggleComment({ indent: true }); }
     }
   });
+  // Whatever else the runner asks of the editor: a web project closes its
+  // tags as they are typed (runners/web.js).
+  Object.keys(R.editorOptions).forEach(function (k) {
+    if (["mode", "indentUnit", "tabSize"].indexOf(k) < 0) editor.setOption(k, R.editorOptions[k]);
+  });
   editor.setSize("100%", "100%");
 
   /* CodeMirror caches its own width and only rechecks on a window resize.
@@ -287,7 +292,11 @@
 
   function makeDoc(text) { return CodeMirror.Doc(text, null); }
 
+  // The entry is already the editor's own document (the template puts its
+  // text in the textarea). A web project's files include it; a second
+  // document under the same name would take its place unseen by the editor.
   Object.keys(window.PYIDE.files || {}).sort().forEach(function (name) {
+    if (name === MAIN) return;
     docs[name] = makeDoc(window.PYIDE.files[name]);
   });
 
@@ -490,7 +499,9 @@
       var warning = runner.warnName(name);
       if (warning) write("\n" + warning + "\n", "dim");
 
-      addFile(name, "");
+      // A new web page starts as a page, linked to the stylesheet (the
+      // runner's starterFor); anything else starts empty.
+      addFile(name, R.starterFor ? R.starterFor(name) : "");
       switchTo(name);
     });
   }
@@ -587,6 +598,7 @@
     mainSource: mainSource,
     dataFiles: dataFiles,
     active: function () { return active; },
+    lastCodeFile: function () { return lastCodeFile; },
     // A change the editor fires no event for (a world built, a Pi wired):
     // saving and the rescue are told here.
     noteEdit: function () {
@@ -647,7 +659,9 @@
      module, so a rescued project is in the editor before autosave has any
      opinion about what the project is. */
   var rescue = window.IDERescue.attach({
-    app: "pyide",
+    // Kept per IDE, so work rescued from a web project can never be put
+    // back into a Python one.
+    app: window.PYIDE.ide || "pyide",
     cfg: {
       signedIn: window.PYIDE.signedIn,
       assignmentSlug: window.PYIDE.assignmentSlug,

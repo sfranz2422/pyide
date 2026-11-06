@@ -107,12 +107,12 @@ IDES = {
     },
 }
 
-# The IDEs whose projects this editor page can open, run and save today.
-# Step 1c adds "webide" once the page has its runner. Until then a WebIDE
-# row reached here by its address — a draft's /p/<slug> took any app's draft
-# before this, and showed an HTML project as a Python program — is not found,
-# the same answer WebIDE gives for a Python one.
-EDITOR_IDES = ("pyide",)
+# The IDEs whose projects this editor page can open, run and save: those it
+# has a runner for (static/runners/). A row of any other IDE reached here by
+# its address — a FlaskIDE draft's /p/<slug> — is not found, rather than
+# opened in a runner that isn't its own; before this list existed, /p/ took
+# any app's draft and showed an HTML project as a Python program.
+EDITOR_IDES = ("pyide", "webide")
 
 
 def _ide_of(row):
@@ -145,6 +145,58 @@ def _ide_asked(data):
     test written before IDEs existed keeps working unchanged."""
     ide = (data.get("ide") if isinstance(data, dict) else None) or APP_NAME
     return ide if ide in EDITOR_IDES else None
+
+
+# A web project starts as these three, already wired together, so nobody
+# spends week one wondering why their stylesheet isn't loading. WebIDE's
+# STARTER, moved here with it.
+WEB_STARTER = {
+    "index.html": """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>My Page</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>Hello!</h1>
+  <p>Edit this page, then press Run.</p>
+  <button id="cheer">Click me</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
+""",
+    "style.css": """body {
+  font-family: system-ui, sans-serif;
+  margin: 40px;
+  background: #f4f6fa;
+  color: #1b2130;
+}
+
+h1 {
+  color: #1d4ed8;
+}
+
+button {
+  font-size: 16px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: white;
+  cursor: pointer;
+}
+""",
+    "script.js": """const button = document.getElementById("cheer");
+
+button.addEventListener("click", function () {
+  console.log("The button was clicked!");
+  button.textContent = "You clicked me!";
+});
+""",
+}
 
 
 DEFAULT_CODE = '''# Welcome to Python!
@@ -867,11 +919,12 @@ def index():
     ide = _ide_asked(request.args)
     if ide is None:
         abort(404)
+    web = not IDES[ide]["entry_in_code"]
     return render_template(
         "index.html",
         ide=ide,
-        code=DEFAULT_CODE,
-        files={},
+        code="" if web else DEFAULT_CODE,
+        files=dict(WEB_STARTER) if web else {},
         title="Untitled",
         author="",
         readonly=False,
@@ -979,8 +1032,10 @@ def view_demo(slug):
     try:
         snip = load_demo(db, slug)
         # Deliberately no code and no file contents in this render: the page
-        # asks for them separately, and only once Run is pressed.
-        return render_template("demo.html", title=snip.title, slug=snip.slug)
+        # asks for them separately, and only once Run is pressed. A web
+        # project's is WebIDE's page, which shows the finished page.
+        page = "demo.html" if IDES[_ide_of(snip)]["entry_in_code"] else "demo_web.html"
+        return render_template(page, title=snip.title, slug=snip.slug)
     finally:
         db.close()
 
@@ -994,6 +1049,10 @@ def play():
     reads it from there (see runInNewTab in app.js). So there is no slug, no
     row, and nothing here for anyone else to open.
     """
+    # A web project's New tab (runners/web.js opens /play?ide=webide) is
+    # WebIDE's player, reading its own key from storage.
+    if request.args.get("ide") == "webide":
+        return render_template("demo_web.html", title="Page", slug=None, play=True)
     return render_template("demo.html", title="Game", slug=None, play=True)
 
 
@@ -1900,8 +1959,13 @@ def _total(score, earned):
 
 
 def _quiz_assignment(db, slug):
-    return db.query(accounts.Assignment).filter_by(
-        slug=clean(slug, 16), app=APP_NAME).first()
+    """The assignment a student's answer, check or prediction is for: one of
+    any IDE this editor opens. Python's alone, a web assignment's Check my
+    work was refused here without a word — the card showed its ticks and
+    the teacher never saw the result."""
+    return db.query(accounts.Assignment).filter(
+        accounts.Assignment.slug == clean(slug, 16),
+        accounts.Assignment.app.in_(EDITOR_IDES)).first()
 
 
 @app.post("/api/quiz/answer")

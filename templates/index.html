@@ -36,7 +36,12 @@
 </script>
 </head>
 
-<body{% if authoring %} class="is-authoring"{% endif %}>
+{#  Which IDE this project belongs to (IDES in app.py): its toolbar, its
+    right-hand pane and its scripts. A Python project's page is exactly what
+    it was before WebIDE moved in; `web` swaps in WebIDE's. #}
+{% set ide = ide | default('pyide') %}
+{% set web = ide == 'webide' %}
+<body class="ide-{{ ide }}{% if authoring %} is-authoring{% endif %}">
 
 <header class="bar">
   {#  To the front door, which sends a student to their classes and a
@@ -63,6 +68,21 @@
         reading notes they did not write (app.js, renderNotesButtons). Empty
         while authoring, when the notes are a tab instead. #}
     <span id="notes-buttons" class="notes-buttons"></span>
+    {% if web %}
+    <button id="run" class="btn btn-run">
+      <span class="btn-icon">▶</span><span id="run-label">Run</span>
+    </button>
+    <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    {#  The page in a tab of its own: bigger on a projector, and a real-
+        looking site for students to click around. #}
+    <button id="run-tab" class="btn" type="button"
+            title="Open your page in a new tab">↗ New tab</button>
+    {% if not readonly %}
+      <label class="toggle">
+        <input type="checkbox" id="auto-run"> Auto
+      </label>
+    {% endif %}
+    {% else %}
     <span id="mode" class="mode mode-console" aria-live="polite">Console</span>
     <button id="run" class="btn btn-run" disabled>
       <span class="btn-icon">▶</span><span id="run-label">Loading…</span>
@@ -82,6 +102,7 @@
     {#  The block world's own help, for a program that imports mcpi. #}
     <a id="world-docs" class="btn" href="{{ url_for('help_world') }}" target="_blank"
        rel="noopener" title="The block world: every command, every block, and how to move" hidden>Docs</a>
+    {% endif %}
     {#  Who sees what. A student gets ONE thing to press besides Run:
 
           signed in, on an assignment       Turn in   (it autosaves anyway)
@@ -126,7 +147,9 @@
       {#  Teach live. Teachers only, and it is a toggle rather than a link
           because the point is that you stay in this editor and carry on
           working — the class watches this file, whatever you do to it. #}
-      {% if is_teacher %}
+      {#  Not for a web project yet: the class's live page can't show one
+          until it has the web runner too (step 3 of moving WebIDE in). #}
+      {% if is_teacher and not web %}
         <button id="go-live" class="btn"
                 title="Put this file on your class's screens while you teach.">Go live</button>
         {#  The join code, and a button: clicking copies the whole address
@@ -234,10 +257,12 @@
     <div class="pane-head pane-head-tabs">
       <div id="file-tabs" class="tabs" role="tablist"></div>
       {% if not readonly %}
-        <button id="new-file" class="linkbtn" title="Add a data file your program can read">+ File</button>
+        <button id="new-file" class="linkbtn" title="{{ 'Add a file to this project' if web else 'Add a data file your program can read' }}">+ File</button>
       {% endif %}
     </div>
-    <div class="editor-wrap"><textarea id="editor">{{ code }}</textarea></div>
+    {#  The entry file's text: main.py, which a Python project keeps apart
+        as `code`, or a web project's index.html, which is one of its files. #}
+    <div class="editor-wrap"><textarea id="editor">{{ (files or {}).get('index.html', '') if web else code }}</textarea></div>
   </section>
 
   {#  Handles (split.js), as on the class's live page: each sizes the pane
@@ -246,6 +271,38 @@
   <div class="resizer resizer-x" data-split="editor-left"></div>
 
   <section class="pane pane-right">
+    {% if web %}
+    {#  WebIDE's preview: the page, and its console under it. The same id as
+        the Python output's, because it is the same pane to the shell —
+        showOutput is "show what Run made". #}
+    <div id="output-view" class="subpane">
+      <div class="pane-head">
+        <span>Preview</span>
+        <span class="hint">Ctrl+Enter to run</span>
+      </div>
+      <!-- Only appears once a link or a form has moved the preview off the
+           home page, so a one-page project never sees it. -->
+      <div id="preview-trail" class="trail" hidden>
+        <button id="preview-back" class="linkbtn">◀ Back</button>
+        <span class="trail-page">showing <code id="preview-page">index.html</code></span>
+      </div>
+      <div class="preview-frame">
+        <!-- allow-scripts WITHOUT allow-same-origin: student JavaScript runs
+             normally but on a null origin, so it cannot touch this page.
+             allow-forms only lets the submit event fire — every submission is
+             caught by the bridge, so nothing is ever actually posted. -->
+        <iframe id="preview" title="Page preview"
+                sandbox="allow-scripts allow-forms"></iframe>
+      </div>
+      <div class="resizer resizer-y" data-split="editor-preview"></div>
+      <div class="pane-head console-head">
+        <span>Console</span>
+        <button id="clear" class="linkbtn">Clear</button>
+      </div>
+      <pre id="output" class="output"><span class="dim">Press Run to see your page.</span>
+</pre>
+    </div>
+    {% else %}
     <div id="stage" class="stage" hidden>
       <div class="pane-head"><span id="stage-label">Game</span>
         <button id="new-world" class="linkbtn" type="button" hidden
@@ -269,6 +326,7 @@
       <pre id="output" class="output"><span class="dim">Python is loading. This takes a few seconds the first time.</span>
 </pre>
     </div>
+    {% endif %}
 
     {#  While live: the notes exactly as the class's Notes pane has them —
         the one slide, when they are cut into slides. Without it the only
@@ -332,6 +390,7 @@
       <div id="notes-body" class="notes-body prose"></div>
     </section>
 
+  {% if not web %}
   <aside id="sprites" class="pane pane-sprites" hidden>
     <div class="pane-head">
       <span>Sprites</span>
@@ -361,6 +420,7 @@
     </div>
     <p class="sprite-foot">Click a sprite to load it. Adding it to the screen is up to you.</p>
   </aside>
+  {% endif %}
 </main>
 
 {#  A teacher's Share asks first, because it can make two kinds of link.
@@ -373,11 +433,18 @@
 <div id="share-ask" class="modal" hidden>
   <div class="modal-card">
     <h2>Share this project</h2>
+    {% if web %}
+    <p class="modal-sub">Makes a link to a snapshot of every file as it is right now.</p>
+    <label class="hidecode share-hide" title="Share a link that shows the finished page with no source on it and no way to copy it.">
+      <input type="checkbox" id="hide-code"> Hide code — the link shows the finished page with no source on it
+    </label>
+    {% else %}
     <p class="modal-sub">Makes a link to a snapshot of your code as it is right now.</p>
     <label class="hidecode share-hide"
            title="Share a link that runs the program and shows the output, with no code on the page and no way to copy it.">
       <input type="checkbox" id="hide-code"> Hide code — the link runs the program and shows only the output
     </label>
+    {% endif %}
     <div class="actions modal-actions">
       <button id="share-go" class="btn btn-primary">Create link</button>
       <button id="share-cancel" class="btn">Cancel</button>
@@ -394,7 +461,7 @@
       <input id="share-url" type="text" readonly>
       <button id="copy" class="btn btn-primary">Copy</button>
     </div>
-    <p class="modal-note" id="modal-note">The link captures your code exactly as it is right now.
+    <p class="modal-note" id="modal-note">The link captures {{ 'every file' if web else 'your code' }} exactly as it is right now.
       If you keep working, share again to create an updated link.</p>
     <div class="actions">
       <button id="close-modal" class="btn">Done</button>
@@ -407,7 +474,16 @@
 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+{% if web %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+{% else %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+{% endif %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
@@ -420,7 +496,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+{% if web %}
+{#  for completion in a web project's JavaScript (web/complete.js) #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.14.0/acorn.min.js"></script>
+{% else %}
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js"></script>
+{% endif %}
 <script>
   window.PYIDE = {
     // Which IDE this project belongs to (IDES in app.py). Nothing reads it
@@ -447,6 +528,9 @@
   };
 </script>
 <script src="{{ url_for('static', filename='zip.js') }}"></script>
+{% if web %}
+<script src="{{ url_for('static', filename='web/runner.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='runtime.js') }}"></script>
 {# after runtime.js: an export carries that file's Python bootstrap inside it #}
 <script src="{{ url_for('static', filename='export.js') }}"></script>
@@ -460,22 +544,31 @@
 <script src="{{ url_for('static', filename='turtle.js') }}"></script>
 <script src="{{ url_for('static', filename='pi.js') }}"></script>
 <script src="{{ url_for('static', filename='sprites.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='snippets.js') }}"></script>
 <script src="{{ url_for('static', filename='pictures.js') }}"></script>
+{% if web %}
+<script src="{{ url_for('static', filename='web/complete.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='syntax.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
 <script src="{{ url_for('static', filename='sighint.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='tabstops.js') }}"></script>
 <script src="{{ url_for('static', filename='rescue.js') }}"></script>
 <script src="{{ url_for('static', filename='account.js') }}"></script>
 <script src="{{ url_for('static', filename='split.js') }}"></script>
 <script src="{{ url_for('static', filename='laser.js') }}"></script>
 <script src="{{ url_for('static', filename='checks_in_notes.js') }}"></script>
+{% if web %}
+<script src="{{ url_for('static', filename='web/autograde.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='autograde.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='xp.js') }}"></script>
 {# the runner for this project's IDE, before the shell that attaches it #}
-<script src="{{ url_for('static', filename='runners/python.js') }}"></script>
+<script src="{{ url_for('static', filename='runners/web.js' if web else 'runners/python.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% include "_idle.html" %}
 </body>

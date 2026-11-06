@@ -589,6 +589,84 @@ body.is-demo.is-game .pane-right #output-view { flex: 0 0 110px; min-height: 0; 
 .stage:fullscreen .stage-frame { padding: 0; background: #000; }
 .stage:fullscreen #canvas { border-radius: 0; box-shadow: none; outline: none; }
 
+/* ---------------------------------------------------------- web projects */
+/* An HTML/CSS/JS project (runners/web.js): WebIDE's preview, moved here with
+   WebIDE (Nov 2026). Every rule is under .ide-webide — the editor's body
+   for a web project, and the web demo page's — because the names are
+   ordinary ones: the avatar page has its own #preview, and #output is the
+   Python console's, which these sizes would squash. */
+
+/* Where the preview currently is, once it has left the home page. Reads as a
+   thin address bar rather than a toolbar, because it describes the preview
+   below it and not the project. */
+.ide-webide .trail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.ide-webide .trail[hidden] { display: none; }
+.ide-webide .trail-page code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.ide-webide .trail .linkbtn:disabled { opacity: .4; cursor: default; }
+
+/* "Auto" — whether the preview follows the typing. Sits beside Run and reads
+   as a setting for it, rather than competing with it for attention. */
+.ide-webide .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.ide-webide .toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.ide-webide .toggle:hover { color: var(--text); }
+.ide-webide .toggle[hidden] { display: none; }
+
+.ide-webide .preview-frame {
+  flex: 1 1 62%;
+  min-height: 140px;
+  display: flex;
+  /* a web page brings its own background; never tint it with the editor's */
+  background: #ffffff;
+}
+.ide-webide #preview {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #ffffff;
+}
+.ide-webide .console-head { border-top: 1px solid var(--line); }
+.ide-webide #output { flex: 0 1 38%; min-height: 84px; }
+.ide-webide .output .warn { color: var(--amber); }
+
+/* The editor's console grows when the page above it is dragged smaller:
+ * without it, a sized page left a gap at the bottom of the column. By
+ * default the two still share it 62/38 — their bases are more than the
+ * pane has, so they shrink and the grow never applies. */
+.ide-webide .split .pane-right #output { flex-grow: 1; }
+.ide-webide .split .resizer + .console-head { border-top: 0; }
+
+/* A drag across the preview would hand the mouse to the page inside it. */
+body.ide-webide.is-resizing-x iframe, body.ide-webide.is-resizing-y iframe { pointer-events: none; }
+
+/* The demo page and the New tab: the page takes the column, and the console
+ * is a strip under it. At the editor's 62/38 split the console had nearly
+ * half a projector. */
+.ide-webide .demo-main #output { flex: 0 0 110px; min-height: 0; }
+.ide-webide .demo-main .preview-frame { flex: 1 1 0; }
+
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a
    glaring rectangle in dark mode. Repaint it from the tokens. */

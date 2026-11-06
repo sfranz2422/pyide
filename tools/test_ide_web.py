@@ -7,14 +7,14 @@ WebIDE and FlaskIDE are being folded into this app. The shared tables
 already said which IDE each row belongs to (`app`), and share snapshots now
 do too (`snippets.ide`). Three things are pinned here:
 
-1. TODAY, A WEB PROJECT IS NOT FOUND. Until the editor page can run one
-   (EDITOR_IDES), every editor route answers a WebIDE row as if it weren't
-   there. Before this, /p/<slug> opened any app's draft, so an HTML project
-   reached by its address was shown, run and saved as a Python program.
+1. AN IDE WITHOUT A RUNNER IS NOT FOUND. Until the editor page can run one
+   (EDITOR_IDES — FlaskIDE's, today), every editor route answers its row as
+   if it weren't there. Before this, /p/<slug> opened any app's draft, so an
+   HTML project reached by its address was shown, run and saved as Python.
 
-2. ONCE THE PAGE CAN, EVERY DOOR KNOWS THE IDE. With "webide" let in, a
-   draft, share, assignment, turn-in and automatic turn-in each carry it, and
-   the page is told it. Web projects keep WebIDE's rules: an index.html,
+2. EVERY DOOR KNOWS THE IDE. A web draft, share, assignment, turn-in and
+   automatic turn-in each carry it, and the page is told it — and is the
+   web page: WebIDE's preview and scripts, and none of Python's. Web projects keep WebIDE's rules: an index.html,
    everything in files, `code` always "", and its small limits — while a
    Python project's limits and answers stay exactly what they were.
 
@@ -139,50 +139,58 @@ check("Python autosave of an emptied program still saves", r.status_code == 200,
 
 
 # --------------------------------------------------------------------------
-print("\nToday a WebIDE row is not found (EDITOR_IDES = %r)" % (P.EDITOR_IDES,))
+print("\nAn IDE the editor has no runner for is not found (EDITOR_IDES = %r)" % (P.EDITOR_IDES,))
 
-web_draft = add_row(accounts.Draft(slug="webdraft1", owner_id=STUDENT,
-                                   app="webide", title="Site", code="",
-                                   files=json.dumps(WEB)))
-web_item = add_row(accounts.Assignment(slug="webitem1", app="webide",
-                                       teacher_id=TEACHER, title="Lists",
-                                       code="", files=json.dumps(
-                                           dict(WEB, **{"notes.md": NOTES}))))
-web_snip = add_row(P.Snippet(slug="websnip1", title="Site", author="A", code="",
-                             files=json.dumps(WEB), ide="webide"))
-web_demo = add_row(P.Snippet(slug="webdemo1", title="Site", author="A", code="",
-                             files=json.dumps(WEB), ide="webide", hidden=1))
+# FlaskIDE's rows share these tables. Until the page has a Flask runner, a
+# FlaskIDE draft reached here by its address is not found — it used to open,
+# and an HTML project was shown, run and saved as a Python program that way.
+flask_draft = add_row(accounts.Draft(slug="flkdraft1", owner_id=STUDENT,
+                                     app="flaskide", title="Site", code="",
+                                     files=json.dumps({"app.py": "x"})))
+flask_item = add_row(accounts.Assignment(slug="flkitem1", app="flaskide",
+                                         teacher_id=TEACHER, title="Routes",
+                                         code="", files=json.dumps({"app.py": "x"})))
+flask_snip = add_row(P.Snippet(slug="flksnip1", title="Site", author="A", code="",
+                               files=json.dumps({"app.py": "x"}), ide="flaskide"))
+flask_demo = add_row(P.Snippet(slug="flkdemo1", title="Site", author="A", code="",
+                               files=json.dumps({"app.py": "x"}), ide="flaskide", hidden=1))
 
-check("/p/<web draft> is 404", student.get("/p/webdraft1").status_code == 404)
-check("saving a web draft is 404",
-      student.post("/api/draft/webdraft1",
+check("/p/<flask draft> is 404", student.get("/p/flkdraft1").status_code == 404)
+check("saving a flask draft is 404",
+      student.post("/api/draft/flkdraft1",
                    json={"code": "print('python now')"}).status_code == 404)
-check("... and it is untouched", row(accounts.Draft, slug="webdraft1").code == "")
-check("deleting a web draft is 404",
-      student.delete("/api/draft/webdraft1").status_code == 404)
-check("/a/<web assignment> is 404", student.get("/a/webitem1").status_code == 404)
+check("... and it is untouched", row(accounts.Draft, slug="flkdraft1").code == "")
+check("deleting a flask draft is 404",
+      student.delete("/api/draft/flkdraft1").status_code == 404)
+check("turning in a flask draft is 404",
+      student.post("/api/submit", json={"draft": "flkdraft1"}).status_code == 404)
+check("/a/<flask assignment> is 404", student.get("/a/flkitem1").status_code == 404)
 check("its teacher's editor is 404",
-      teacher.get("/teacher/webitem1/edit").status_code == 404)
-check("/s, /fork, /raw of a web snapshot are 404",
+      teacher.get("/teacher/flkitem1/edit").status_code == 404)
+check("/s, /fork, /raw of a flask snapshot are 404",
       all(student.get(u).status_code == 404
-          for u in ("/s/websnip1", "/s/websnip1/fork", "/s/websnip1/raw")))
-check("/d and its source of a web demo are 404",
+          for u in ("/s/flksnip1", "/s/flksnip1/fork", "/s/flksnip1/raw")))
+check("/d and its source of a flask demo are 404",
       all(student.get(u).status_code == 404
-          for u in ("/d/webdemo1", "/d/webdemo1/source")))
-check("/new?ide=webide is 404", student.get("/new?ide=webide").status_code == 404)
-check("a new web draft is refused",
-      student.post("/api/draft", json={"ide": "webide", "files": WEB}).status_code == 400)
-check("a web share is refused",
-      student.post("/api/share", json={"ide": "webide", "author": "A",
-                                       "files": WEB}).status_code == 400)
+          for u in ("/d/flkdemo1", "/d/flkdemo1/source")))
+check("/new?ide=flaskide is 404", student.get("/new?ide=flaskide").status_code == 404)
+check("a new flask draft is refused",
+      student.post("/api/draft", json={"ide": "flaskide", "files": {"app.py": "x"}}).status_code == 400)
+check("a flask share is refused",
+      student.post("/api/share", json={"ide": "flaskide", "author": "A",
+                                       "files": {"app.py": "x"}}).status_code == 400)
 check("an IDE nobody has heard of is refused",
       student.post("/api/draft", json={"ide": "cobol", "code": "x"}).status_code == 400)
 
+# A WebIDE draft from before the move, as WebIDE stored it.
+web_draft = add_row(accounts.Draft(slug="webdraft1", owner_id=STUDENT,
+                                   app="webide", title="Site", code="",
+                                   files=json.dumps(WEB)))
 
-# --------------------------------------------------------------------------
-print("\nWith the web runner in place, every door carries the IDE")
 
-P.EDITOR_IDES = ("pyide", "webide")
+print("\nA web project: every door carries the IDE")
+
+check("the editor has a web runner", "webide" in P.EDITOR_IDES, P.EDITOR_IDES)
 
 html = student.get("/new?ide=webide").get_data(as_text=True)
 check("/new?ide=webide is told webide", page_ide(html) == "webide", page_ide(html))
@@ -235,6 +243,78 @@ check("its raw text is the page, not the empty `code`",
 r = student.post("/api/share", json={"ide": "webide", "author": "A", "files": {}})
 check("an empty web share is refused", r.status_code == 400, r.status_code)
 
+
+# --------------------------------------------------------------------------
+print("\nThe page is the IDE's own")
+
+def scripts(html):
+    return re.findall(r"<script src=\"([^\"]+)\"", html)
+
+web_page = student.get("/new?ide=webide").get_data(as_text=True)
+py_page = student.get("/new").get_data(as_text=True)
+ws, ps = scripts(web_page), scripts(py_page)
+check("a web project loads the web runner, not Python's",
+      "/static/runners/web.js" in ws and "/static/runners/python.js" not in ws, ws[-3:])
+check("  and WebIDE's runner, tests and completion",
+      all(x in ws for x in ("/static/web/runner.js", "/static/web/autograde.js",
+                            "/static/web/complete.js")))
+check("  and no Pyodide, game, world or Pi",
+      not [x for x in ws if "pyodide" in x or x.endswith(("/runtime.js", "/game.js",
+                                                          "/world.js", "/pi.js", "/autograde.js"))
+           and "/web/" not in x])
+check("  and the HTML modes and closing tags",
+      any("htmlmixed" in x for x in ws) and any("closetag" in x for x in ws)
+      and not any("mode/python" in x for x in ws))
+check("  each runner before the shell that attaches it",
+      ws.index("/static/runners/web.js") < ws.index("/static/app.js")
+      and ps.index("/static/runners/python.js") < ps.index("/static/app.js"))
+check("its right pane is the preview and its console",
+      'id="preview" title="Page preview"' in web_page and 'sandbox="allow-scripts allow-forms"' in web_page
+      and 'id="output-view"' in web_page and 'id="stage"' not in web_page)
+check("its body says which IDE, for the styles", '<body class="ide-webide' in web_page)
+check("a new web project starts from WebIDE's three files, index.html in the editor",
+      "&lt;h1&gt;Hello!&lt;/h1&gt;" in web_page.split('<textarea id="editor">')[1].split("</textarea>")[0]
+      and '"style.css"' in web_page and '"script.js"' in web_page)
+check("a teacher has no Go live on a web project yet (the live page can't show one)",
+      'id="go-live"' not in teacher.get("/new?ide=webide").get_data(as_text=True)
+      and 'id="go-live"' in teacher.get("/new").get_data(as_text=True))
+check("the Python page is as it was: its runner, Pyodide, the stage, the sprites",
+      "/static/runners/python.js" in ps and any("pyodide" in x for x in ps)
+      and 'id="stage"' in py_page and 'id="sprites"' in py_page
+      and "/static/runners/web.js" not in ps and "/static/web/runner.js" not in ps
+      and '<body class="ide-pyide' in py_page)
+check("  with main.py's starter in the editor",
+      "What is your name?" in py_page.split('<textarea id="editor">')[1].split("</textarea>")[0])
+
+# The page's own script: work rescued from a web project is kept under the
+# IDE's name, so it can never be put back into a Python one (rescue.js).
+_app_js = open(os.path.join(PYIDE, "static", "app.js")).read()
+check("the rescue is kept per IDE", 'app: window.PYIDE.ide || "pyide",' in _app_js)
+
+# Every web rule in the stylesheet is under .ide-webide: the names are
+# ordinary ones (#preview is also the avatar page's; #output is Python's
+# console, which the web console's sizes would squash).
+_css = open(os.path.join(PYIDE, "static", "style.css")).read()
+_web = _css[_css.index("/* ---------------------------------------------------------- web projects */"):]
+_web = _web[:_web.index("/* ----", 10)]
+_sels = [sel.strip() for block in re.findall(r"([^{}]+)\{", re.sub(r"/\*.*?\*/", "", _web, flags=re.S))
+         for sel in block.split(",")]
+check("every web style is for a web page only",
+      _sels and all(".ide-webide" in sel for sel in _sels),
+      [sel for sel in _sels if ".ide-webide" not in sel])
+
+r = student.post("/api/share", json={"ide": "webide", "author": "A", "files": WEB, "hidden": True})
+demo = r.get_json()["slug"]
+check("a web demo link opens WebIDE's player",
+      "/static/web/demo.js" in student.get("/d/%s" % demo).get_data(as_text=True))
+check("  which fetches the files",
+      student.get("/d/%s/source" % demo).get_json().get("files", {}).get("index.html") == PAGE)
+check("a web New tab is WebIDE's player",
+      "/static/web/demo.js" in student.get("/play?ide=webide").get_data(as_text=True))
+check("a Python New tab and demo are Python's",
+      "/static/demo.js" in student.get("/play").get_data(as_text=True)
+      and "/static/web/demo.js" not in student.get("/play").get_data(as_text=True))
+
 r = teacher.post("/api/assignment", json={"ide": "webide", "title": "Lists",
                                           "files": dict(WEB, **{"notes.md": NOTES})})
 check("a web assignment is published", r.status_code == 200, r.get_json())
@@ -272,6 +352,16 @@ check("... with the page in it", snap.file_map().get("index.html", "").endswith(
 r = other.post("/api/submit", json={"draft": sd.slug, "files": {"a.css": "x"}})
 check("Turn in without an index.html is refused",
       r.status_code == 400 and "index.html" in r.get_json()["error"], r.get_json())
+
+
+r = other.post("/api/tests/self", json={"assignment": item.slug,
+                                        "results": [{"label": "Has at least 3 li", "ok": True, "points": 1}]})
+check("a student's Check my work on a web assignment is kept", r.status_code == 200, r.get_json())
+_kept = row(accounts.TestResult, student_id=OTHER, assignment_id=item.id)
+check("  as their own check, for the teacher", _kept is not None and _kept.kind == "self",
+      _kept and _kept.kind)
+check("  but not for a FlaskIDE one (no runner, so no assignment)",
+      other.post("/api/tests/self", json={"assignment": "flkitem1", "results": []}).status_code == 404)
 
 
 # --------------------------------------------------------------------------
