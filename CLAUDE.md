@@ -92,6 +92,18 @@ dashboard wins. Do not "fix" the file into force without asking.
 from an earlier deploy needs the explicit `ALTER TABLE`. Every default has to
 leave existing rows *correct*, not merely valid.
 
+**WebIDE and FlaskIDE are moving in** (Nov 2026; both services go down
+after). A project's IDE is the `app` column the shared rows already carry —
+`_ide_of`, `IDES` in `app.py` — and `snippets.ide` for share snapshots;
+called `ide` because `Assignment.kind` already means code/lesson/lab. Each
+IDE keeps its own limits (`validate_files(files, ide)`): a web project's
+files go into every live poll, so they stay at WebIDE's 200 KB. A web
+project's `code` is always "", everything in `files`. **`EDITOR_IDES` is the
+switch**: a row whose IDE isn't in it is not found by any editor route, which
+is right until the page has that IDE's runner. A request that leaves `ide`
+out means Python. The tests grammar is picked by IDE too (`_grader`;
+`autograde_web.py` is WebIDE's, unchanged). `test_ide_web.py`.
+
 ## Features worth knowing about
 
 **Teaching live** (`/live`, `static/live.js`, the `live_*` routes). A teacher

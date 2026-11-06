@@ -423,6 +423,10 @@
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js"></script>
 <script>
   window.PYIDE = {
+    // Which IDE this project belongs to (IDES in app.py). Nothing reads it
+    // yet: the runner layer will pick this page's runner by it. A request
+    // that leaves `ide` out means Python, so today's saves need not send it.
+    ide: {{ (ide | default('pyide')) | tojson }},
     readonly: {{ 'true' if readonly else 'false' }},
     // Opened through a class's view-only link: questions say so.
     viewOnly: {{ 'true' if visitor else 'false' }},

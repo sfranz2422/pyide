@@ -37,6 +37,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 import accounts
 import autograde
+import autograde_web
 import lab_checks
 import quiz
 import library
@@ -65,6 +66,86 @@ ID_LENGTH = 7
 # and other .py modules for it to import. main.py is the one thing that runs,
 # so it is the one name that can't be attached — it arrives as `code`.
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
+
+# --------------------------------------------------------------------------
+# One editor, several IDEs
+# --------------------------------------------------------------------------
+#
+# WebIDE and FlaskIDE are being folded into this app (Nov 2026), so one class
+# page can hold a Python project beside an HTML one. Which IDE a project
+# belongs to was already written on every row: the shared tables carry an
+# `app` column ("pyide", "webide", "flaskide") that each app used to keep the
+# others' rows out of its lists. That column IS the project's IDE now — read
+# through _ide_of — and nothing new is stored on drafts or assignments.
+#
+# Called `ide`, never `kind`: Assignment.kind already means code / lesson /
+# lab, and a second "kind" meaning something else would be read wrong.
+#
+# The limits stay different on purpose. A Python project reads books and
+# datasets (MAX_FILE_BYTES above); a web project's files are inlined into the
+# page every student in a live lesson polls, which is why WebIDE kept them
+# small, and why they stay small here.
+IDES = {
+    "pyide": {
+        "max_files": MAX_FILES,
+        "max_file_bytes": MAX_FILE_BYTES,
+        "max_total": MAX_FILES_TOTAL,
+        # main.py arrives as `code`, apart from the files; every route,
+        # draft and snapshot of a Python project has always been that shape
+        "entry": "main.py",
+        "entry_in_code": True,
+        "name_example": ".txt or .csv",
+    },
+    "webide": {
+        "max_files": 16,
+        "max_file_bytes": 200_000,
+        "max_total": 600_000,
+        # everything is a file, index.html among them, and `code` is ""
+        "entry": "index.html",
+        "entry_in_code": False,
+        "name_example": ".html, .css or .js",
+    },
+}
+
+# The IDEs whose projects this editor page can open, run and save today.
+# Step 1c adds "webide" once the page has its runner. Until then a WebIDE
+# row reached here by its address — a draft's /p/<slug> took any app's draft
+# before this, and showed an HTML project as a Python program — is not found,
+# the same answer WebIDE gives for a Python one.
+EDITOR_IDES = ("pyide",)
+
+
+def _ide_of(row):
+    """The IDE a draft, assignment or share snapshot belongs to.
+
+    Drafts and assignments say so in `app`; a snapshot in `ide` (a column of
+    its own, since `snippets` is this app's table and had no `app`). A row
+    from before either existed is a Python one: that is what every such row
+    is."""
+    return (getattr(row, "ide", None) or getattr(row, "app", None)
+            or APP_NAME)
+
+
+# Each IDE's tests block has its own grammar — a Python test is "input 3 ->
+# prints 9", a web one "has 3 li" — and the server only ever parses them, to
+# count points and to know which labels are real. Parsing an HTML project's
+# tests with Python's grammar fails every line as unreadable, silently: the
+# assignment just looks like it has no tests.
+GRADERS = {"pyide": autograde, "webide": autograde_web}
+
+
+def _grader(item):
+    """The tests grammar for this assignment's IDE."""
+    return GRADERS.get(_ide_of(item), autograde)
+
+
+def _ide_asked(data):
+    """The IDE a request for a NEW project asks for, or None if this editor
+    can't make one of those. Leaving it out means Python, so every page and
+    test written before IDEs existed keeps working unchanged."""
+    ide = (data.get("ide") if isinstance(data, dict) else None) or APP_NAME
+    return ide if ide in EDITOR_IDES else None
+
 
 DEFAULT_CODE = '''# Welcome to Python!
 # Write your code here, then press Run (or Ctrl+Enter).
@@ -110,6 +191,9 @@ class Snippet(Base):
     # refused by /s, /fork and /raw alike, so there is no second door to forget
     # about and nothing to gain by editing the letter in the URL.
     hidden = Column(Integer, nullable=False, default=0)
+    # Which IDE opens it ("pyide", "webide"): a share link or a turned-in
+    # copy has no draft or assignment beside it to say so. See IDES.
+    ide = Column(String(16), nullable=False, default="pyide")
     created_at = Column(DateTime, nullable=False,
                         default=lambda: datetime.now(timezone.utc))
 
@@ -210,6 +294,8 @@ accounts.create_all(engine)
 LATER_COLUMNS = [
     ("files", "ALTER TABLE snippets ADD COLUMN files TEXT NOT NULL DEFAULT '{}'"),
     ("hidden", "ALTER TABLE snippets ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0"),
+    # every snapshot made before WebIDE moved in is a Python one
+    ("ide", "ALTER TABLE snippets ADD COLUMN ide VARCHAR(16) NOT NULL DEFAULT 'pyide'"),
 ]
 
 
@@ -255,14 +341,20 @@ def clean(value, limit) -> str:
     return value[:limit]
 
 
-def validate_files(raw):
-    """Check an incoming {name: contents} map. Returns (files, error)."""
+def validate_files(raw, ide="pyide"):
+    """Check an incoming {name: contents} map for a project of this IDE.
+    Returns (files, error).
+
+    A Python project's files are what it attaches beside main.py, so none at
+    all is fine and main.py is refused. A web project is nothing but files,
+    so it needs its index.html — without one there is no page to open."""
+    spec = IDES[ide]
     if raw in (None, ""):
-        return {}, None
+        raw = {}
     if not isinstance(raw, dict):
         return None, "Those attached files could not be read."
-    if len(raw) > MAX_FILES:
-        return None, "A project can hold at most %d files." % MAX_FILES
+    if len(raw) > spec["max_files"]:
+        return None, "A project can hold at most %d files." % spec["max_files"]
 
     files, total = {}, 0
     for name, body in raw.items():
@@ -273,20 +365,49 @@ def validate_files(raw):
         if not FILE_NAME.match(name):
             return None, ("'%s' is not a valid file name. Use letters, digits, "
                           "dashes and underscores, and end with an extension "
-                          "like .txt or .csv." % name)
-        if name.lower() == "main.py":
+                          "like %s." % (name, spec["name_example"]))
+        if spec["entry_in_code"] and name.lower() == spec["entry"]:
             return None, ("main.py is the program itself and is saved with the "
                           "project, so it can't also be attached as a file.")
         if not isinstance(body, str):
             return None, "'%s' could not be read as text." % name
         size = len(body.encode("utf-8"))
-        if size > MAX_FILE_BYTES:
+        if size > spec["max_file_bytes"]:
             return None, "'%s' is too large to save." % name
         total += size
-        if total > MAX_FILES_TOTAL:
+        if total > spec["max_total"]:
             return None, "Those files are too large to save together."
         files[name] = body
+
+    if not spec["entry_in_code"] and spec["entry"] not in files:
+        return None, "A project needs an %s to open." % spec["entry"]
     return files, None
+
+
+def read_project(data, ide, *, empty, too_big, code=None, allow_empty=False):
+    """The code and files a request sends for a project of this IDE.
+
+    Returns (code, files, None), or (None, None, (reply, status)) to send
+    back as it is. `empty` and `too_big` are the route's own words for an
+    empty or oversized program, so a Python project's answers are exactly
+    what they were before IDEs existed. `code` overrides what the request
+    sent (a turn-in falls back to the draft's).
+
+    A web project's `code` is always "", whatever was sent: everything it
+    has is in its files, as WebIDE always stored it, and a stray `code`
+    kept on the row would be compared by the automatic turn-in forever."""
+    if IDES[ide]["entry_in_code"]:
+        code = data.get("code", "") if code is None else code
+        if not isinstance(code, str) or (not allow_empty and not code.strip()):
+            return None, None, (jsonify(error=empty), 400)
+        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+            return None, None, (jsonify(error=too_big), 413)
+    else:
+        code = ""
+    files, file_error = validate_files(data.get("files"), ide)
+    if file_error:
+        return None, None, (jsonify(error=file_error), 400)
+    return code, files, None
 
 
 # --------------------------------------------------------------------------
@@ -743,8 +864,12 @@ def my_classes():
 # link to it is url_for("index"), so they all moved with it.
 @app.get("/new")
 def index():
+    ide = _ide_asked(request.args)
+    if ide is None:
+        abort(404)
     return render_template(
         "index.html",
+        ide=ide,
         code=DEFAULT_CODE,
         files={},
         title="Untitled",
@@ -766,7 +891,7 @@ def load_visible(db, slug):
     the code never leaves the database for a hidden row, whatever the URL says.
     """
     snip = db.query(Snippet).filter_by(slug=slug).first()
-    if snip is None or snip.is_hidden:
+    if snip is None or snip.is_hidden or _ide_of(snip) not in EDITOR_IDES:
         abort(404)
     return snip
 
@@ -778,6 +903,7 @@ def view_shared(slug):
         snip = load_visible(db, slug)
         return render_template(
             "index.html",
+            ide=_ide_of(snip),
             code=snip.code,
             files=snip.file_map(),
             title=snip.title,
@@ -799,6 +925,7 @@ def fork_shared(slug):
         snip = load_visible(db, slug)
         return render_template(
             "index.html",
+            ide=_ide_of(snip),
             code=snip.code,
             files=snip.file_map(),
             title=f"Copy of {snip.title}",
@@ -817,7 +944,11 @@ def raw_shared(slug):
     db = SessionLocal()
     try:
         snip = load_visible(db, slug)
-        return snip.code, 200, {"Content-Type": "text/plain; charset=utf-8"}
+        # The program as text: main.py for Python, the page for the web
+        spec = IDES[_ide_of(snip)]
+        body = (snip.code if spec["entry_in_code"]
+                else snip.file_map().get(spec["entry"], ""))
+        return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
     finally:
         db.close()
 
@@ -837,7 +968,7 @@ def raw_shared(slug):
 
 def load_demo(db, slug):
     snip = db.query(Snippet).filter_by(slug=slug).first()
-    if snip is None or not snip.is_hidden:
+    if snip is None or not snip.is_hidden or _ide_of(snip) not in EDITOR_IDES:
         abort(404)
     return snip
 
@@ -885,21 +1016,20 @@ def demo_source(slug):
 @app.post("/api/share")
 def create_share():
     data = request.get_json(silent=True) or {}
-    code = data.get("code", "")
+    ide = _ide_asked(data)
+    if ide is None:
+        return jsonify(error="This editor can't share that kind of project."), 400
     author = clean(data.get("author"), 80)
 
-    if not isinstance(code, str) or not code.strip():
-        return jsonify(error="There's no code to share yet."), 400
-    if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-        return jsonify(error="That program is too large to share."), 413
+    code, files, refused = read_project(
+        data, ide, empty="There's no code to share yet.",
+        too_big="That program is too large to share.")
+    if refused:
+        return refused
     # a submission nobody can be identified from is no use to a teacher
     if not author:
         return jsonify(error="Put your name in before sharing.",
                        field="author"), 400
-
-    files, file_error = validate_files(data.get("files"))
-    if file_error:
-        return jsonify(error=file_error), 400
 
     hidden = bool(data.get("hidden"))
 
@@ -912,6 +1042,7 @@ def create_share():
             code=code,
             files=json.dumps(files),
             hidden=1 if hidden else 0,
+            ide=ide,
         )
         db.add(snip)
         db.commit()
@@ -986,6 +1117,7 @@ def _draft_payload(db, draft, extra=None):
     item = (db.query(accounts.Assignment).filter_by(id=draft.assignment_id).first()
             if draft.assignment_id else None)
     ctx.update(
+        ide=_ide_of(draft),
         code=draft.code,
         files=_current_notes(item, draft.file_map()),
         title=draft.title,
@@ -1039,7 +1171,8 @@ def open_draft(slug):
             abort(404)
         # Somebody else's work is simply not found, rather than forbidden —
         # there is no reason to confirm that a given link belongs to anyone.
-        if draft.owner_id != user.id:
+        # Nor is a project this editor can't open (EDITOR_IDES).
+        if draft.owner_id != user.id or _ide_of(draft) not in EDITOR_IDES:
             abort(404)
 
         assignment = None
@@ -1141,7 +1274,7 @@ def _auto_turn_in(db, item, user, draft=None):
         else:
             snap = Snippet(slug=new_slug(db), title=draft.title or item.title,
                            author=user.display_name(), code=draft.code,
-                           files=draft.files)
+                           files=draft.files, ide=_ide_of(draft))
             db.add(snap)
             db.flush()
     if row is None:
@@ -1183,19 +1316,17 @@ def save_draft(slug):
         if user is None:
             return jsonify(error="not signed in"), 401
         draft = db.query(accounts.Draft).filter_by(slug=slug).first()
-        if draft is None or draft.owner_id != user.id:
+        if (draft is None or draft.owner_id != user.id
+                or _ide_of(draft) not in EDITOR_IDES):
             return jsonify(error="no such project"), 404
 
         data = request.get_json(silent=True) or {}
-        code = data.get("code", "")
-        if not isinstance(code, str):
-            return jsonify(error="bad code"), 400
-        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-            return jsonify(error="That program is too large to save."), 413
-
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
+        # An autosave of a program typed down to nothing is still a save.
+        code, files, refused = read_project(
+            data, _ide_of(draft), empty="bad code",
+            too_big="That program is too large to save.", allow_empty=True)
+        if refused:
+            return refused
 
         stale = _stale(draft, data)
         if stale:
@@ -1233,21 +1364,20 @@ def start_draft():
             return jsonify(error="Sign in first, then you can save projects."), 401
 
         data = request.get_json(silent=True) or {}
-        code = data.get("code", "")
-        if not isinstance(code, str) or not code.strip():
-            return jsonify(error="There's nothing to save yet."), 400
-        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-            return jsonify(error="That program is too large to save."), 413
-
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
+        ide = _ide_asked(data)
+        if ide is None:
+            return jsonify(error="This editor can't save that kind of project."), 400
+        code, files, refused = read_project(
+            data, ide, empty="There's nothing to save yet.",
+            too_big="That program is too large to save.")
+        if refused:
+            return refused
 
         draft = accounts.Draft(
             slug=accounts.new_id(db, accounts.Draft),
             owner_id=user.id,
             assignment_id=None,           # not part of an assignment
-            app=APP_NAME,
+            app=ide,
             title=clean(data.get("title"), 200) or "Untitled",
             code=code,
             files=json.dumps(files),
@@ -1275,7 +1405,8 @@ def delete_draft(slug):
         if user is None:
             return jsonify(error="not signed in"), 401
         draft = db.query(accounts.Draft).filter_by(slug=slug).first()
-        if draft is None or draft.owner_id != user.id:
+        if (draft is None or draft.owner_id != user.id
+                or _ide_of(draft) not in EDITOR_IDES):
             return jsonify(error="no such project"), 404
         db.delete(draft)
         db.commit()
@@ -1436,19 +1567,18 @@ def publish_assignment():
             return jsonify(error="Only a teacher can publish an assignment."), 403
 
         data = request.get_json(silent=True) or {}
-        code = data.get("code", "")
-        if not isinstance(code, str) or not code.strip():
-            return jsonify(error="There's no code to hand out yet."), 400
-        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-            return jsonify(error="That program is too large."), 413
-
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
+        ide = _ide_asked(data)
+        if ide is None:
+            return jsonify(error="This editor can't hand out that kind of project."), 400
+        code, files, refused = read_project(
+            data, ide, empty="There's no code to hand out yet.",
+            too_big="That program is too large.")
+        if refused:
+            return refused
 
         item = accounts.Assignment(
             slug=accounts.new_id(db, accounts.Assignment),
-            app=APP_NAME,
+            app=ide,
             teacher_id=user.id,
             title=clean(data.get("title"), 200) or "Untitled assignment",
             code=code,
@@ -1477,8 +1607,9 @@ def open_assignment(slug):
     """
     db = SessionLocal()
     try:
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(
+            accounts.Assignment.slug == slug,
+            accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None:
             abort(404)
 
@@ -1507,6 +1638,7 @@ def open_assignment(slug):
         if user is None:
             ctx = user_context(db)
             ctx.update(
+                ide=_ide_of(item),
                 code=item.code,
                 files=quiz.redact_files(item.file_map()),
                 title=item.title,
@@ -1530,7 +1662,7 @@ def open_assignment(slug):
                 slug=accounts.new_id(db, accounts.Draft),
                 owner_id=user.id,
                 assignment_id=item.id,
-                app=APP_NAME,
+                app=_ide_of(item),       # the assignment's IDE is its draft's
                 title=item.title,
                 code=item.code,
                 files=json.dumps(quiz.redact_files(item.file_map())),
@@ -1563,7 +1695,8 @@ def turn_in():
         data = request.get_json(silent=True) or {}
         draft = db.query(accounts.Draft).filter_by(
             slug=str(data.get("draft", ""))).first()
-        if draft is None or draft.owner_id != user.id:
+        if (draft is None or draft.owner_id != user.id
+                or _ide_of(draft) not in EDITOR_IDES):
             return jsonify(error="no such project"), 404
         if not draft.assignment_id:
             return jsonify(error="This project isn't part of an assignment."), 400
@@ -1574,12 +1707,12 @@ def turn_in():
         if item.closed:
             return jsonify(error="That assignment is closed."), 403
 
-        code = data.get("code", draft.code)
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
-        if not isinstance(code, str) or not code.strip():
-            return jsonify(error="There's nothing to turn in yet."), 400
+        code, files, refused = read_project(
+            data, _ide_of(draft), code=data.get("code", draft.code),
+            empty="There's nothing to turn in yet.",
+            too_big="That program is too large to turn in.")
+        if refused:
+            return refused
 
         # A tab that has fallen behind must not hand in its stale copy — nor
         # write it over the newer one, which is what the line after this did.
@@ -1600,6 +1733,7 @@ def turn_in():
             author=user.display_name(),
             code=code,
             files=json.dumps(files),
+            ide=_ide_of(draft),
         )
         db.add(snap)
         db.flush()
@@ -2064,7 +2198,7 @@ def _self_tests_xp(db, item, student_id, row):
     student = db.query(accounts.User).filter_by(id=student_id).first()
     if not _earns_xp(student):
         return 0
-    real = {t["label"] for t in autograde.file_tests(item.file_map())[0]}
+    real = {t["label"] for t in _grader(item).file_tests(item.file_map())[0]}
     got = 0
     for r in json.loads(row.details or "[]"):
         if r.get("ok") and r.get("label") in real:
@@ -2752,8 +2886,9 @@ def edit_assignment(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(
+            accounts.Assignment.slug == slug,
+            accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
         if _is_lesson(item):
@@ -2770,6 +2905,7 @@ def edit_assignment(slug):
                      .count())
         ctx = user_context(db)
         ctx.update(
+            ide=_ide_of(item),
             code=item.code,
             files=item.file_map(),
             title=item.title,
@@ -2806,21 +2942,18 @@ def update_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(
+            accounts.Assignment.slug == slug,
+            accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
 
         data = request.get_json(silent=True) or {}
-        code = data.get("code", "")
-        if not isinstance(code, str) or not code.strip():
-            return jsonify(error="There's no code to hand out."), 400
-        if len(code.encode("utf-8")) > MAX_CODE_BYTES:
-            return jsonify(error="That program is too large."), 413
-
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
+        code, files, refused = read_project(
+            data, _ide_of(item), empty="There's no code to hand out.",
+            too_big="That program is too large.")
+        if refused:
+            return refused
         # The notes are the library's (library.py): edited there and nowhere
         # else, so the editor can never overwrite a tutorial — the stored
         # notes stay whatever the editor sent, as a draft's do (_keep_notes).
@@ -3192,7 +3325,7 @@ def teacher_assignment(slug):
         points = _earned(db, item.id)
         possible = _quiz_possible(item)
         answers = _answers_for_teacher(db, item)
-        tests, test_errors = autograde.file_tests(item.file_map())
+        tests, test_errors = _grader(item).file_tests(item.file_map())
         # An A+ lab's tasks are marked on the server as the student works
         # (lab_state_save); its page shows them where tests would be.
         lab = _lab_of(item) if _is_lab(item) else None
@@ -5535,7 +5668,7 @@ def _has_full_marks(db, item, student_id):
         total = _total(sub.score if sub else None, earned)
         return total is not None and total >= item.out_of
     possible = (sum(q["points"] for q in _quiz_possible(item))
-                + autograde.possible(item.file_map()))
+                + _grader(item).possible(item.file_map()))
     return possible > 0 and earned is not None and earned >= possible - 0.001
 
 
