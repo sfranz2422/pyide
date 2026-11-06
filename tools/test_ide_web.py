@@ -275,8 +275,8 @@ check("its body says which IDE, for the styles", '<body class="ide-webide' in we
 check("a new web project starts from WebIDE's three files, index.html in the editor",
       "&lt;h1&gt;Hello!&lt;/h1&gt;" in web_page.split('<textarea id="editor">')[1].split("</textarea>")[0]
       and '"style.css"' in web_page and '"script.js"' in web_page)
-check("a teacher has no Go live on a web project yet (the live page can't show one)",
-      'id="go-live"' not in teacher.get("/new?ide=webide").get_data(as_text=True)
+check("a teacher can Go live from a web project, as from a Python one",
+      'id="go-live"' in teacher.get("/new?ide=webide").get_data(as_text=True)
       and 'id="go-live"' in teacher.get("/new").get_data(as_text=True))
 check("the Python page is as it was: its runner, Pyodide, the stage, the sprites",
       "/static/runners/python.js" in ps and any("pyodide" in x for x in ps)
@@ -382,8 +382,8 @@ check("  and only there: a Python or web page sends as it always has",
 check("  the PHP and SQL modes", any("mode/php" in x for x in fs) and any("mode/sql" in x for x in fs))
 check("  its preview has an address bar and a place for SQL results",
       'id="preview-path"' in fl_page and 'id="sql-results"' in fl_page and '<body class="ide-flaskide' in fl_page)
-check("  and no Go live for the teacher yet",
-      'id="go-live"' not in teacher.get("/new?ide=flaskide").get_data(as_text=True))
+check("  and Go live for the teacher",
+      'id="go-live"' in teacher.get("/new?ide=flaskide").get_data(as_text=True))
 
 def editor_text(html):
     return html.split('<textarea id="editor">')[1].split("</textarea>")[0]
@@ -461,6 +461,93 @@ check("a Flask assignment's tests are read as Flask tests",
 html = other.get("/a/%s" % fitem.slug, follow_redirects=True).get_data(as_text=True)
 check("a student opening it gets a Flask editor, open on app.py",
       page_ide(html) == "flaskide" and "from flask import" in editor_text(html))
+
+
+
+
+# --------------------------------------------------------------------------
+print("\nTeaching a web or Flask lesson live")
+
+def live_row(code):
+    return row(accounts.LiveSession, code=code)
+
+r = teacher.post("/api/live/start", json={"ide": "webide", "body": PAGE, "filename": "index.html",
+                                          "title": "Lists", "assignment": item.slug})
+check("Go live on a web assignment starts a web lesson", r.status_code == 200, r.get_json())
+wcode = r.get_json()["code"]
+check("  its IDE is the assignment's", live_row(wcode).app == "webide", live_row(wcode).app)
+lp = other.get("/live/%s" % wcode).get_data(as_text=True)
+check("the class gets WebIDE's live page", "/static/web/live.js" in lp and "ide-webide" in lp
+      and "/static/live.js" not in lp)
+check("  the student's editor starting on their draft's index.html, its other files as tabs",
+      # the page's config: the entry as `starter`, the rest as starterFiles
+      re.search(r'starter: "[^"]*mine\\u003c/p\\u003e', lp) is not None
+      and re.search(r'starterFiles: \{[^\n]*"style.css"', lp) is not None
+      and not re.search(r'starterFiles: \{[^\n]*"index.html"', lp))
+r = teacher.post("/api/live/%s/push" % wcode, json={"body": PAGE, "filename": "index.html",
+                                                     "page": "<html>THE PAGE</html>", "seq": 5})
+check("the teacher's page goes out with a push", r.status_code == 200, r.get_json())
+poll = other.get("/api/live/%s?v=-1" % wcode).get_json()
+check("  and comes back on a poll, with its id", poll.get("page") == "<html>THE PAGE</html>"
+      and poll.get("page_id"), poll.get("page_id"))
+again = other.get("/api/live/%s?v=-1&pg=%s" % (wcode, poll["page_id"])).get_json()
+check("  but not to a page that already shows it", "page" not in again and again.get("page_id") == poll["page_id"])
+teacher.post("/api/live/%s/push" % wcode, json={"body": PAGE, "filename": "index.html",
+                                                 "page": "x" * (P.LIVE_PAGE_BYTES + 1), "seq": 6})
+check("a page too big to send is dropped, and the code still goes",
+      live_row(wcode).page == "" and live_row(wcode).version == 6)
+
+r = other.post("/api/live/%s/keep" % wcode, json={"code": "<h1>kept live</h1>", "files": {"style.css": "p{}"}})
+check("a student's Save from a web lesson is kept", r.status_code == 200, r.get_json())
+kd = row(accounts.Draft, slug=r.get_json()["slug"])
+check("  into their web draft: index.html among the files, `code` empty",
+      kd.app == "webide" and kd.code == "" and kd.file_map().get("index.html") == "<h1>kept live</h1>"
+      and kd.file_map().get("style.css") == "p{}", (kd.app, kd.code, sorted(kd.file_map())))
+r = other.post("/api/live/%s/keep" % wcode, json={"code": "<h1>again</h1>"})
+check("  and a Save with no other files keeps the ones it had",
+      r.status_code == 200 and row(accounts.Draft, slug=kd.slug).file_map().get("style.css") == "p{}"
+      and row(accounts.Draft, slug=kd.slug).file_map().get("index.html") == "<h1>again</h1>")
+
+# A Python lesson with no assignment first, then a SQL project's Go live, also
+# with none: the same (no) assignment, so only the change of IDE ends it.
+r = teacher.post("/api/live/start", json={"body": "print(0)", "filename": "main.py", "assignment": ""})
+p0 = r.get_json()["code"]
+check("(a Python lesson, no assignment, on the air)", live_row(p0).app == "pyide" and not live_row(p0).ended)
+r = teacher.post("/api/live/start", json={"ide": "flaskide", "body": "SELECT 1;", "filename": "query.sql",
+                                          "title": "Queries", "assignment": ""})
+check("Go live from a SQL project starts a Flask lesson, ending the Python one",
+      r.status_code == 200 and live_row(r.get_json()["code"]).app == "flaskide"
+      and live_row(p0).ended == 1 and r.get_json()["code"] != p0, r.get_json())
+fcode = r.get_json()["code"]
+lp = student.get("/live/%s" % fcode).get_data(as_text=True)
+check("the class gets FlaskIDE's live page, opening their editor on query.sql",
+      "/static/flask/live.js" in lp and "ide-flaskide" in lp
+      and re.search(r'\bentry: "query.sql"', lp) is not None)
+r = student.post("/api/live/%s/keep" % fcode, json={"code": "SELECT 2;", "entry": "query.sql"})
+check("a student's Save from it makes a SQL project", r.status_code == 200
+      and row(accounts.Draft, slug=r.get_json()["slug"]).file_map() == {"query.sql": "SELECT 2;"}
+      and row(accounts.Draft, slug=r.get_json()["slug"]).app == "flaskide", r.get_json())
+teacher.post("/api/live/%s/push" % fcode, json={"body": "SELECT 1;", "filename": "query.sql",
+                                                 "page": '{"sql": true, "html": "<table></table>"}', "seq": 9})
+check("a Flask lesson's page (FlaskIDE's {sql, html}) goes out too",
+      student.get("/api/live/%s?v=-1" % fcode).get_json().get("page") == '{"sql": true, "html": "<table></table>"}')
+
+r = teacher.post("/api/live/start", json={"body": "print(1)", "filename": "main.py", "assignment": ""})
+pcode = r.get_json()["code"]
+check("Go live from Python is a Python lesson, on the Python page",
+      live_row(pcode).app == "pyide" and "/static/live.js" in student.get("/live/%s" % pcode).get_data(as_text=True))
+teacher.post("/api/live/%s/push" % pcode, json={"body": "print(1)", "filename": "main.py",
+                                                 "page": "<html>no</html>", "seq": 3})
+check("  where a page sent anyway is ignored", live_row(pcode).page == "")
+
+check("the Go live chooser lists the editor's own kind of assignment",
+      [a["slug"] for a in teacher.get("/api/live/assignments?ide=webide").get_json()["assignments"]] == [item.slug]
+      and item.slug not in [a["slug"] for a in teacher.get("/api/live/assignments").get_json()["assignments"]])
+r = teacher.post("/api/live/start", json={"ide": "pyide", "body": "", "filename": "main.py", "assignment": item.slug})
+check("a Python editor can't teach a web assignment live", r.status_code == 400, r.get_json())
+loc = teacher.get("/teacher/%s/live" % fitem.slug).headers.get("Location", "")
+check("teaching a Flask assignment from the dashboard opens the Flask editor",
+      "ide=flaskide" in loc and "teach=" in loc, loc)
 
 
 # --------------------------------------------------------------------------

@@ -57,7 +57,17 @@ try {
     ws.send(JSON.stringify({ id: i, method, params, sessionId }));
   });
   const targets = {};
-  const close = (p) => send("Target.closeTarget", { targetId: targets[p] }).catch(() => {});
+  // Before a page closes: it must not have said anything in an alert, which
+  // is how the editor reports a refusal (a start or a save the server turned
+  // down). Recorded, not shown — see the preload in open().
+  const alerts = [];
+  const close = async (p) => {
+    try {
+      const got = await ev(p, "window.__alerts || []");
+      got.forEach((m) => alerts.push(m));
+    } catch (e) { /* a page already gone */ }
+    return send("Target.closeTarget", { targetId: targets[p] }).catch(() => {});
+  };
   async function open(path, cookie) {
     const { browserContextId } = await send("Target.createBrowserContext");
     if (cookie) {
@@ -74,7 +84,10 @@ try {
     // No dialogs in a headless run: New file's prompt answers from here.
     await send("Page.addScriptToEvaluateOnNewDocument", { source:
       "window.prompt = function () { return window.__answer || null; };" +
-      "window.confirm = function () { return true; };" }, sessionId);
+      "window.confirm = function () { return true; };" +
+      // An alert would block the page, and every later step with it, until
+      // the run timed out with nothing said: kept here instead, to be read.
+      "window.__alerts = []; window.alert = function (m) { window.__alerts.push(String(m)); };" }, sessionId);
     await send("Page.navigate", { url: base + path }, sessionId);
     return sessionId;
   }
@@ -217,6 +230,7 @@ try {
   // was saved as a web project's files. Autosave waits for a pause.
   await setCode(S, setup.studentPage);
   await sleep(5000);
+  say(alerts.length === 0, "no alerts: nothing the server refused", alerts.slice(0, 3));
   say(errors.length === 0, "no errors from the editor's own scripts", errors.slice(0, 4));
 } catch (e) {
   say(false, "the browser run itself", String(e && e.stack || e).slice(0, 300));

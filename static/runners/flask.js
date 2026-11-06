@@ -526,8 +526,31 @@
     });
     applyKind();
 
+    /* What a live lesson shows the class of the teacher's app (FlaskIDE's
+       livePage): the page the preview is on, with its path, or a SQL
+       project's results grid, styled to stand alone. Nothing before Run. */
+    var SQL_PAGE_STYLE = "<style>body{font:13px ui-monospace,Menlo,monospace;"
+      + "margin:10px 12px;color:#222}.sql-result{margin-bottom:18px}"
+      + ".sql-result-head{display:flex;justify-content:space-between;gap:12px;"
+      + "color:#777;font-size:11.5px}.sql-stmt{white-space:pre-wrap;margin:0}"
+      + "table{border-collapse:collapse;width:100%}th,td{text-align:left;"
+      + "padding:4px 10px;border-bottom:1px solid #ddd;white-space:nowrap}"
+      + "th{background:#f3f3f3}.sql-null{color:#999;font-style:italic}"
+      + "</style>";
+    function livePage() {
+      if (!hasRun) return "";
+      if (isSql()) {
+        var grid = $("sql-results");
+        var html = grid ? grid.innerHTML : "";
+        return html ? JSON.stringify({ sql: true, html: SQL_PAGE_STYLE + html }) : "";
+      }
+      if (!preview || !preview.shown) return "";
+      return JSON.stringify({ path: preview.path || "/", html: preview.shown });
+    }
+
     return {
       run: run,
+      livePage: livePage,
       stop: function () {},       // nothing to stop: a run ends, PHP has its own limit
       escape: function () {},
       isRunning: function () { return running; },

@@ -168,9 +168,7 @@
       {#  Teach live. Teachers only, and it is a toggle rather than a link
           because the point is that you stay in this editor and carry on
           working — the class watches this file, whatever you do to it. #}
-      {#  Not for a web project yet: the class's live page can't show one
-          until it has the web runner too (step 3 of moving WebIDE in). #}
-      {% if is_teacher and not web and not flask %}
+      {% if is_teacher %}
         <button id="go-live" class="btn"
                 title="Put this file on your class's screens while you teach.">Go live</button>
         {#  The join code, and a button: clicking copies the whole address

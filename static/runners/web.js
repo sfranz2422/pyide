@@ -554,6 +554,12 @@
       escape: function () {},              // Stop is the button; Escape is the page's
       isRunning: function () { return running; },
       hasRun: function () { return hasRun; },
+      // What a live lesson shows the class: what Run made (sharedPage, above)
+      // — never every redraw as the teacher types.
+      livePage: function () { return sharedPage; },
+    // What a live lesson shows the class: what Run made (sharedPage, above)
+    // — never every redraw as the teacher types.
+    livePage: function () { return sharedPage; },
       checks: runChecks,
       // Everything in files, `code` empty: how WebIDE always stored a project,
       // and what the server keeps for one (read_project in app.py). `ide` makes

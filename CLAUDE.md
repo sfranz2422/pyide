@@ -143,6 +143,19 @@ and the library's links (step 5). Tests: `test_flask_browser.py` (Chrome),
 `test_autograde_flask.py`, and FlaskIDE's own as `test_flask_*.py`;
 `test_flask_php.py` needs `npm install` in `tools/php_node/` once (~460 MB,
 ignored — the repo's own node_modules is committed).
+**Live lessons too.** A lesson's `app` is its IDE: its assignment's, or the
+editor's (`ide` on `/api/live/start`, and on the Go live chooser's list).
+Going live from another kind of project ends the one on the air. The class
+gets the lesson's IDE's own page — `live.html` (Python), `live_web.html` /
+`static/web/live.js` or `live_flask.html` / `static/flask/live.js`, which
+are WebIDE's and FlaskIDE's moved in with only the shared modules renamed
+(so **a fix to the class's page belongs in all three** until they are
+merged). A push carries the teacher's page (`runner.livePage()`: what Run
+built, or FlaskIDE's `{path|sql, html}`), dropped when too big; a poll
+sends it only when the student's `pg` differs (`_page_id`). `live_keep`
+folds a web or Flask project's entry back into its files. Their styles are
+every rule of WebIDE's and FlaskIDE's stylesheets this one lacked, under
+`.ide-webide` / `.ide-flaskide`. `test_live_ides_browser.py`.
 
 ## Features worth knowing about
 

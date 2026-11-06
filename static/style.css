@@ -892,6 +892,335 @@ body.ide-flaskide.is-resizing-y iframe { pointer-events: none; }
 
 .ide-flaskide .split .resizer + .console-head { border-top: 0; }
 
+/* ------------------------------------------- web and flask live pages */
+/* Every rule WebIDE's and FlaskIDE's stylesheets had that this one didn't —
+   their live pages for the class (live_web.html, live_flask.html), the
+   console that folds, the teacher's page beside the student's — taken over
+   when they moved in (Nov 2026), each under its IDE's body class so a Python
+   page never sees it. Machine-copied: WebIDE's, then FlaskIDE's, each in
+   its own order, media blocks kept. */
+
+.ide-webide .live-mirror-out[hidden],
+.ide-webide .live-mirror-console[hidden] { display: none; }
+
+.ide-webide .live-mirror-out .preview-wrap { flex: 1 1 auto; min-height: 0; }
+
+.ide-webide .live-mirror-console {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 30%;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
+
+.ide-webide .live-mirror-console .output { flex: 1 1 auto; min-height: 0; }
+
+/* The student's own page, under the console strip. */
+.ide-webide .preview-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #fff;
+}
+
+.ide-webide .preview-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* The console is a strip, not a pane. It was 28% of the column, mostly
+ * empty — its <pre> took only 38% of that, the share the editor gives it —
+ * and it squeezed the notes under it to a few lines on a classroom laptop.
+ * The <pre>s fill the strip here, so it is short without wasting any of it;
+ * the editor's own console is untouched. */
+.ide-webide .live-console { flex: 0 0 16%; min-height: 80px; }
+
+/* #output by id too: the editor's `#output` rule outranks a class. */
+.ide-webide .live-console .output,
+.ide-webide .live-console #output { flex: 1 1 auto; min-height: 0; }
+
+/* The project's notes on the live page, under the console. A fixed share of
+ * the column, like the console's, so the preview keeps the most room and
+ * long notes scroll inside their own pane rather than pushing it away. */
+.ide-webide .live-right .live-notes {
+  flex: 0 0 48%;
+  min-height: 110px;
+  border-top: 1px solid var(--line);
+}
+
+/* The console folded: just its head, and the page and notes get the
+ * column. The <pre>s are hidden rather than squeezed to zero so the
+ * student's own console keeps its scroll position for when it opens. */
+.ide-webide .live-console.is-folded { flex: 0 0 auto; min-height: 0; }
+
+.ide-webide .live-console.is-folded .output { display: none; }
+
+/* Two frames in one pane — the student's page and the teacher's — and the
+ * `.preview-wrap iframe` rule gives every frame display:block, which
+ * beats [hidden]. */
+.ide-webide .preview-wrap iframe[hidden] { display: none; }
+
+/* The fixed size above only holds if the pane beside it does not ask for
+ * more. #preview-view's basis was `auto` — its own content — so every line
+ * the console printed took height from the notes. The same 38% as the
+ * class's own Notes pane, so the teacher sees them the size the class does. */
+.ide-webide .pane-right #preview-view { flex: 1 1 0; }
+
+.ide-webide .share-hide input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
+/* And the teacher's code fills the row again when their page goes, or it
+ * would stay at a dragged width beside an empty gap. */
+.ide-webide .live-mirror-code:has(+ .resizer + [hidden]) { flex: 1 1 0 !important; }
+
+.ide-webide :not(.is-folded):not(.resizer):has(~ .resizer-y[data-size="next"] + .is-sized) { min-height: 80px; }
+
+/* A FOLDED CONSOLE IS ITS HEAD, whatever size it was dragged to — the size
+ * is inline on the pane and would beat the fold — and has no handle, since
+ * there is nothing to size. Opening it gives the dragged size back. */
+.ide-webide .live-console.is-folded { flex: 0 0 auto !important; }
+
+.ide-webide .resizer:has(+ .is-folded) { display: none; }
+
+/* The notes give way when a stored size is more than the window has room
+ * for (split.js gives every dragged pane flex-shrink 1), rather than pushing
+ * the preview off the bottom. */
+.ide-webide .live-right .live-notes { flex-shrink: 1; }
+
+@media (max-width: 860px) {
+  /* A page needs width more than the mirror needs height: stacked here,
+     * each gets the whole phone's width. */
+  .ide-webide .live-mirror { flex-direction: column; height: auto; }
+
+  .ide-webide .live-mirror-code { height: 44vh; flex: none; }
+
+  .ide-webide .live-mirror-out { height: 44vh; flex: none; border-left: 0;
+                       border-top: 1px solid var(--line); }
+
+  /* The editor page's own phone rule fixes every .editor-wrap at 55vh and
+     * every .output at 35vh. Inside a 44vh live pane that spilled out of the
+     * bottom and over whatever came next — the teacher's page heading, or the
+     * top of the student's own editor — so here they fill their pane instead. */
+  .ide-webide .live-pane .editor-wrap { height: auto; flex: 1 1 auto; }
+
+  /* And with that gone, the student's pane needs a height of its own: its
+     * 55% basis is of a column with no height here, so it shrank to its head. */
+  .ide-webide .live-mine { flex: none; }
+
+  .ide-webide .live-mirror-console .output { height: auto; }
+}
+
+@media (min-width: 861px) {
+  .ide-webide .split .resizer + .console-head { border-top: 0; }
+
+  .ide-webide .live-left { border-right: 0; }
+
+  .ide-webide .live-mirror { border-bottom: 0; }
+
+  .ide-webide .live-mirror-out { border-left: 0; }
+
+  .ide-webide .live-right .live-notes { border-top: 0; }
+}
+
+
+.ide-flaskide .trail[hidden] { display: none; }
+
+.ide-flaskide .trail-page code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+/* "Auto" — whether the preview follows the typing. Sits beside Run and reads
+   as a setting for it, rather than competing with it for attention. */
+.ide-flaskide .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ide-flaskide .toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
+.ide-flaskide .toggle:hover { color: var(--text); }
+
+.ide-flaskide .toggle[hidden] { display: none; }
+
+/* Notes | Preview, in the right pane's head (app.js, paintSwitch). Two
+   buttons joined into one control, the one on show filled in. */
+.ide-flaskide .head-right { display: flex; align-items: center; gap: 10px; }
+
+.ide-flaskide .view-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 6px;
+               overflow: hidden; }
+
+.ide-flaskide .view-switch[hidden] { display: none; }
+
+.ide-flaskide .view-btn { font: inherit; font-size: 11px; letter-spacing: .4px; text-transform: uppercase;
+            padding: 3px 9px; border: 0; background: transparent; color: var(--muted);
+            cursor: pointer; }
+
+.ide-flaskide .view-btn + .view-btn { border-left: 1px solid var(--line); }
+
+.ide-flaskide .view-btn:hover { background: var(--hover-bg); color: var(--text); }
+
+.ide-flaskide .view-btn.is-on { background: var(--brand); color: var(--on-brand); }
+
+/* Set by paintTabs when the tabs are wider than the strip. Without it a
+   clipped tab reads as a broken layout rather than as something to scroll,
+   because macOS hides the scrollbar until it is already moving. */
+.ide-flaskide .tabs.has-more {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+
+/* The button keeps its width whatever the strip does; letting it shrink is
+   how "+ File" becomes "+ Fi". */
+.ide-flaskide .pane-head-tabs > .linkbtn { flex: 0 0 auto; }
+
+.ide-flaskide #output,
+.ide-flaskide #teacher-output { flex: 0 1 38%; min-height: 84px; }
+
+.ide-flaskide .chip[hidden] { display: none; }
+
+/* The student's own page, under the console strip. */
+.ide-flaskide .preview-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: #fff;
+}
+
+/* STACKED, like .preview-frame in the editor, because it is the same
+ * preview.js and it double-buffers: the first Run adds a second iframe
+ * beside the first. Left in the flow, that second frame sat UNDER the
+ * first — below the preview, over the console and the notes — so the
+ * student's page was painted across the panes beneath it and the preview
+ * itself stayed blank. */
+.ide-flaskide .preview-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.ide-flaskide .preview-wrap iframe.is-back {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* .preview-wrap sets no display, but say so: the teacher's page and the
+   student's take turns in the same place, and a rule that set display later
+   would put both on screen at once. */
+.ide-flaskide .preview-wrap[hidden] { display: none; }
+
+/* The console is a strip, not a pane. At 28% it took more of the column
+ * than the notes under it, and on a classroom laptop the notes were left a
+ * hand's width of text — the part of the page the lesson is actually in.
+ * Its <pre>s fill the strip here rather than taking the 38% the editor's
+ * console takes, which inside a strip this short left a gap under them. */
+.ide-flaskide .live-console { flex: 0 0 16%; min-height: 80px; }
+
+.ide-flaskide .live-console #output,
+.ide-flaskide .live-console #teacher-output { flex: 1 1 auto; min-height: 0; }
+
+/* The path bar over the live preview, the same shape the editor's has. */
+.ide-flaskide .preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-head);
+}
+
+.ide-flaskide .preview-bar .field-path { flex: 1 1 auto; font-family: var(--mono); }
+
+/* Put away while the teacher's page is in front: it drives the student's
+   app, and on the teacher's snapshot it would look like it drove that. */
+.ide-flaskide .preview-bar[hidden] { display: none; }
+
+/* The project's notes on the live page, under the console. A fixed share of
+ * the column, like the console's, so the preview keeps the most room and
+ * long notes scroll inside their own pane rather than pushing it away. */
+.ide-flaskide .live-right .live-notes {
+  flex: 0 0 48%;
+  min-height: 110px;
+  border-top: 1px solid var(--line);
+}
+
+.ide-flaskide .out-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 2px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ide-flaskide .out-tab:hover { color: var(--text); }
+
+.ide-flaskide .out-tab.is-on { color: var(--text); border-bottom-color: var(--accent); }
+
+/* Changed while the student's own app was running, so it did not jump to
+ * the front; a dot says there is something new behind it. */
+.ide-flaskide .out-tab.has-new::after { content: " •"; color: var(--accent); }
+
+/* The console folded: just its head, and the page and notes get the
+ * column. The <pre>s are hidden rather than squeezed to zero so the
+ * student's own console keeps its scroll position for when it opens. */
+.ide-flaskide .live-console.is-folded { flex: 0 0 auto; min-height: 0; }
+
+.ide-flaskide .live-console.is-folded .output { display: none; }
+
+/* The fixed size above only holds if the pane beside it does not ask for
+ * more. #preview-view's basis was `auto` — its own content — so every line
+ * the console printed took height from the notes. The same 38% as the
+ * class's own Notes pane, so the teacher sees them the size the class does. */
+.ide-flaskide .pane-right #preview-view { flex: 1 1 0; }
+
+.ide-flaskide .share-hide input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
+/* THE CLASS'S RIGHT-HAND COLUMN: PREVIEW, CONSOLE, NOTES. The preview is
+ * what is left, as it was before there were handles; the two handles size
+ * the console and the notes from above. Folded, the console is its head
+ * and nothing more, whatever size it was dragged to — split.js puts the
+ * stored size on it inline, which would otherwise beat .is-folded and
+ * leave an empty strip — and its handle goes, since there is nothing in
+ * it to size. */
+.ide-flaskide .live-right .live-console.is-folded { flex: 0 0 auto !important; }
+
+.ide-flaskide .resizer:has(+ .live-console.is-folded) { display: none; }
+
+.ide-flaskide :not(.is-folded):not(.resizer):has(~ .resizer-y[data-size="next"] + .is-sized) { min-height: 80px; }
+
+/* The editor's console is sized from ABOVE (data-pane="output"), so the
+ * pane taking what is left is the one before it: the preview, `1 1 62%`, or
+ * the SQL results. With their own basis they kept a share, and the console
+ * asked for 358px got 301. */
+.ide-flaskide #preview-view:has(> #output.is-sized) > .preview-frame,
+.ide-flaskide #preview-view:has(> #output.is-sized) > .sql-pane { flex-basis: 0; }
+
+@media (min-width: 861px) {
+  .ide-flaskide .split .resizer + .console-head { border-top: 0; }
+
+  .ide-flaskide .live-left { border-right: 0; }
+
+  .ide-flaskide .live-mirror { border-bottom: 0; }
+
+  .ide-flaskide .live-right .live-notes { border-top: 0; }
+}
+
+
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a
    glaring rectangle in dark mode. Repaint it from the tokens. */

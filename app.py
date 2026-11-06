@@ -53,6 +53,9 @@ APP_NAME = "pyide"          # this editor, in the shared account tables
 
 MAX_CODE_BYTES = 200_000          # ~200 KB, generous for a class assignment
 LIVE_OUTPUT_BYTES = 20_000        # the tail of a Run, sent to the class
+# A web lesson's page as the teacher's Run built it: every file inlined into
+# one document, so a little over a web project's whole 600 KB (WebIDE's).
+LIVE_PAGE_BYTES = 600_000 + 100_000
 MAX_FILES = 12
 # A book is the large case: a novel's 8,000 lines is 400-600 KB, and a
 # teacher had a project with three of them refused as "too large to save"
@@ -727,6 +730,8 @@ app = Flask(__name__)
 app.request_class = PackedRequest
 # The editor's template asks which file a project opens on (entry_of).
 app.jinja_env.globals["entry_of"] = entry_of
+# A web lesson's page renders the id of the teacher's page it starts with.
+app.jinja_env.globals["live_page_id"] = lambda page: _page_id(page)
 
 #: The school's clock, for every time the server writes out as words. Times
 #: are stored in UTC (accounts.now), and for a long while they were also
@@ -7235,8 +7240,12 @@ def _live_now():
 
 
 def _find_live(db, code):
-    return db.query(accounts.LiveSession).filter_by(
-        code=(code or "").strip().lower(), app=APP_NAME).first()
+    """A live lesson by its code, of any IDE this editor teaches: its `app`
+    is the lesson's IDE (EDITOR_IDES), which says which page the class gets
+    (live_page) — a web lesson's preview, a Flask lesson's address bar."""
+    return db.query(accounts.LiveSession).filter(
+        accounts.LiveSession.code == (code or "").strip().lower(),
+        accounts.LiveSession.app.in_(EDITOR_IDES)).first()
 
 
 @app.get("/api/live/assignments")
@@ -7252,8 +7261,11 @@ def live_assignments():
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="Only a teacher can start a live lesson."), 403
+        # Of the IDE the editor is teaching (`ide`, Python when left out):
+        # a web lesson can only be turned in to a web assignment.
+        ide = _ide_asked(request.args) or APP_NAME
         rows = (db.query(accounts.Assignment)
-                  .filter_by(teacher_id=user.id, app=APP_NAME,
+                  .filter_by(teacher_id=user.id, app=ide,
                              archived=0, closed=0)
                   .filter(accounts.Assignment.kind.notin_(("lesson", "lab")))
                   .order_by(func.coalesce(accounts.Assignment.updated_at,
@@ -7297,8 +7309,9 @@ def _assignment_for(db, user, slug):
     """
     if not slug:
         return None, None
-    item = db.query(accounts.Assignment).filter_by(
-        slug=slug, app=APP_NAME).first()
+    item = db.query(accounts.Assignment).filter(
+        accounts.Assignment.slug == slug,
+        accounts.Assignment.app.in_(EDITOR_IDES)).first()
     if item is None:
         return None, "No assignment with that link."
     if item.teacher_id != user.id:
@@ -7349,7 +7362,9 @@ def _newest_lesson(db, host_id, assignment_id):
     another section's last code — while the teacher taught in the new one.
     """
     return (db.query(accounts.LiveSession)
-              .filter_by(host_id=host_id, app=APP_NAME, assignment_id=assignment_id)
+              .filter(accounts.LiveSession.host_id == host_id,
+                      accounts.LiveSession.app.in_(EDITOR_IDES),
+                      accounts.LiveSession.assignment_id == assignment_id)
               .order_by(accounts.LiveSession.started_at.desc(),
                         accounts.LiveSession.id.desc()).first())
 
@@ -7371,8 +7386,10 @@ def _lesson_for(db, user, item):
     if live is None:
         live = accounts.LiveSession(
             code=accounts.new_id(db, accounts.LiveSession, "code"),
-            app=APP_NAME, host_id=user.id, host_name=_live_host_name(user),
-            title=item.title, body="", filename="main.py", version=0,
+            # the assignment's IDE is its lesson's (live_page)
+            app=_ide_of(item), host_id=user.id, host_name=_live_host_name(user),
+            title=item.title, body="", filename=entry_of(_ide_of(item), item.file_map()),
+            version=0,
             assignment_id=item.id, ended=1)
         db.add(live)
         db.commit()
@@ -7425,8 +7442,9 @@ def teach_assignment_live(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(
+            accounts.Assignment.slug == slug,
+            accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
         if _is_lesson(item):
@@ -7434,7 +7452,11 @@ def teach_assignment_live(slug):
         if _is_lab(item):                  # no live mode for labs
             return redirect(url_for("teacher_assignment", slug=item.slug))
         live = _lesson_for(db, user, item)
-        return redirect(url_for("index", teach=live.code, a=item.slug))
+        # In the assignment's own editor: a web lesson taught from the Python
+        # one would push its page's text to a class running it as Python.
+        ide = _ide_of(item)
+        return redirect(url_for("index", teach=live.code, a=item.slug,
+                                **({} if ide == APP_NAME else {"ide": ide})))
     finally:
         db.close()
 
@@ -7464,12 +7486,20 @@ def live_start():
         item, why = _assignment_for(db, user, wanted)
         if why:
             return jsonify(error=why), 400
+        # The lesson's IDE: its assignment's, else the editor's (`ide`).
+        ide = _ide_of(item) if item is not None else (_ide_asked(data) or APP_NAME)
+        if item is not None and _ide_asked(data) not in (None, ide):
+            return jsonify(error="That assignment is a different kind of project "
+                                 "from the one open here."), 400
         # The first file can be the notes, answer keys and all.
         if quiz.is_notes(data.get("filename")):
             body = quiz.redact(body)
 
+        # One open lesson per teacher, whichever IDE it is in.
         live = (db.query(accounts.LiveSession)
-                  .filter_by(host_id=user.id, app=APP_NAME, ended=0)
+                  .filter(accounts.LiveSession.host_id == user.id,
+                          accounts.LiveSession.app.in_(EDITOR_IDES),
+                          accounts.LiveSession.ended == 0)
                   .order_by(accounts.LiveSession.started_at.desc()).first())
 
         # A RESUME ONLY EVER REATTACHES. The editor remembers the lesson it
@@ -7500,7 +7530,7 @@ def live_start():
             # Go live and reload over the lesson the class is looking at.
             (db.query(accounts.LiveSession)
                .filter(accounts.LiveSession.host_id == user.id,
-                       accounts.LiveSession.app == APP_NAME,
+                       accounts.LiveSession.app.in_(EDITOR_IDES),
                        accounts.LiveSession.ended == 0,
                        accounts.LiveSession.id != old.id)
                .update({"ended": 1, "updated_at": _live_now()},
@@ -7518,6 +7548,14 @@ def live_start():
         # resume (which never says which assignment), carries on as before.
         if (live is not None and not reopen and not resume and "assignment" in data
                 and live.assignment_id != (item.id if item else None)):
+            live.ended = 1
+            live.updated_at = _live_now()
+            live = None
+        # GO LIVE FROM ANOTHER KIND OF PROJECT ends the lesson open in the
+        # last one, assignment or not: a class on a Python lesson would be
+        # sent a web page's text to run as Python. Not on a resume, which
+        # only ever reattaches the lesson it names.
+        if live is not None and not reopen and not resume and _ide_of(live) != ide:
             live.ended = 1
             live.updated_at = _live_now()
             live = None
@@ -7555,7 +7593,7 @@ def live_start():
                 # moves on so every student's poll sees the new file.
                 own.version = (own.version or 0) + 1
                 own.body = body
-                own.filename = clean(data.get("filename"), 200) or "main.py"
+                own.filename = clean(data.get("filename"), 200) or entry_of(ide, {})
                 own.title = clean(data.get("title"), 200) or own.title
                 own.host_name = _live_host_name(user)
                 live = own
@@ -7563,12 +7601,12 @@ def live_start():
         if live is None:
             live = accounts.LiveSession(
                 code=accounts.new_id(db, accounts.LiveSession, "code"),
-                app=APP_NAME,
+                app=ide,
                 host_id=user.id,
                 host_name=_live_host_name(user),
                 title=clean(data.get("title"), 200) or "Live lesson",
                 body=body,
-                filename=clean(data.get("filename"), 200) or "main.py",
+                filename=clean(data.get("filename"), 200) or entry_of(ide, {}),
                 # 1, not 0: version 0 on an ended lesson means "made ahead
                 # and never taught" (_waiting), and a lesson started here
                 # and ended before its first push must not look like that.
@@ -7722,6 +7760,17 @@ def live_push(code):
             if len(raw) > LIVE_OUTPUT_BYTES:
                 output = raw[-LIVE_OUTPUT_BYTES:].decode("utf-8", "ignore")
             fields["output"] = output
+
+        # The page the teacher's last Run made, in a web or Flask lesson: the
+        # whole built page (WebIDE), or {path, html} / {sql, html} (FlaskIDE).
+        # Too big, it is DROPPED, not refused, for the same reason as the
+        # output: a 413 would take the code down with it, and the mirror
+        # would freeze with the button still saying Live. Half a page cannot
+        # be trimmed into anything that renders, so the class is shown none.
+        page = data.get("page")
+        if isinstance(page, str) and not IDES[_ide_of(live)]["entry_in_code"]:
+            cap = LIVE_PAGE_BYTES if _ide_of(live) == "webide" else IDES[_ide_of(live)]["max_file_bytes"]
+            fields["page"] = page if len(page.encode("utf-8")) <= cap else ""
 
         # One statement, so two workers cannot interleave a read and a write.
         # `version < seq` is what drops a stale push, and it is also why this
@@ -7944,9 +7993,25 @@ def live_poll(code):
             pointer="" if live.ended else (live.pointer or ""),
             pointer_path="" if live.ended else (live.pointer_path or ""),
             pointer_seq=live.pointer_seq or 0,
+            # The teacher's page (a web or Flask lesson's), only to a page
+            # that doesn't already have this one (`pg`, its _page_id): sent
+            # with every poll it would be thirty students pulling hundreds of
+            # kilobytes a second for a page that has not changed. A page that
+            # sends no `pg` (FlaskIDE's) gets it every time, as it always did.
+            page_id=_page_id(live.page),
+            **({"page": live.page or ""}
+               if request.args.get("pg", "") != _page_id(live.page) else {}),
         )
     finally:
         db.close()
+
+
+def _page_id(page):
+    """A short name for the teacher's page, so a poll can leave it out
+    (WebIDE's). "" for no page at all."""
+    if not page:
+        return ""
+    return hashlib.sha1(page.encode("utf-8")).hexdigest()[:16]
 
 
 # --------------------------------------------------------------------------
@@ -8186,21 +8251,14 @@ def live_keep(code):
             return jsonify(error="No such live lesson."), 404
 
         data = request.get_json(silent=True) or {}
+        ide = _ide_of(live)
+        spec = IDES[ide]
         source = data.get("code", "")
         if not isinstance(source, str) or not source.strip():
             return jsonify(error="There's nothing to save yet."), 400
-        if len(source.encode("utf-8")) > MAX_CODE_BYTES:
+        if len(source.encode("utf-8")) > (MAX_CODE_BYTES if spec["entry_in_code"]
+                                          else spec["max_file_bytes"]):
             return jsonify(error="That program is too large to save."), 413
-
-        # The project's other files, from the tabs on the live page. An EMPTY
-        # map means "leave them alone", never "delete them all": the live page
-        # has no way to remove a file, so an empty map from it can only be an
-        # editor tab still running the code from before it had tabs, and that
-        # code sent `files: {}` on every save. Taking it at its word would wipe
-        # an assignment's data files without a word.
-        files, file_error = validate_files(data.get("files"))
-        if file_error:
-            return jsonify(error=file_error), 400
 
         item = None
         if live.assignment_id:
@@ -8215,6 +8273,37 @@ def live_keep(code):
             draft = db.query(accounts.Draft).filter_by(
                 owner_id=user.id, assignment_id=item.id).first()
 
+        # The project's other files, from the tabs on the live page. An EMPTY
+        # map means "leave them alone", never "delete them all": the live page
+        # has no way to remove a file, so an empty map from it can only be an
+        # editor tab still running the code from before it had tabs, and that
+        # code sent `files: {}` on every save. Taking it at its word would wipe
+        # an assignment's data files without a word.
+        if spec["entry_in_code"]:
+            files, file_error = validate_files(data.get("files"), ide)
+            if file_error:
+                return jsonify(error=file_error), 400
+        else:
+            # A web or Flask project is all files: what the page sends as
+            # `code` is its entry (index.html; app.py, query.sql or
+            # index.php), and it goes back among the rest — the rest as sent,
+            # or else what the draft (or the assignment) already has.
+            # WebIDE's and FlaskIDE's live_keep, one rule for both.
+            rest = data.get("files") if isinstance(data.get("files"), dict) and data.get("files") else None
+            base = (draft.file_map() if draft is not None else
+                    quiz.redact_files(item.file_map()) if item is not None else {})
+            entries = spec.get("entries") or (spec["entry"],)
+            if any(e in base for e in entries):
+                entry = entry_of(ide, base)
+            else:
+                entry = data.get("entry") if data.get("entry") in entries else spec["entry"]
+            project = dict(rest if rest is not None else base)
+            project[entry] = source
+            files, file_error = validate_files(project, ide)
+            if file_error:
+                return jsonify(error=file_error), 400
+            source = ""
+
         if draft is None:
             # SEEDED FROM THE ASSIGNMENT, exactly as /a/<slug> seeds one. An
             # assignment can ship data files and notes; a student who joins
@@ -8225,7 +8314,7 @@ def live_keep(code):
                 slug=accounts.new_id(db, accounts.Draft),
                 owner_id=user.id,
                 assignment_id=item.id if item else None,
-                app=APP_NAME,
+                app=ide,
                 title=(item.title if item else (live.title or "Live lesson")),
                 code=source,
                 files=(json.dumps(files) if files else
@@ -8328,6 +8417,14 @@ def live_page(code):
         starter = ""
         starter_files = {}
         draft_version = None
+        ide = _ide_of(live)
+        in_code = IDES[ide]["entry_in_code"]
+        # The file the student's editor opens on. Without an assignment, a
+        # Flask lesson says which by the teacher's open file (FlaskIDE's rule).
+        low = (live.filename or "").lower()
+        entry = (entry_of(ide, {}) if ide != "flaskide" else
+                 "query.sql" if low.endswith(".sql") else
+                 "index.php" if low.endswith(".php") else "app.py")
         if item is not None:
             starter = item.code or ""
             starter_files = quiz.redact_files(item.file_map())
@@ -8338,6 +8435,12 @@ def live_page(code):
                     starter = mine.code or ""
                     starter_files = _current_notes(item, mine.file_map())
                     draft_version = mine.version or 0
+            if not in_code:
+                # The entry is one of the files: it starts the editor, and
+                # the rest are its tabs (WebIDE's and FlaskIDE's live_page).
+                entry = entry_of(ide, starter_files)
+                starter = starter_files.get(entry, "")
+                starter_files = {k: v for k, v in starter_files.items() if k != entry}
 
         ctx = user_context(db)
         ctx.update(
@@ -8353,8 +8456,14 @@ def live_page(code):
             waiting=_waiting(live),
             error="",
             attend_class=_attend_item(db, user, item, live=True),
+            entry=entry,
+            sql_entry="query.sql",
+            php_entry="index.php",
         )
-        return render_template("live.html", **ctx)
+        # The class's page is the lesson's IDE's: WebIDE's preview, or
+        # FlaskIDE's address bar, moved here with them.
+        page = {"webide": "live_web.html", "flaskide": "live_flask.html"}.get(ide, "live.html")
+        return render_template(page, **ctx)
     finally:
         db.close()
 

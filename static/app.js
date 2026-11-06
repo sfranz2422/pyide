@@ -1194,14 +1194,17 @@
       paintSlides(cut);
       paintClassView(onSlide, slide, window.PyIDENotes.takeTheme(notes).name);
       var output = liveOutput();
-      var stamp = [name, text, notes, slide, output, cursor].join("\u0000");
+      // A web or Flask lesson's page, as the teacher's last Run made it (the
+      // runner's livePage); none for Python, whose output is the console.
+      var page = runner.livePage ? runner.livePage() : undefined;
+      var stamp = [name, text, notes, slide, output, page, cursor].join("\u0000");
       if (stamp === lastSent) return;      // nothing typed since last time
       lastSent = stamp;
       fetch("/api/live/" + encodeURIComponent(liveCode) + "/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: text, filename: name, notes: notes,
-                               slide: slide, output: output,
+                               slide: slide, output: output, page: page,
                                cursor: cursor, seq: nextSeq() })
       }).then(function (res) {
         if (res.status === 403 || res.status === 409) { stopLive(true); return; }
@@ -1439,6 +1442,9 @@
         runner.forget(name);
       });
       docs[MAIN].setValue(code || "");
+      // A web or Flask project's entry comes as one of its files (its `code`
+      // is ""), and replaces the document above; showEditorDoc below puts
+      // the editor on it. test_live_ides_browser.py types after a load.
       Object.keys(files || {}).sort().forEach(function (name) {
         docs[name] = makeDoc(files[name]);
       });
@@ -1459,7 +1465,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assignment === undefined
-          ? { body: text, filename: name, resume: resume || "",
+          ? { body: text, filename: name, resume: resume || "", ide: window.PYIDE.ide || "pyide",
               reopen: reopen || "",
               title: ($("title") && $("title").value) || "Live lesson" }
           /* `assignment` present — even as "" — is what tells the server this
@@ -1467,7 +1473,7 @@
              assignment it already had rather than silently losing it on a
              page reload, which would leave the class unable to hand in with
              nothing on screen to say why. */
-          : { body: text, filename: name, assignment: assignment,
+          : { body: text, filename: name, assignment: assignment, ide: window.PYIDE.ide || "pyide",
               title: ($("title") && $("title").value) || "Live lesson" })
       }).then(function (res) { return res.json(); })
         .then(function (data) {
@@ -1563,7 +1569,9 @@
           stopLive(false);
         }
       } else {
-        fetch("/api/live/assignments")
+        // This kind of project's assignments only: a web lesson can be
+        // turned in to a web assignment, and nothing else.
+        fetch("/api/live/assignments?ide=" + encodeURIComponent(window.PYIDE.ide || "pyide"))
           .then(function (res) { return res.json(); })
           .catch(function () { return {}; })
           .then(function (data) {

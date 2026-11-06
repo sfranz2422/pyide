@@ -121,7 +121,7 @@ else:
     for ln in lines:
         label, _, detail = ln[5:].partition("\t")
         check(label, ln.startswith("ok"), "" if ln.startswith("ok") else detail[:200])
-    check("the browser run reported every check", len(lines) == 22,
+    check("the browser run reported every check", len(lines) == 23,
           (len(lines), out.stderr.strip()[-300:]))
 
     db = P.SessionLocal()
