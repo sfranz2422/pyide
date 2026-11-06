@@ -8,8 +8,8 @@ already said which IDE each row belongs to (`app`), and share snapshots now
 do too (`snippets.ide`). Three things are pinned here:
 
 1. AN IDE WITHOUT A RUNNER IS NOT FOUND. Until the editor page can run one
-   (EDITOR_IDES — FlaskIDE's, today), every editor route answers its row as
-   if it weren't there. Before this, /p/<slug> opened any app's draft, so an
+   (EDITOR_IDES — GameIDE's, which shares the tables), every editor route
+   answers its row as if it weren't there. Before this, /p/<slug> opened any app's draft, so an
    HTML project reached by its address was shown, run and saved as Python.
 
 2. EVERY DOOR KNOWS THE IDE. A web draft, share, assignment, turn-in and
@@ -141,43 +141,43 @@ check("Python autosave of an emptied program still saves", r.status_code == 200,
 # --------------------------------------------------------------------------
 print("\nAn IDE the editor has no runner for is not found (EDITOR_IDES = %r)" % (P.EDITOR_IDES,))
 
-# FlaskIDE's rows share these tables. Until the page has a Flask runner, a
-# FlaskIDE draft reached here by its address is not found — it used to open,
+# GameIDE's rows share these tables, and this editor has no runner for a
+# GameIDE project: one reached here by its address is not found — it used to open,
 # and an HTML project was shown, run and saved as a Python program that way.
-flask_draft = add_row(accounts.Draft(slug="flkdraft1", owner_id=STUDENT,
-                                     app="flaskide", title="Site", code="",
+flask_draft = add_row(accounts.Draft(slug="gmedraft1", owner_id=STUDENT,
+                                     app="gameide", title="Site", code="",
                                      files=json.dumps({"app.py": "x"})))
-flask_item = add_row(accounts.Assignment(slug="flkitem1", app="flaskide",
+flask_item = add_row(accounts.Assignment(slug="gmeitem1", app="gameide",
                                          teacher_id=TEACHER, title="Routes",
                                          code="", files=json.dumps({"app.py": "x"})))
-flask_snip = add_row(P.Snippet(slug="flksnip1", title="Site", author="A", code="",
-                               files=json.dumps({"app.py": "x"}), ide="flaskide"))
-flask_demo = add_row(P.Snippet(slug="flkdemo1", title="Site", author="A", code="",
-                               files=json.dumps({"app.py": "x"}), ide="flaskide", hidden=1))
+flask_snip = add_row(P.Snippet(slug="gmesnip1", title="Site", author="A", code="",
+                               files=json.dumps({"app.py": "x"}), ide="gameide"))
+flask_demo = add_row(P.Snippet(slug="gmedemo1", title="Site", author="A", code="",
+                               files=json.dumps({"app.py": "x"}), ide="gameide", hidden=1))
 
-check("/p/<flask draft> is 404", student.get("/p/flkdraft1").status_code == 404)
-check("saving a flask draft is 404",
-      student.post("/api/draft/flkdraft1",
+check("/p/<GameIDE draft> is 404", student.get("/p/gmedraft1").status_code == 404)
+check("saving a GameIDE draft is 404",
+      student.post("/api/draft/gmedraft1",
                    json={"code": "print('python now')"}).status_code == 404)
-check("... and it is untouched", row(accounts.Draft, slug="flkdraft1").code == "")
-check("deleting a flask draft is 404",
-      student.delete("/api/draft/flkdraft1").status_code == 404)
-check("turning in a flask draft is 404",
-      student.post("/api/submit", json={"draft": "flkdraft1"}).status_code == 404)
-check("/a/<flask assignment> is 404", student.get("/a/flkitem1").status_code == 404)
+check("... and it is untouched", row(accounts.Draft, slug="gmedraft1").code == "")
+check("deleting a GameIDE draft is 404",
+      student.delete("/api/draft/gmedraft1").status_code == 404)
+check("turning in a GameIDE draft is 404",
+      student.post("/api/submit", json={"draft": "gmedraft1"}).status_code == 404)
+check("/a/<GameIDE assignment> is 404", student.get("/a/gmeitem1").status_code == 404)
 check("its teacher's editor is 404",
-      teacher.get("/teacher/flkitem1/edit").status_code == 404)
-check("/s, /fork, /raw of a flask snapshot are 404",
+      teacher.get("/teacher/gmeitem1/edit").status_code == 404)
+check("/s, /fork, /raw of a GameIDE snapshot are 404",
       all(student.get(u).status_code == 404
-          for u in ("/s/flksnip1", "/s/flksnip1/fork", "/s/flksnip1/raw")))
-check("/d and its source of a flask demo are 404",
+          for u in ("/s/gmesnip1", "/s/gmesnip1/fork", "/s/gmesnip1/raw")))
+check("/d and its source of a GameIDE demo are 404",
       all(student.get(u).status_code == 404
-          for u in ("/d/flkdemo1", "/d/flkdemo1/source")))
-check("/new?ide=flaskide is 404", student.get("/new?ide=flaskide").status_code == 404)
-check("a new flask draft is refused",
-      student.post("/api/draft", json={"ide": "flaskide", "files": {"app.py": "x"}}).status_code == 400)
-check("a flask share is refused",
-      student.post("/api/share", json={"ide": "flaskide", "author": "A",
+          for u in ("/d/gmedemo1", "/d/gmedemo1/source")))
+check("/new?ide=gameide is 404", student.get("/new?ide=gameide").status_code == 404)
+check("a new GameIDE draft is refused",
+      student.post("/api/draft", json={"ide": "gameide", "files": {"app.py": "x"}}).status_code == 400)
+check("a GameIDE share is refused",
+      student.post("/api/share", json={"ide": "gameide", "author": "A",
                                        "files": {"app.py": "x"}}).status_code == 400)
 check("an IDE nobody has heard of is refused",
       student.post("/api/draft", json={"ide": "cobol", "code": "x"}).status_code == 400)
@@ -360,8 +360,107 @@ check("a student's Check my work on a web assignment is kept", r.status_code == 
 _kept = row(accounts.TestResult, student_id=OTHER, assignment_id=item.id)
 check("  as their own check, for the teacher", _kept is not None and _kept.kind == "self",
       _kept and _kept.kind)
-check("  but not for a FlaskIDE one (no runner, so no assignment)",
-      other.post("/api/tests/self", json={"assignment": "flkitem1", "results": []}).status_code == 404)
+check("  but not for a GameIDE one (no runner, so no assignment)",
+      other.post("/api/tests/self", json={"assignment": "gmeitem1", "results": []}).status_code == 404)
+
+
+# --------------------------------------------------------------------------
+print("\nA FlaskIDE project: a Flask app, a SQL project or a PHP site")
+
+check("the editor has a Flask runner", "flaskide" in P.EDITOR_IDES, P.EDITOR_IDES)
+fl_page = student.get("/new?ide=flaskide").get_data(as_text=True)
+fs = scripts(fl_page)
+check("a Flask project loads the Flask runner and FlaskIDE's runtimes",
+      "/static/runners/flask.js" in fs and all(x in fs for x in (
+          "/static/flask/flask.js", "/static/flask/php.js", "/static/flask/preview.js",
+          "/static/flask/syntax.js", "/static/flask/complete.js", "/static/flask/autograde.js"))
+      and "/static/runners/python.js" not in fs and "/static/runtime.js" not in fs, fs[-6:])
+check("  with pack.js first, before anything that could keep a plain fetch",
+      fs and fs[0] == "/static/flask/pack.js" and fl_page.index("flask/pack.js") < fl_page.index("</head>"), fs[:2])
+check("  and only there: a Python or web page sends as it always has",
+      "pack.js" not in py_page and "pack.js" not in web_page)
+check("  the PHP and SQL modes", any("mode/php" in x for x in fs) and any("mode/sql" in x for x in fs))
+check("  its preview has an address bar and a place for SQL results",
+      'id="preview-path"' in fl_page and 'id="sql-results"' in fl_page and '<body class="ide-flaskide' in fl_page)
+check("  and no Go live for the teacher yet",
+      'id="go-live"' not in teacher.get("/new?ide=flaskide").get_data(as_text=True))
+
+def editor_text(html):
+    return html.split('<textarea id="editor">')[1].split("</textarea>")[0]
+
+check("a new Flask app opens on app.py, its templates beside it",
+      "from flask import" in editor_text(fl_page) and '"templates/base.html"' in fl_page)
+sql_page = student.get("/new?ide=flaskide&kind=sql").get_data(as_text=True)
+check("kind=sql is a SQL project, open on query.sql",
+      '"query.sql"' in sql_page and '"schema.sql"' in sql_page and '"app.py"' not in sql_page
+      and editor_text(sql_page).lstrip().startswith("--"))
+php_page = student.get("/new?ide=flaskide&kind=php").get_data(as_text=True)
+check("kind=php is a PHP site, open on index.php",
+      '"includes/header.php"' in php_page and editor_text(php_page).startswith("&lt;?php"))
+
+FLASK = dict(P.FLASK_STARTER)
+r = student.post("/api/draft", json={"ide": "flaskide", "files": FLASK})
+check("a Flask draft is saved, folders and all", r.status_code == 200, r.get_json())
+fd = row(accounts.Draft, slug=r.get_json()["slug"])
+check("  as a FlaskIDE project, `code` empty", fd.app == "flaskide" and fd.code == ""
+      and "templates/index.html" in fd.file_map())
+r = student.post("/api/draft", json={"ide": "flaskide", "files": dict(FLASK, **{"pages/x.html": "x"})})
+check("a folder Flask doesn't look in is refused, naming the ones it does",
+      r.status_code == 400 and "templates or static or includes" in r.get_json()["error"], r.get_json())
+r = student.post("/api/draft", json={"ide": "flaskide", "files": dict(FLASK, **{"templates\\x.html": "x"})})
+check("a backslash gets a sentence about forward slashes",
+      r.status_code == 400 and "forward slash" in r.get_json()["error"], r.get_json())
+r = student.post("/api/draft", json={"ide": "flaskide", "files": {"templates/x.html": "x"}})
+check("a project with nothing to run is refused, naming all three entries",
+      r.status_code == 400 and all(e in r.get_json()["error"] for e in ("app.py", "query.sql", "index.php")))
+many = dict(FLASK)
+many.update({"static/f%d.css" % i: "x" for i in range(40 - len(FLASK))})
+check("a Flask project may have 40 files (Web 2's Game Vault has 22)",
+      student.post("/api/draft", json={"ide": "flaskide", "files": many}).status_code == 200)
+many["static/one-more.css"] = "x"
+check("  and not 41", student.post("/api/draft", json={"ide": "flaskide", "files": many}).status_code == 400)
+check("a web project still may not have folders",
+      student.post("/api/draft", json={"ide": "webide", "files": dict(WEB, **{"templates/a.html": "x"})}).status_code == 400)
+
+# Encoded, as pack.js sends it: a body Render's firewall would read as an
+# attack goes as base64 and the server reads it as if it were plain.
+import base64                                               # noqa: E402
+packed = {"_packed": base64.b64encode(json.dumps(
+    {"files": dict(FLASK, **{"app.py": FLASK["app.py"] + "\n# <script>packed</script>\n"})}).encode()).decode()}
+r = student.post("/api/draft/%s" % fd.slug, json=packed)
+check("an encoded autosave is read as a plain one", r.status_code == 200, r.get_json())
+check("  and saved", "<script>packed</script>" in row(accounts.Draft, slug=fd.slug).file_map()["app.py"])
+r = student.post("/api/draft/%s" % fd.slug, json={"_packed": "not base64!"})
+check("  and one that can't be read is refused, not saved as nothing", r.status_code == 400)
+check("a plain save still works on the same draft",
+      student.post("/api/draft/%s" % fd.slug, json={"files": FLASK}).status_code == 200)
+
+r = student.post("/api/share", json={"ide": "flaskide", "author": "A", "files": P.SQL_STARTER})
+sq = r.get_json()["slug"]
+check("a SQL project's raw text is its query.sql",
+      student.get("/s/%s/raw" % sq).get_data(as_text=True) == P.SQL_STARTER["query.sql"])
+r = student.post("/api/share", json={"ide": "flaskide", "author": "A", "files": FLASK, "hidden": True})
+fdemo = r.get_json()["slug"]
+fd_page = student.get("/d/%s" % fdemo).get_data(as_text=True)
+check("a Flask hide-code link plays in the app's own player, from its source",
+      "/static/flask/play.js" in fd_page and "/d/%s/source" % fdemo in fd_page)
+check("  which sends the files", student.get("/d/%s/source" % fdemo).get_json()["files"] == FLASK)
+check("the console's handle names the pane it sizes, and split.js honours that",
+      'data-split="editor-console" data-size="next" data-pane="output"' in open(os.path.join(PYIDE, "templates", "index.html")).read()
+      and "if (handle.dataset.pane) return document.getElementById(handle.dataset.pane);"
+      in open(os.path.join(PYIDE, "static", "split.js")).read())
+check("a Flask New tab is the app's own player",
+      "/static/flask/play.js" in student.get("/play?ide=flaskide").get_data(as_text=True))
+
+r = teacher.post("/api/assignment", json={"ide": "flaskide", "title": "Routes",
+                                          "files": dict(FLASK, **{"notes.md": "```tests\nGET / -> 200\nGET /about -> 200 (2 points)\n```\n"})})
+fitem = row(accounts.Assignment, slug=r.get_json()["slug"])
+check("a Flask assignment's tests are read as Flask tests",
+      fitem.app == "flaskide" and P._grader(fitem).possible(fitem.file_map()) == 3,
+      P._grader(fitem).possible(fitem.file_map()))
+html = other.get("/a/%s" % fitem.slug, follow_redirects=True).get_data(as_text=True)
+check("a student opening it gets a Flask editor, open on app.py",
+      page_ide(html) == "flaskide" and "from flask import" in editor_text(html))
 
 
 # --------------------------------------------------------------------------

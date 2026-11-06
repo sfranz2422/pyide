@@ -667,6 +667,231 @@ body.ide-webide.is-resizing-x iframe, body.ide-webide.is-resizing-y iframe { poi
 .ide-webide .demo-main #output { flex: 0 0 110px; min-height: 0; }
 .ide-webide .demo-main .preview-frame { flex: 1 1 0; }
 
+/* -------------------------------------------------------- flask projects */
+/* A Flask app, a SQL project or a PHP site (runners/flask.js): FlaskIDE's
+   preview with its address bar, the SQL results grid and the new-tab
+   player, moved here with FlaskIDE (Nov 2026). Under .ide-flaskide for the
+   same reason as the web styles above: #output is Python's console too. */
+
+/* Where the preview currently is, once it has left the home page. Reads as a
+   thin address bar rather than a toolbar, because it describes the preview
+   below it and not the project. */
+.ide-flaskide .trail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ide-flaskide .trail .linkbtn:disabled { opacity: .4; cursor: default; }
+
+/* Two iframes stacked exactly on top of each other, so a new page can be
+   built in the hidden one and swapped in without the white flash that
+   assigning srcdoc otherwise causes. See the comment in preview.js. */
+.ide-flaskide .preview-frame {
+  flex: 1 1 62%;
+  min-height: 140px;
+  position: relative;
+  /* a web page brings its own background; never tint it with the editor's */
+  background: #ffffff;
+}
+
+.ide-flaskide .preview-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+/* Hidden with opacity rather than display:none or visibility:hidden, both of
+   which let a browser skip the work we are waiting for. The back buffer has
+   to actually load while it is out of sight — that is the whole point. */
+.ide-flaskide .preview-frame iframe.is-back {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ide-flaskide .console-head { border-top: 1px solid var(--line); }
+
+.ide-flaskide #output { flex: 0 1 38%; min-height: 84px; }
+
+.ide-flaskide .output .warn { color: var(--amber); }
+
+/* A tab name here can contain a folder — templates/index.html — and a
+   column of those reads as one long smear of identical prefix. The folder
+   goes grey so the eye lands on the part that differs. */
+.ide-flaskide .tab-dir { opacity: .55; }
+
+/* The preview's address bar. Every URL in it is imaginary: it exists only
+   as a rule in the student's url_map, and typing one is how they check that
+   a route they just wrote actually answers. */
+.ide-flaskide .trail {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .35rem .6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.ide-flaskide .field-path {
+  flex: 1; font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: .82rem; padding: .25rem .5rem;
+}
+
+.ide-flaskide .status-code {
+  font: 600 .75rem/1 var(--mono, ui-monospace, Menlo, monospace);
+  padding: .25rem .45rem; border-radius: 5px; min-width: 2.4rem;
+  text-align: center; color: var(--fg-dim);
+}
+
+.ide-flaskide .status-code.ok { background: #1e6b4822; color: #1e6b48; }
+
+.ide-flaskide .status-code.warn { background: #8a6a0022; color: #8a6a00; }
+
+.ide-flaskide .status-code.bad { background: #b23a4822; color: #b23a48; }
+
+/* ==========================================================================
+   SQL mode
+   ==========================================================================
+   The editor is the same editor. What changes is the right-hand pane: the
+   address bar and the iframe are meaningless without a Flask app, and a grid
+   of results takes their place. The console stays in both, because that is
+   where an error goes either way.
+
+   Done with one class on <body> rather than by toggling four elements from
+   JavaScript. Four toggles is four chances to miss one, and a missed one
+   leaves an address bar floating above a table of query results. */
+
+body.ide-flaskide.is-sql .trail,
+body.ide-flaskide.is-sql .preview-frame { display: none; }
+
+body.ide-flaskide:not(.is-sql) .sql-pane { display: none; }
+
+.ide-flaskide .sql-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.ide-flaskide .sql-results { padding: 10px 12px 18px; }
+
+/* One block per statement. */
+.ide-flaskide .sql-result { margin-bottom: 18px; }
+
+.ide-flaskide .sql-result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+/* The statement that produced the table under it, so a page of results can
+   be read against a file of queries without counting. */
+.ide-flaskide .sql-stmt {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.ide-flaskide .sql-count {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ide-flaskide .sql-table-wrap { overflow-x: auto; border: 1px solid var(--line);
+                  border-radius: 6px; }
+
+.ide-flaskide table.sql-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  font-family: var(--mono);
+}
+
+.ide-flaskide table.sql-table th,
+.ide-flaskide table.sql-table td {
+  text-align: left;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.ide-flaskide table.sql-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-head);
+  font-weight: 600;
+  z-index: 1;
+}
+
+.ide-flaskide table.sql-table tr:last-child td { border-bottom: 0; }
+
+.ide-flaskide table.sql-table tbody tr:nth-child(even) { background: var(--bg-head); }
+
+/* NULL is not the empty string, and a table that renders both as nothing is
+   a table that teaches the wrong thing on the day LEFT JOIN is introduced. */
+.ide-flaskide .sql-null { color: var(--muted); font-style: italic; }
+
+.ide-flaskide .sql-empty { color: var(--muted); padding: 6px 10px; font-size: 12.5px; }
+
+.ide-flaskide .sql-clipped {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--amber);
+}
+
+/* What the database holds right now, under the results. Worth having on
+   screen: half of learning SQL is remembering what the tables are called. */
+.ide-flaskide .sql-schema {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.ide-flaskide .sql-schema code { font-size: 11.5px; }
+
+/* The editor's New tab: the app's pages fill the tab, under the same
+ * address bar the preview has, with the console a strip at the bottom. */
+.ide-flaskide .play-main {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - var(--bar-h));
+  min-height: 0;
+  background: var(--bg-panel);
+}
+
+.ide-flaskide .play-main .preview-frame { flex: 1 1 0; min-height: 0; }
+
+.ide-flaskide .play-main #output { flex: 0 0 110px; min-height: 0; }
+
+/* An iframe swallows the pointer, and the drag would stop dead the moment
+ * it crossed the preview. Capture should prevent that; this makes sure. */
+body.ide-flaskide.is-resizing-x iframe,
+body.ide-flaskide.is-resizing-y iframe { pointer-events: none; }
+
+/* The editor's console is sized from ABOVE (data-pane="output"), so the
+ * pane taking what is left is the one before it: the preview, `1 1 62%`, or
+ * the SQL results. With their own basis they kept a share, and the console
+ * asked for 358px got 301. */
+.ide-flaskide #output-view:has(> #output.is-sized) > .preview-frame,
+.ide-flaskide #output-view:has(> #output.is-sized) > .sql-pane { flex-basis: 0; }
+
+.ide-flaskide .split .resizer + .console-head { border-top: 0; }
+
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a
    glaring rectangle in dark mode. Repaint it from the tokens. */

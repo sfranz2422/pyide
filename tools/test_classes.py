@@ -388,7 +388,7 @@ _to_editor = sorted(n for n, m in _brands.items()
                     if m and "url_for('index')" in m.group(1))
 _not_link = sorted(n for n, m in _brands.items()
                    # the demo pages are a student's work shown to anyone: no way in
-                   if m and "<a " not in m.group(1) and n not in ("demo.html", "demo_web.html"))
+                   if m and "<a " not in m.group(1) and n not in ("demo.html", "demo_web.html", "play_flask.html"))
 check("every page's logo leads to the front door, not the editor",
       not _to_editor and not _not_link, (_to_editor, _not_link))
 check("  and the editor's asks before leaving unsaved typing",

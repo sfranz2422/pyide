@@ -9,3 +9,8 @@ venv/
 # Packages node's Pyodide fetches and caches beside itself when a test
 # imports matplotlib or pandas (test_charts.py). Megabytes, and re-fetched.
 node_modules/pyodide/*.whl
+
+# PHP for node, for tools/test_flask_php.py only: ~460 MB, installed with
+# `npm install` in tools/php_node, never committed.
+tools/php_node/node_modules/
+tools/php_node/package-lock.json

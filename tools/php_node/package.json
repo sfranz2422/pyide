@@ -1,0 +1,9 @@
+{
+  "name": "pyide-php-tests",
+  "private": true,
+  "description": "Only for tools/test_flask_php.py: PHP in Node, the same build a PHP site's page loads from the CDN. Kept out of the repo's own node_modules (which is committed) because it is ~460 MB; its node_modules is ignored. Nothing here is served.",
+  "devDependencies": {
+    "@php-wasm/node": "3.1.61",
+    "@php-wasm/universal": "3.1.61"
+  }
+}

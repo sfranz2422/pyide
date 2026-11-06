@@ -209,7 +209,12 @@
      program, in a Python project (the runner says which). Each file keeps its
      own CodeMirror document, so switching tabs preserves the caret and the
      undo history. */
-  var MAIN = R.entry;
+  // A FlaskIDE project's depends on its files: app.py, query.sql or
+  // index.php (runners/flask.js), so the runner can say it from them.
+  var MAIN = typeof R.entry === "function" ? R.entry(window.PYIDE.files || {}) : R.entry;
+  // The editor was made before the entry was known; give it the entry's own
+  // mode (a SQL project opens on query.sql). The same mode it had otherwise.
+  editor.setOption("mode", R.modeFor(MAIN));
   // Files kept with the project that are no tab (a block world, a Pi's
   // breadboard): the runner's to say.
   var hidden = R.hidden;
@@ -311,9 +316,12 @@
   }
 
   function fileNames() {
-    return [MAIN].concat(Object.keys(docs).filter(function (n) {
+    var rest = Object.keys(docs).filter(function (n) {
       return n !== MAIN && !hidden(n);
-    }).sort());
+    }).sort();
+    // In the runner's order when it has one: a Flask project's templates
+    // come after its top-level files, and static/ last.
+    return [MAIN].concat(R.tabOrder ? R.tabOrder(rest) : rest);
   }
 
   /* A .md tab is a view switch, not an editor swap: the notes render on the
@@ -435,7 +443,17 @@
       tab.setAttribute("aria-selected", String(on));
 
       var label = document.createElement("span");
-      label.textContent = name;
+      // A file in a folder (a Flask project's templates/index.html): the
+      // folder in grey and the file in full, so a column of templates/...
+      // doesn't read as one long smear of the same prefix.
+      var cut = name.lastIndexOf("/");
+      if (cut > 0) {
+        var dir = document.createElement("span");
+        dir.className = "tab-dir";
+        dir.textContent = name.slice(0, cut + 1);
+        label.appendChild(dir);
+      }
+      label.appendChild(document.createTextNode(name.slice(cut + 1)));
       tab.appendChild(label);
       tab.addEventListener("click", function () { switchTo(name); });
 
@@ -460,6 +478,9 @@
 
   function addFile(name, text) {
     docs[name] = makeDoc(text || "");
+    // A file can change what kind of project this is (a query.sql makes a
+    // Flask project a SQL one), so the runner hears of it.
+    if (runner && runner.onFiles) runner.onFiles();
     renderTabs();
     // adding a file is a change, but fires no editor change event
     if (account) account.noteEdit();
@@ -475,6 +496,7 @@
     }
     delete docs[name];
     runner.forget(name);
+    if (runner.onFiles) runner.onFiles();
     renderTabs();
     relayout();
     if (account) account.noteEdit();
@@ -483,9 +505,12 @@
   var newFileBtn = $("new-file");
   if (newFileBtn) {
     newFileBtn.addEventListener("click", function () {
-      var name = (window.prompt(R.newFile.question, R.newFile.example) || "").trim();
+      // The runner's words, which may depend on the project (a PHP site is
+      // asked for pages, a Flask app for templates).
+      var ask = typeof R.newFile === "function" ? R.newFile(fileNames()) : R.newFile;
+      var name = (window.prompt(ask.question, ask.example) || "").trim();
       if (!name) return;
-      if (!NAME_OK.test(name)) {
+      if (!(R.nameOk ? R.nameOk(name) : NAME_OK.test(name))) {
         write("\n'" + name + "' won't work as a file name. Use letters, digits," +
               " dashes and underscores, ending in something like " +
               R.nameExample + ".\n", "err");
@@ -501,7 +526,7 @@
 
       // A new web page starts as a page, linked to the stylesheet (the
       // runner's starterFor); anything else starts empty.
-      addFile(name, R.starterFor ? R.starterFor(name) : "");
+      addFile(name, R.starterFor ? R.starterFor(name, fileNames()) : "");
       switchTo(name);
     });
   }

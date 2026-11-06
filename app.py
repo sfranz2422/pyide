@@ -19,6 +19,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from werkzeug.exceptions import BadRequest
 from flask import (
     Flask,
     Response,
@@ -38,6 +39,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 import accounts
 import autograde
 import autograde_web
+import autograde_flask
 import lab_checks
 import quiz
 import library
@@ -66,6 +68,10 @@ ID_LENGTH = 7
 # and other .py modules for it to import. main.py is the one thing that runs,
 # so it is the one name that can't be attached — it arrives as `code`.
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
+# A FlaskIDE project's: the same name, optionally in one of its folders
+# (IDES["flaskide"]["folders"]).
+FOLDER_FILE_NAME = re.compile(
+    r"^(?:(?:templates|static|includes)/)?[A-Za-z0-9][A-Za-z0-9 _-]{0,50}\.[A-Za-z0-9]{1,8}$")
 
 # --------------------------------------------------------------------------
 # One editor, several IDEs
@@ -96,6 +102,25 @@ IDES = {
         "entry_in_code": True,
         "name_example": ".txt or .csv",
     },
+    "flaskide": {
+        # Web 2's Game Vault reaches 22 files by the logins unit (a template
+        # a page, a stylesheet, scripts, pictures, schema.sql), and at 16 a
+        # save was refused halfway through the course. The total bounds it.
+        "max_files": 40,
+        "max_file_bytes": 200_000,
+        "max_total": 600_000,
+        # Three kinds, read off the files (flask_kind): app.py, query.sql or
+        # index.php is the file that runs, and one of them must be there.
+        "entry": "app.py",
+        "entries": ("app.py", "query.sql", "index.php"),
+        "entry_in_code": False,
+        "name_example": ".py, .html or .css",
+        # One folder deep, and only the ones Flask (templates/, static/) or
+        # a PHP site (includes/) looks in. A whitelist, not a check for
+        # "..": nothing matching it can leave the project or name a hidden
+        # file.
+        "folders": ("templates", "static", "includes"),
+    },
     "webide": {
         "max_files": 16,
         "max_file_bytes": 200_000,
@@ -112,7 +137,27 @@ IDES = {
 # its address — a FlaskIDE draft's /p/<slug> — is not found, rather than
 # opened in a runner that isn't its own; before this list existed, /p/ took
 # any app's draft and showed an HTML project as a Python program.
-EDITOR_IDES = ("pyide", "webide")
+EDITOR_IDES = ("pyide", "webide", "flaskide")
+
+
+def flask_kind(files):
+    """Which kind of FlaskIDE project this is, read off the files: "sql" with
+    a query.sql, "php" with an index.php and no app.py, else "flask". Not
+    stored, as FlaskIDE never stored it; runners/flask.js reads the same rule
+    off the same files. Change one, change both."""
+    if "query.sql" in files:
+        return "sql"
+    if "index.php" in files and "app.py" not in files:
+        return "php"
+    return "flask"
+
+
+def entry_of(ide, files):
+    """The file that runs, which the editor opens on: main.py, index.html,
+    or a FlaskIDE project's app.py, query.sql or index.php."""
+    if ide == "flaskide":
+        return {"sql": "query.sql", "php": "index.php"}.get(flask_kind(files or {}), "app.py")
+    return IDES.get(ide, IDES["pyide"])["entry"]
 
 
 def _ide_of(row):
@@ -131,7 +176,7 @@ def _ide_of(row):
 # count points and to know which labels are real. Parsing an HTML project's
 # tests with Python's grammar fails every line as unreadable, silently: the
 # assignment just looks like it has no tests.
-GRADERS = {"pyide": autograde, "webide": autograde_web}
+GRADERS = {"pyide": autograde, "webide": autograde_web, "flaskide": autograde_flask}
 
 
 def _grader(item):
@@ -197,6 +242,159 @@ button.addEventListener("click", function () {
 });
 """,
 }
+
+
+FLASK_STARTER = {
+    "app.py": """from flask import Flask, render_template, request, redirect, url_for
+
+app = Flask(__name__)
+
+# A list to play with. It lives in memory, so it resets when you press Run.
+pets = ["cat", "dog"]
+
+
+@app.route("/")
+def home():
+    return render_template("index.html", pets=pets)
+
+
+@app.route("/pet/<name>")
+def pet(name):
+    return render_template("pet.html", name=name)
+
+
+@app.route("/add", methods=["POST"])
+def add():
+    name = request.form["name"].strip()
+    if name:
+        pets.append(name)
+    return redirect(url_for("home"))
+
+
+# ---------------------------------------------------------------------------
+# USING A DATABASE INSTEAD OF A LIST
+#
+# Add a file called schema.sql to this project, put CREATE TABLE and INSERT
+# statements in it, and press Run. It is built into a real database called
+# data.db sitting next to this file, from scratch, every single time you Run
+# -- so you cannot break it, and anything you INSERT while the app is running
+# is gone on the next Run.
+#
+# Then delete the # from the lines below.
+#
+# import sqlite3
+#
+# def query(sql, args=()):
+#     con = sqlite3.connect("data.db")
+#
+#     # SQLite IGNORES FOREIGN KEYS UNLESS YOU ASK, ON EVERY CONNECTION.
+#     # Without this line it will happily store a row pointing at a teacher
+#     # who does not exist and tell you it worked. The REFERENCES in your
+#     # schema is remembered and not enforced.
+#     con.execute("PRAGMA foreign_keys = ON")
+#
+#     # Rows come back as tuples by default, so you write row[0]. This makes
+#     # them behave like dicts too, so a template can say {{ row["name"] }}.
+#     con.row_factory = sqlite3.Row
+#
+#     rows = con.execute(sql, args).fetchall()
+#     con.close()
+#     return rows
+#
+# @app.route("/teachers")
+# def teachers():
+#     rows = query("SELECT name, department FROM teachers ORDER BY name")
+#     return "<br>".join(r["name"] + " - " + r["department"] for r in rows)
+#
+# That returns a rough list so you can see it working straight away. Once it
+# does, add a template of your own under templates/ and hand the rows to it
+# with render_template, exactly the way the pet list above does.
+#
+# The + SQL button at the top opens a separate project for practising queries
+# against that same kind of database, with one already written for you.
+""",
+
+    "templates/base.html": """<!doctype html>
+<html>
+<head>
+  <title>{% block title %}My Site{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h1>My Pet List</h1>
+  {% block body %}{% endblock %}
+</body>
+</html>
+""",
+
+    "templates/index.html": """{% extends "base.html" %}
+
+{% block body %}
+  <ul>
+    {% for p in pets %}
+      <li><a href="{{ url_for('pet', name=p) }}">{{ p }}</a></li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="{{ url_for('add') }}">
+    <input name="name" placeholder="a new pet">
+    <button>Add</button>
+  </form>
+{% endblock %}
+""",
+
+    "templates/pet.html": """{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+
+{% block body %}
+  <p>This one is called <strong>{{ name }}</strong>.</p>
+  <p><a href="{{ url_for('home') }}">back to the list</a></p>
+{% endblock %}
+""",
+
+    "static/style.css": """body {
+  font-family: system-ui, sans-serif;
+  margin: 40px;
+  color: #1b2130;
+}
+
+h1 { color: #1d4ed8; }
+
+li { margin: 4px 0; }
+
+form { margin-top: 24px; }
+
+input, button { font-size: 16px; padding: 6px 10px; }
+""",
+}
+
+
+# A SQL project and a PHP site start from real files in examples/flaskide/,
+# as they did in FlaskIDE: they can be opened, run and checked like anything
+# else. Read once at startup, and a missing one stops the process — a deploy
+# that boots and hands every student an empty editor is worse than one that
+# fails and leaves the last good one serving.
+_FLASK_EXAMPLES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples", "flaskide")
+
+
+def _flask_examples(sub=""):
+    root = os.path.join(_FLASK_EXAMPLES, sub)
+    found = {}
+    for here, _dirs, names in os.walk(root):
+        for n in names:
+            path = os.path.join(here, n)
+            found[os.path.relpath(path, root).replace(os.sep, "/")] = open(path).read()
+    if not found:
+        raise RuntimeError("examples/flaskide/%s is missing; a starter needs it" % sub)
+    return found
+
+
+SQL_STARTER = {k: v for k, v in _flask_examples().items() if "/" not in k}
+PHP_STARTER = _flask_examples("php")
+# What /new?ide=flaskide&kind= starts from, and the title it has.
+FLASK_STARTERS = {"flask": (FLASK_STARTER, "Untitled"),
+                  "sql": (SQL_STARTER, "Untitled query"),
+                  "php": (PHP_STARTER, "Untitled site")}
 
 
 DEFAULT_CODE = '''# Welcome to Python!
@@ -409,12 +607,26 @@ def validate_files(raw, ide="pyide"):
         return None, "A project can hold at most %d files." % spec["max_files"]
 
     files, total = {}, 0
+    folders = spec.get("folders")
     for name, body in raw.items():
         name = str(name).strip()
+        if folders:
+            # A backslash is never legal, and saying so before the pattern
+            # runs means a Windows-shaped path gets a sentence about slashes
+            # rather than one about extensions.
+            if "\\" in name:
+                return None, ("'%s' uses backslashes. Folders here are written "
+                              "with a forward slash: templates/index.html" % name)
+            if not FOLDER_FILE_NAME.match(name):
+                return None, ("'%s' is not a valid file name. Use letters, "
+                              "digits, dashes and underscores, end with an "
+                              "extension like %s, and put it either at the "
+                              "top level or in one of %s."
+                              % (name, spec["name_example"], " or ".join(folders)))
         # no directories, no traversal — these are plain names in one folder
-        if "/" in name or "\\" in name or name in (".", ".."):
+        elif "/" in name or "\\" in name or name in (".", ".."):
             return None, "'%s' is not a valid file name." % name
-        if not FILE_NAME.match(name):
+        elif not FILE_NAME.match(name):
             return None, ("'%s' is not a valid file name. Use letters, digits, "
                           "dashes and underscores, and end with an extension "
                           "like %s." % (name, spec["name_example"]))
@@ -431,7 +643,14 @@ def validate_files(raw, ide="pyide"):
             return None, "Those files are too large to save together."
         files[name] = body
 
-    if not spec["entry_in_code"] and spec["entry"] not in files:
+    entries = spec.get("entries")
+    if entries:
+        # Any one will do: which one decides the kind (flask_kind).
+        if not any(e in files for e in entries):
+            return None, ("A project needs an %s (a Flask app), a %s (a SQL "
+                          "project) or an %s (a PHP site) — that is the file "
+                          "that runs." % entries)
+    elif not spec["entry_in_code"] and spec["entry"] not in files:
         return None, "A project needs an %s to open." % spec["entry"]
     return files, None
 
@@ -466,7 +685,48 @@ def read_project(data, ide, *, empty, too_big, code=None, allow_empty=False):
 # App
 # --------------------------------------------------------------------------
 
+
+
+class PackedRequest(Flask.request_class):
+    """Read a JSON body that static/flask/pack.js sent as base64 — FlaskIDE's,
+    moved here with it (Nov 2026). A Flask project's editor encodes every
+    save; a body sent plain is read as it always was.
+
+    Render puts a firewall in front of the app, and it refuses requests whose
+    body *looks* like an attack. For a web programming class that is the
+    lesson itself: a teacher's notes full of HTML, Flask and f-strings were
+    turned away before they reached us, so nothing showed in our logs, and
+    the editor, handed the firewall's page instead of JSON, said "Couldn't
+    reach the server." The assignment silently never saved. No single line
+    was to blame — each pasted alone saved fine — so leaving out a pattern
+    is not a fix. pack.js sends every JSON body as
+    {"_packed": base64(utf-8 JSON)}, and this unwraps it before any route
+    sees it.
+
+    Every check still happens after this: sign-in, teacher, file names,
+    sizes. Only the shape on the wire changes. A plain JSON body is still
+    read as before, so an editor tab opened before a deploy keeps saving.
+    """
+
+    def get_json(self, force=False, silent=False, cache=True):
+        data = super().get_json(force=force, silent=silent, cache=cache)
+        if isinstance(data, dict) and set(data) == {"_packed"}:
+            try:
+                data = json.loads(base64.b64decode(data["_packed"],
+                                                   validate=True).decode("utf-8"))
+            except (ValueError, TypeError):
+                # binascii.Error and UnicodeDecodeError are both ValueErrors.
+                if not silent:
+                    raise BadRequest("That request could not be read.")
+                data = None
+        return data
+
+
+
 app = Flask(__name__)
+app.request_class = PackedRequest
+# The editor's template asks which file a project opens on (entry_of).
+app.jinja_env.globals["entry_of"] = entry_of
 
 #: The school's clock, for every time the server writes out as words. Times
 #: are stored in UTC (accounts.now), and for a long while they were also
@@ -919,13 +1179,20 @@ def index():
     ide = _ide_asked(request.args)
     if ide is None:
         abort(404)
-    web = not IDES[ide]["entry_in_code"]
+    # A FlaskIDE project's kind is its starter's files (kind=sql, kind=php;
+    # FlaskIDE's /sql and /php). Nothing else says which kind it is.
+    title = "Untitled"
+    if ide == "flaskide":
+        files, title = FLASK_STARTERS.get(request.args.get("kind"), FLASK_STARTERS["flask"])
+        files = dict(files)
+    else:
+        files = dict(WEB_STARTER) if ide == "webide" else {}
     return render_template(
         "index.html",
         ide=ide,
-        code="" if web else DEFAULT_CODE,
-        files=dict(WEB_STARTER) if web else {},
-        title="Untitled",
+        code=DEFAULT_CODE if ide == "pyide" else "",
+        files=files,
+        title=title,
         author="",
         readonly=False,
         # only here can notes be written; shared snapshots and forks show them
@@ -998,9 +1265,9 @@ def raw_shared(slug):
     try:
         snip = load_visible(db, slug)
         # The program as text: main.py for Python, the page for the web
-        spec = IDES[_ide_of(snip)]
-        body = (snip.code if spec["entry_in_code"]
-                else snip.file_map().get(spec["entry"], ""))
+        ide = _ide_of(snip)
+        body = (snip.code if IDES[ide]["entry_in_code"]
+                else snip.file_map().get(entry_of(ide, snip.file_map()), ""))
         return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
     finally:
         db.close()
@@ -1034,7 +1301,8 @@ def view_demo(slug):
         # Deliberately no code and no file contents in this render: the page
         # asks for them separately, and only once Run is pressed. A web
         # project's is WebIDE's page, which shows the finished page.
-        page = "demo.html" if IDES[_ide_of(snip)]["entry_in_code"] else "demo_web.html"
+        page = {"webide": "demo_web.html",
+                "flaskide": "play_flask.html"}.get(_ide_of(snip), "demo.html")
         return render_template(page, title=snip.title, slug=snip.slug)
     finally:
         db.close()
@@ -1053,6 +1321,8 @@ def play():
     # WebIDE's player, reading its own key from storage.
     if request.args.get("ide") == "webide":
         return render_template("demo_web.html", title="Page", slug=None, play=True)
+    if request.args.get("ide") == "flaskide":
+        return render_template("play_flask.html", title="App", slug=None)
     return render_template("demo.html", title="Game", slug=None, play=True)
 
 

@@ -124,6 +124,25 @@ project: Go live (the live page has no web runner), and the teacher's pages
 (dashboard, Check all, class pages still filter `app=APP_NAME`).
 `test_web_browser.py` drives it in Chrome; `test_autograde_web.py` is
 WebIDE's test of its tests.
+**So does a FlaskIDE project** (`flaskide`): a Flask app, a SQL project or
+a PHP site, the kind read off the files (`flask_kind`, and the same rule in
+`runners/flask.js`), never stored. Its files may sit in `templates/`,
+`static/` or `includes/` (`FOLDER_FILE_NAME`), up to 40; the entry is
+whichever of app.py / query.sql / index.php decides the kind (`entry_of`,
+also a template global). `/new?ide=flaskide&kind=sql|php` start from
+`examples/flaskide/`. FlaskIDE's runtime is `static/flask/` (flask.js,
+php.js and its worker, preview.js, syntax.js, complete.js, autograde.js —
+whose global is `PyIDETests`, never on a page with Python's — play.js,
+pack.js), unchanged but for play.js now playing a hide-code link
+(`play_flask.html`). **pack.js** encodes every save from a Flask page past
+Render's firewall, and `PackedRequest` unwraps it on every route; other
+pages still send plain. The shell takes from a runner, when it has them:
+`entry(files)`, `tabOrder`, `nameOk`, `newFile(names)`,
+`starterFor(name, names)`, `onFiles`. Not yet: Go live, the teacher's pages,
+and the library's links (step 5). Tests: `test_flask_browser.py` (Chrome),
+`test_autograde_flask.py`, and FlaskIDE's own as `test_flask_*.py`;
+`test_flask_php.py` needs `npm install` in `tools/php_node/` once (~460 MB,
+ignored — the repo's own node_modules is committed).
 
 ## Features worth knowing about
 

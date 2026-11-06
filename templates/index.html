@@ -1,3 +1,10 @@
+{#  Which IDE this project belongs to (IDES in app.py) decides the toolbar,
+    the right-hand pane and the scripts. A Python project's page is exactly
+    what it was before WebIDE and FlaskIDE moved in; `web` swaps in WebIDE's,
+    `flask` FlaskIDE's (a Flask app, a SQL project or a PHP site). #}
+{% set ide = ide | default('pyide') %}
+{% set web = ide == 'webide' %}
+{% set flask = ide == 'flaskide' %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -34,13 +41,14 @@
     } catch (e) { /* storage blocked; the CSS default still applies */ }
   })();
 </script>
+{% if flask %}
+{#  Before any other script: every JSON body this page sends goes base64,
+    past Render's firewall, which turned away a Flask lesson's notes (pack.js).
+    A script that kept a reference to fetch before this ran would go round it. #}
+<script src="{{ url_for('static', filename='flask/pack.js') }}"></script>
+{% endif %}
 </head>
 
-{#  Which IDE this project belongs to (IDES in app.py): its toolbar, its
-    right-hand pane and its scripts. A Python project's page is exactly what
-    it was before WebIDE moved in; `web` swaps in WebIDE's. #}
-{% set ide = ide | default('pyide') %}
-{% set web = ide == 'webide' %}
 <body class="ide-{{ ide }}{% if authoring %} is-authoring{% endif %}">
 
 <header class="bar">
@@ -82,6 +90,19 @@
         <input type="checkbox" id="auto-run"> Auto
       </label>
     {% endif %}
+    {% elif flask %}
+    {#  What kind of project this is: Flask, SQL or PHP. A label, not a
+        switch — the files decide (a query.sql makes it a SQL project).
+        Set by runners/flask.js. #}
+    <span id="mode" class="mode mode-console" aria-live="polite">Flask</span>
+    <button id="run" class="btn btn-run">
+      <span class="btn-icon">▶</span><span id="run-label">Run</span>
+    </button>
+    <button id="stop" class="btn btn-stop" hidden>■ Stop</button>
+    {#  The app's pages in a tab of their own. Not for a SQL project, which
+        has no pages (runners/flask.js hides it). #}
+    <button id="run-tab" class="btn" type="button"
+            title="Open your app's pages in a new tab">↗ New tab</button>
     {% else %}
     <span id="mode" class="mode mode-console" aria-live="polite">Console</span>
     <button id="run" class="btn btn-run" disabled>
@@ -149,7 +170,7 @@
           working — the class watches this file, whatever you do to it. #}
       {#  Not for a web project yet: the class's live page can't show one
           until it has the web runner too (step 3 of moving WebIDE in). #}
-      {% if is_teacher and not web %}
+      {% if is_teacher and not web and not flask %}
         <button id="go-live" class="btn"
                 title="Put this file on your class's screens while you teach.">Go live</button>
         {#  The join code, and a button: clicking copies the whole address
@@ -257,12 +278,12 @@
     <div class="pane-head pane-head-tabs">
       <div id="file-tabs" class="tabs" role="tablist"></div>
       {% if not readonly %}
-        <button id="new-file" class="linkbtn" title="{{ 'Add a file to this project' if web else 'Add a data file your program can read' }}">+ File</button>
+        <button id="new-file" class="linkbtn" title="{{ 'Add a file to this project' if (web or flask) else 'Add a data file your program can read' }}">+ File</button>
       {% endif %}
     </div>
     {#  The entry file's text: main.py, which a Python project keeps apart
         as `code`, or a web project's index.html, which is one of its files. #}
-    <div class="editor-wrap"><textarea id="editor">{{ (files or {}).get('index.html', '') if web else code }}</textarea></div>
+    <div class="editor-wrap"><textarea id="editor">{{ code if ide == 'pyide' else (files or {}).get(entry_of(ide, files or {}), '') }}</textarea></div>
   </section>
 
   {#  Handles (split.js), as on the class's live page: each sizes the pane
@@ -300,6 +321,47 @@
         <button id="clear" class="linkbtn">Clear</button>
       </div>
       <pre id="output" class="output"><span class="dim">Press Run to see your page.</span>
+</pre>
+    </div>
+    {% elif flask %}
+    {#  FlaskIDE's preview: an address bar over the app's routes, the page,
+        the SQL results in a SQL project's place, and the console. The same
+        id as Python's output pane, because it is the same pane to the shell. #}
+    <div id="output-view" class="subpane">
+      <div class="pane-head">
+        <span id="right-title">Preview</span>
+        <span class="hint">Ctrl+Enter to run</span>
+      </div>
+      <!-- Every URL here is imaginary — it exists only as a rule in the
+           student's url_map — so this is an address bar over a function
+           call. It is editable because typing a path is how you check that
+           a route you just wrote actually answers. -->
+      <div class="trail">
+        <button id="preview-back" class="linkbtn" title="Back">◀</button>
+        <input id="preview-path" class="field field-path" value="/"
+               spellcheck="false" autocomplete="off">
+        <span id="preview-status" class="status-code"></span>
+      </div>
+      <!-- SQL results take the preview's place. Both exist in the page and
+           one is shown (body.is-sql); building the pane on demand meant the
+           grid's first paint came after the query had already run. -->
+      <div id="sql-pane" class="sql-pane">
+        <div id="sql-results" class="sql-results"></div>
+      </div>
+      <div class="preview-frame">
+        <!-- allow-scripts WITHOUT allow-same-origin: student JavaScript runs
+             normally but on a null origin, so it cannot touch this page. -->
+        <iframe id="preview" title="Page preview"
+                sandbox="allow-scripts allow-forms"></iframe>
+      </div>
+      {#  Sizes the console under it (data-pane): the pane before it is the
+          preview or the SQL results, whichever is shown. #}
+      <div class="resizer resizer-y" data-split="editor-console" data-size="next" data-pane="output"></div>
+      <div class="pane-head console-head">
+        <span>Console</span>
+        <button id="clear" class="linkbtn">Clear</button>
+      </div>
+      <pre id="output" class="output"><span class="dim">Press Run to start your app.</span>
 </pre>
     </div>
     {% else %}
@@ -390,7 +452,7 @@
       <div id="notes-body" class="notes-body prose"></div>
     </section>
 
-  {% if not web %}
+  {% if not web and not flask %}
   <aside id="sprites" class="pane pane-sprites" hidden>
     <div class="pane-head">
       <span>Sprites</span>
@@ -438,6 +500,11 @@
     <label class="hidecode share-hide" title="Share a link that shows the finished page with no source on it and no way to copy it.">
       <input type="checkbox" id="hide-code"> Hide code — the link shows the finished page with no source on it
     </label>
+    {% elif flask %}
+    <p class="modal-sub">Makes a link to a snapshot of every file as it is right now.</p>
+    <label class="hidecode share-hide" title="Share a link that runs the app and shows its pages, with no source on the page and no way to copy it.">
+      <input type="checkbox" id="hide-code"> Hide code — the link runs the app and shows its pages, with no source
+    </label>
     {% else %}
     <p class="modal-sub">Makes a link to a snapshot of your code as it is right now.</p>
     <label class="hidecode share-hide"
@@ -461,7 +528,7 @@
       <input id="share-url" type="text" readonly>
       <button id="copy" class="btn btn-primary">Copy</button>
     </div>
-    <p class="modal-note" id="modal-note">The link captures {{ 'every file' if web else 'your code' }} exactly as it is right now.
+    <p class="modal-note" id="modal-note">The link captures {{ 'every file' if (web or flask) else 'your code' }} exactly as it is right now.
       If you keep working, share again to create an updated link.</p>
     <div class="actions">
       <button id="close-modal" class="btn">Done</button>
@@ -481,6 +548,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+{% elif flask %}
+{#  app.py, its templates and stylesheet, SQL, and a PHP site's pages:
+    clike is php's, and htmlmixed is what a .php page is outside <?php ?>. #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
 {% else %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 {% endif %}
@@ -504,9 +582,9 @@
 {% endif %}
 <script>
   window.PYIDE = {
-    // Which IDE this project belongs to (IDES in app.py). Nothing reads it
-    // yet: the runner layer will pick this page's runner by it. A request
-    // that leaves `ide` out means Python, so today's saves need not send it.
+    // Which IDE this project belongs to (IDES in app.py): app.js picks its
+    // runner by it (static/runners/). A request that leaves `ide` out means
+    // Python; a web or Flask runner sends it with every new project.
     ide: {{ (ide | default('pyide')) | tojson }},
     readonly: {{ 'true' if readonly else 'false' }},
     // Opened through a class's view-only link: questions say so.
@@ -530,6 +608,10 @@
 <script src="{{ url_for('static', filename='zip.js') }}"></script>
 {% if web %}
 <script src="{{ url_for('static', filename='web/runner.js') }}"></script>
+{% elif flask %}
+<script src="{{ url_for('static', filename='flask/flask.js') }}"></script>
+<script src="{{ url_for('static', filename='flask/php.js') }}"></script>
+<script src="{{ url_for('static', filename='flask/preview.js') }}"></script>
 {% else %}
 <script src="{{ url_for('static', filename='runtime.js') }}"></script>
 {# after runtime.js: an export carries that file's Python bootstrap inside it #}
@@ -550,6 +632,10 @@
 <script src="{{ url_for('static', filename='pictures.js') }}"></script>
 {% if web %}
 <script src="{{ url_for('static', filename='web/complete.js') }}"></script>
+{% elif flask %}
+<script src="{{ url_for('static', filename='flask/syntax.js') }}"></script>
+<script src="{{ url_for('static', filename='flask/complete.js') }}"></script>
+<script src="{{ url_for('static', filename='sighint.js') }}"></script>
 {% else %}
 <script src="{{ url_for('static', filename='syntax.js') }}"></script>
 <script src="{{ url_for('static', filename='complete.js') }}"></script>
@@ -563,12 +649,14 @@
 <script src="{{ url_for('static', filename='checks_in_notes.js') }}"></script>
 {% if web %}
 <script src="{{ url_for('static', filename='web/autograde.js') }}"></script>
+{% elif flask %}
+<script src="{{ url_for('static', filename='flask/autograde.js') }}"></script>
 {% else %}
 <script src="{{ url_for('static', filename='autograde.js') }}"></script>
 {% endif %}
 <script src="{{ url_for('static', filename='xp.js') }}"></script>
 {# the runner for this project's IDE, before the shell that attaches it #}
-<script src="{{ url_for('static', filename='runners/web.js' if web else 'runners/python.js') }}"></script>
+<script src="{{ url_for('static', filename='runners/web.js' if web else 'runners/flask.js' if flask else 'runners/python.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% include "_idle.html" %}
 </body>

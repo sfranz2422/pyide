@@ -63,8 +63,13 @@ window.PyIDESplit = (function () {
 
   function sizesNext(handle) { return handle.dataset.size === "next"; }
 
-  /* The pane a handle sizes: the element before it, or after it. */
+  /* The pane a handle sizes: the one it names (data-pane="<id>"), or the
+     element before it, or after it. A Flask project's console is a <pre>
+     under its own "Console" head: the handle goes above the head and sizes
+     the <pre> — the pane before it is the preview or the SQL results,
+     whichever is shown (FlaskIDE's split.js, moved here with it). */
   function paneOf(handle) {
+    if (handle.dataset.pane) return document.getElementById(handle.dataset.pane);
     return sizesNext(handle) ? handle.nextElementSibling : handle.previousElementSibling;
   }
 
