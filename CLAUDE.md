@@ -181,6 +181,11 @@ own autograde.js as `pm_autograde`, saves packed) — the generated
 presmaker.html takes both from the page (`tools/sync_presmaker.py`, synced
 to all three). The page's IDE filter appears only with more than one IDE,
 so WebIDE's and FlaskIDE's library pages are unchanged.
+The help covers every kind: `/help/questions#tests` has Python's, a web
+page's (`#tests-web`) and a Flask / SQL / PHP project's (`#tests-flask`,
+`#tests-php`) lines, each checked by `test_ide_web.py` against its own
+grammar; `/help/php` is FlaskIDE's PHP page. My work tags each project Web,
+Flask, SQL or PHP (`_kind_label`; Python untagged).
 
 ## Features worth knowing about
 

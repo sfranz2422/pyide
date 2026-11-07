@@ -584,6 +584,11 @@ check("  and its page, with the assignment", spage.status_code == 200 and item.s
 # (an assignment shows on My work through its turn-in as well).
 other.post("/api/draft", json={"ide": "webide", "title": "My own site", "files": WEB})
 check("a web project of their own is in My work", "My own site" in other.get("/my").get_data(as_text=True))
+other.post("/api/draft", json={"ide": "flaskide", "title": "My own queries", "files": P.SQL_STARTER})
+_my = other.get("/my").get_data(as_text=True)
+check("My work says which kind each is: Web, SQL (Python's untagged, as before)",
+      re.search(r'My own site</a><span class="dim small"> · Web</span>', _my) is not None
+      and re.search(r'My own queries</a><span class="dim small"> · SQL</span>', _my) is not None)
 db = P.SessionLocal()
 _course = db.query(accounts.Course).filter_by(id=WCLASS).first()
 with P.app.test_request_context():
@@ -676,6 +681,39 @@ check("PresMaker reads a web tutorial's tests with WebIDE's reader, and packs it
       and '"tests": "lines"' in pm_web)
 check("  and a Python one's with Python's, as before",
       "/static/autograde.js" in pm_py and "pack.js" not in pm_py and '"tests": "form"' in pm_py)
+
+
+
+
+# --------------------------------------------------------------------------
+print("\nThe help, for every kind of project")
+import html as _html                                        # noqa: E402
+_help = client().get("/help/questions").get_data(as_text=True)
+
+
+def _example(name):
+    """A help example's tests. The help shows a note beside each line; the
+    format has no such thing, so the notes are cut off first (as
+    test_autograde.py reads Python's) — what is left must all be tests."""
+    m = re.search(r'<pre class="help-src" id="%s">(.*?)</pre>' % name, _help, re.S)
+    text = _html.unescape(m.group(1)) if m else ""
+    return "\n".join(re.split(r"\s{3,}", ln)[0] for ln in text.split("\n"))
+
+
+for _id, _grammar, _what in (("tests-web-example", P.autograde_web, "web page's"),
+                             ("tests-flask-example", P.autograde_flask, "Flask app's"),
+                             ("tests-php-example", P.autograde_flask, "PHP site's")):
+    _t, _e = _grammar.parse(_example(_id))
+    check("the help's %s tests are all real tests in that grammar" % _what,
+          len(_t) >= 8 and not _e, (len(_t), _e[:2]))
+check("  and Python's are still there", "input 3, 4 -&gt; prints 12" in _help)
+check("PHP sites have their help page, linked from there",
+      client().get("/help/php").status_code == 200 and 'href="/help/php"' in _help)
+r = student.post("/api/share", json={"ide": "webide", "author": "A", "files": WEB})
+_s = r.get_json()["slug"]
+check("one file of a share, by name, as text",
+      student.get("/s/%s/raw/style.css" % _s).get_data(as_text=True) == WEB["style.css"]
+      and student.get("/s/%s/raw/nope.css" % _s).status_code == 404)
 
 
 # --------------------------------------------------------------------------

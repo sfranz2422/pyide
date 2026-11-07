@@ -1275,12 +1275,22 @@ def fork_shared(slug):
 
 
 @app.get("/s/<slug>/raw")
-def raw_shared(slug):
+@app.get("/s/<slug>/raw/<path:name>")
+def raw_shared(slug, name=None):
     db = SessionLocal()
     try:
         snip = load_visible(db, slug)
         # The program as text: main.py for Python, the page for the web
         ide = _ide_of(snip)
+        if name is not None:
+            # One file by name (WebIDE's and FlaskIDE's /raw/<name>), for
+            # diffing or feeding to a checker; main.py is a Python share's code.
+            files = snip.file_map()
+            if IDES[ide]["entry_in_code"] and name == "main.py":
+                return snip.code, 200, {"Content-Type": "text/plain; charset=utf-8"}
+            if name not in files:
+                abort(404)
+            return files[name], 200, {"Content-Type": "text/plain; charset=utf-8"}
         body = (snip.code if IDES[ide]["entry_in_code"]
                 else snip.file_map().get(entry_of(ide, snip.file_map()), ""))
         return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
@@ -1834,6 +1844,7 @@ def my_work():
                 # (Deleting an assignment is refused once anyone has turned
                 # in, so nothing handed in is lost by listing it this way.)
                 projects.append({"slug": d.slug, "title": d.title or "Untitled",
+                                 "kind_label": _kind_label(d),
                                  "updated": when(d.updated_at),
                                  "url": url_for("open_draft", slug=d.slug)})
                 continue
@@ -1863,9 +1874,22 @@ def my_work():
         db.close()
 
 
+def _kind_label(row):
+    """What kind of project a draft or assignment is, for a list holding
+    every kind (My work): "" for Python, as it always was, else Web, Flask,
+    SQL or PHP — FlaskIDE's My work said SQL and PHP the same way."""
+    ide = _ide_of(row)
+    if ide == "webide":
+        return "Web"
+    if ide == "flaskide":
+        return {"sql": "SQL", "php": "PHP"}.get(flask_kind(row.file_map()), "Flask")
+    return ""
+
+
 def _my_assignment(item, draft, sub, when, earned=None):
     return {
         "title": item.title,
+        "kind_label": _kind_label(item),
         "closed": bool(item.closed),
         "draft_slug": draft.slug if draft else "",
         # Their copy if they still have one, else the handout link, which
@@ -8638,6 +8662,13 @@ def help_questions():
 _MCPI_BLOCK_PY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "py", "mcpi", "block.py")
 WOOL_COLOURS = ["white", "orange", "magenta", "light blue", "yellow", "lime", "pink", "gray",
                 "light gray", "cyan", "purple", "blue", "brown", "green", "red", "black"]
+
+
+@app.get("/help/php")
+def help_php():
+    """What a PHP site can do here (FlaskIDE's, moved in). Open to anyone,
+    like /help/questions."""
+    return render_template("help_php.html")
 
 
 @app.get("/help/world")
