@@ -181,6 +181,14 @@ own autograde.js as `pm_autograde`, saves packed) — the generated
 presmaker.html takes both from the page (`tools/sync_presmaker.py`, synced
 to all three). The page's IDE filter appears only with more than one IDE,
 so WebIDE's and FlaskIDE's library pages are unchanged.
+**Copy WebIDE and FlaskIDE classes** (the dashboard, while any are left;
+`copy_old_classes`, `_copy_class(whole=True)`): each becomes a new PyIDE
+class of the same name with its roster, Classroom course, calendar, layout
+and a fresh copy of every assignment (archived and closed kept so, each in
+its own IDE) — never students' work, which stays in the original. The
+originals are left as they are and stay listed (the teacher's choice).
+`class_copies` (PyIDE's own table) makes each copy once. Duplicate class
+shares the code and is unchanged. `test_copy_old_classes.py`.
 
 ## Features worth knowing about
 
