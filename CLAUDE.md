@@ -156,6 +156,19 @@ sends it only when the student's `pg` differs (`_page_id`). `live_keep`
 folds a web or Flask project's entry back into its files. Their styles are
 every rule of WebIDE's and FlaskIDE's stylesheets this one lacked, under
 `.ide-webide` / `.ide-flaskide`. `test_live_ides_browser.py`.
+**And the class pages.** Every lookup of a class, an assignment, a draft, a
+live lesson, a class event or a waiting photo takes any IDE in
+`EDITOR_IDES` (`app.in_(EDITOR_IDES)`), so WebIDE's and FlaskIDE's classes
+and work are PyIDE's — a class's `app` no longer means anything but where
+it was made. The Classroom link stays per app (`app=APP_NAME`): it is the
+teacher's sign-in to Google for this app. Add to class has HTML / CSS / JS,
+Flask app, SQL and PHP site (`NEW_PROJECT_KINDS`, the same starters as
+`/new`); Copy and Duplicate class keep each assignment's own IDE.
+"New project ▾" (`_new_project.html`) offers every kind on the front door,
+a student's classes, My work and the dashboard. The assignment page's
+Check all picks its checker by the assignment's IDE (WebIDE's, FlaskIDE's,
+PHP for a PHP site), loaded when pressed; `/tests/work` adds main.py for
+Python only. `test_check_all_ides_browser.py`.
 
 ## Features worth knowing about
 

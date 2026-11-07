@@ -252,12 +252,40 @@ check("  with Describe on an assignment's row and a heading's",
 # Block world: a Raspberry Pi Minecraft project (the block world), PyIDE only.
 # Raspberry Pi: a gpiozero project on the simulated Pi (circuit.pi), PyIDE only.
 # Lab (A+): goes to the tickets to pick one (lab_scenarios), PyIDE only.
-check("the Add form's kinds are Code, Block world, Raspberry Pi, Lab (A+), Lesson and Material",
-      re.search(r'<option value="code">Code</option>\s*<option value="world">Block world \(Minecraft\)</option>'
-                r'\s*<option value="pi">Raspberry Pi</option>'
-                r'\s*<option value="lab">Lab \(A\+\)</option>'
-                r'\s*<option value="lesson">Lesson</option>'
-                r'\s*<option value="material">Material</option>', page) is not None)
+# HTML/CSS/JS, Flask app, SQL, PHP site: WebIDE's and FlaskIDE's kinds, since
+# they moved in (Nov 2026) — one class page holds every kind of project.
+_kinds = re.findall(r'<option value="(\w+)">', page)
+check("the Add form's kinds: Python's three, the web four, then Lab, Lesson and Material",
+      _kinds[:10] == ["code", "world", "pi", "web", "flask", "sql", "php", "lab", "lesson", "material"]
+      and '<option value="code">Python</option>' in page, _kinds[:10])
+import json as _json                                        # noqa: E402
+_made = {}
+# In a class of their own: the checks below count this class's cards.
+_KC = teacher.post("/api/class", json={"name": "Every kind"}).get_json()["id"]
+for _kind, _ide, _entry in (("web", "webide", "index.html"), ("flask", "flaskide", "app.py"),
+                            ("sql", "flaskide", "query.sql"), ("php", "flaskide", "index.php")):
+    _r = teacher.post("/api/class/%d/new" % _KC, json={"title": "A %s one" % _kind, "kind": _kind})
+    _slug = (_r.get_json() or {}).get("slug")
+    _db = P.SessionLocal()
+    _a = _db.query(accounts.Assignment).filter_by(slug=_slug).first()
+    _db.close()
+    _made[_kind] = _slug
+    check("Add to class → %s makes a %s assignment from its starter" % (_kind, _ide),
+          _a is not None and _a.app == _ide and _a.code == "" and _entry in _a.file_map(),
+          _a and (_a.app, sorted(_a.file_map())[:3]))
+check("  which opens in its own editor",
+      'ide: "webide"' in teacher.get("/teacher/%s/edit" % _made["web"]).get_data(as_text=True)
+      and 'ide: "flaskide"' in teacher.get("/teacher/%s/edit" % _made["sql"]).get_data(as_text=True))
+check("  and is on the class page beside the Python ones",
+      all(_made[k] in teacher.get("/teacher/class/%d" % _KC).get_data(as_text=True) for k in _made))
+_dup = teacher.post("/api/class/%d/duplicate" % _KC, json={"name": "Every kind, 2"}).get_json() or {}
+_db = P.SessionLocal()
+_apps = sorted(a.app for a in _db.query(accounts.Assignment).join(
+    accounts.ClassItem, accounts.ClassItem.assignment_id == accounts.Assignment.id).filter(
+    accounts.ClassItem.class_id == _dup.get("id")).all())
+_db.close()
+check("Duplicate class keeps each one's kind (a web copy made Python would open its HTML as Python)",
+      _apps == ["flaskide", "flaskide", "flaskide", "webide"], (_dup, _apps))
 _quiz_row = [int(i) for i, s_, _ in order() if s_ == QUIZ][0]
 check("a code assignment is tagged code, a lesson lesson",
       '<span class="kind-tag">code</span>' in _row_html(hello_row)

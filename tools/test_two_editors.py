@@ -89,45 +89,23 @@ def check(label, condition):
     print("  %-4s %s" % ("ok" if condition else "FAIL", label))
 
 
-def cannot_reach(editor, slug, other_title, other, opens_in_editor=False):
-    """Every route that takes an assignment slug must refuse a foreign one —
-    except, from PyIDE, the editor's own routes on a WebIDE assignment.
-
-    WebIDE is moving into PyIDE (Nov 2026), and PyIDE's editor now opens a
-    web project with WebIDE's runner (EDITOR_IDES in app.py): the edit page,
-    its update and the handout link open a WebIDE assignment AS A WEB
-    PROJECT, which is the point. Everything else — the dashboard, the
-    assignment's page, archive, delete — still refuses it until the class
-    pages take every IDE (step 4 of the move)."""
+def cannot_reach(editor, slug, other_title, other):
+    """Every route that takes an assignment slug must refuse a foreign one."""
     check("not listed on the dashboard",
           other_title not in editor.get("/teacher").get_data(as_text=True))
     check("detail page refuses",
           editor.get("/teacher/" + slug).status_code == 404)
-    if opens_in_editor:
-        page = editor.get("/teacher/" + slug + "/edit")
-        check("edit page opens it, as a web project",
-              page.status_code == 200 and 'ide: "webide"' in page.get_data(as_text=True))
-        check("update keeps it to a web project's rules (an index.html)",
-              editor.post("/api/assignment/" + slug,
-                          json={"code": "x", "files": {}}).status_code == 400)
-    else:
-        check("edit page refuses",
-              editor.get("/teacher/" + slug + "/edit").status_code == 404)
-        check("update refuses",
-              editor.post("/api/assignment/" + slug,
-                          json={"code": "x", "files": {}}).status_code == 404)
+    check("edit page refuses",
+          editor.get("/teacher/" + slug + "/edit").status_code == 404)
+    check("update refuses",
+          editor.post("/api/assignment/" + slug,
+                      json={"code": "x", "files": {}}).status_code == 404)
     check("archive refuses",
           editor.post("/api/assignment/" + slug + "/archive").status_code == 404)
     check("DELETE refuses",
           editor.delete("/api/assignment/" + slug).status_code == 404)
-    if opens_in_editor:
-        # its author, so to the assignment's editor, as for PyIDE's own
-        check("the handout link opens it",
-              editor.get("/a/" + slug).headers.get("Location", "")
-              .endswith("/teacher/" + slug + "/edit"))
-    else:
-        check("the handout link refuses",
-              editor.get("/a/" + slug).status_code == 404)
+    check("the handout link refuses",
+          editor.get("/a/" + slug).status_code == 404)
     check("turning in refuses",
           editor.post("/api/submit", json={"assignment": slug}).status_code
           in (400, 403, 404))
@@ -135,8 +113,29 @@ def cannot_reach(editor, slug, other_title, other, opens_in_editor=False):
           other_title in other.get("/teacher").get_data(as_text=True))
 
 
-print("PyIDE opens WebIDE's assignment in its editor, and nowhere else yet:")
-cannot_reach(py, web_slug, "WEB assignment", web, opens_in_editor=True)
+def takes_as_its_own(editor, slug, title):
+    """WebIDE moved into PyIDE (Nov 2026): PyIDE's pages take a WebIDE
+    assignment as one of its own, opened in its web editor (EDITOR_IDES in
+    app.py). Not the other way: WebIDE, still running until it is taken
+    down, keeps refusing PyIDE's (below)."""
+    check("listed on PyIDE's dashboard", title in editor.get("/teacher").get_data(as_text=True))
+    check("its page opens", editor.get("/teacher/" + slug).status_code == 200)
+    page = editor.get("/teacher/" + slug + "/edit")
+    check("its editor opens, as a web project",
+          page.status_code == 200 and 'ide: "webide"' in page.get_data(as_text=True))
+    check("update keeps it to a web project's rules (an index.html)",
+          editor.post("/api/assignment/" + slug,
+                      json={"code": "x", "files": {}}).status_code == 400)
+    check("the handout link opens it, to its editor",
+          editor.get("/a/" + slug).headers.get("Location", "")
+          .endswith("/teacher/" + slug + "/edit"))
+    check("archiving it works, and so does bringing it back",
+          editor.post("/api/assignment/" + slug + "/archive", json={"archived": True}).status_code == 200
+          and editor.post("/api/assignment/" + slug + "/archive", json={"archived": False}).status_code == 200)
+
+
+print("PyIDE takes WebIDE's assignment as its own:")
+takes_as_its_own(py, web_slug, "WEB assignment")
 
 print("\nWebIDE must not reach PyIDE's assignment:")
 cannot_reach(web, py_slug, "PY assignment", py)
@@ -166,7 +165,8 @@ py.post("/api/draft", json={"code": "print(2)", "title": "PY proj"})
 web_list = web.get("/api/my/projects").get_data(as_text=True)
 py_list = py.get("/api/my/projects").get_data(as_text=True)
 check("webide lists only its own", "WEB proj" in web_list and "PY proj" not in web_list)
-check("pyide lists only its own", "PY proj" in py_list and "WEB proj" not in py_list)
+# WebIDE moved in: a student's My projects in PyIDE is every project they have.
+check("pyide lists both, since WebIDE moved in", "PY proj" in py_list and "WEB proj" in py_list)
 
 print()
 if all(results):

@@ -400,6 +400,16 @@ FLASK_STARTERS = {"flask": (FLASK_STARTER, "Untitled"),
                   "php": (PHP_STARTER, "Untitled site")}
 
 
+# Add to class's kinds of project beyond Python's ("code", "world", "pi"):
+# (its IDE, its starter files). The same starters /new starts from.
+NEW_PROJECT_KINDS = {
+    "web": ("webide", WEB_STARTER),
+    "flask": ("flaskide", FLASK_STARTER),
+    "sql": ("flaskide", SQL_STARTER),
+    "php": ("flaskide", PHP_STARTER),
+}
+
+
 DEFAULT_CODE = '''# Welcome to Python!
 # Write your code here, then press Run (or Ctrl+Enter).
 
@@ -970,7 +980,7 @@ def logout():
         db = SessionLocal()
         try:
             (db.query(accounts.LiveSession)
-               .filter_by(host_id=uid, app=APP_NAME, ended=0)
+               .filter(accounts.LiveSession.host_id == uid, accounts.LiveSession.app.in_(EDITOR_IDES), accounts.LiveSession.ended == 0)
                .update({"ended": 1, "updated_at": _live_now()},
                        synchronize_session=False))
             db.commit()
@@ -1758,7 +1768,7 @@ def my_projects():
         if user is None:
             return jsonify(error="not signed in"), 401
         rows = (db.query(accounts.Draft)
-                  .filter_by(owner_id=user.id, app=APP_NAME)
+                  .filter(accounts.Draft.owner_id == user.id, accounts.Draft.app.in_(EDITOR_IDES))
                   .order_by(accounts.Draft.updated_at.desc())
                   .limit(60).all())
         titles = {a.id: a.title for a in db.query(accounts.Assignment).all()}
@@ -1798,14 +1808,14 @@ def my_work():
             return redirect(url_for("login", next=request.path))
 
         drafts = (db.query(accounts.Draft)
-                    .filter_by(owner_id=user.id, app=APP_NAME)
+                    .filter(accounts.Draft.owner_id == user.id, accounts.Draft.app.in_(EDITOR_IDES))
                     .order_by(accounts.Draft.updated_at.desc()).all())
         subs = {s.assignment_id: s for s in db.query(accounts.Submission)
                 .filter_by(student_id=user.id).all()}
         wanted = {d.assignment_id for d in drafts if d.assignment_id} | set(subs)
         items = {a.id: a for a in db.query(accounts.Assignment)
                  .filter(accounts.Assignment.id.in_(wanted),
-                         accounts.Assignment.app == APP_NAME).all()} if wanted else {}
+                         accounts.Assignment.app.in_(EDITOR_IDES)).all()} if wanted else {}
 
         def when(t):
             return _local(t, "%b %d at %I:%M %p")
@@ -2624,7 +2634,11 @@ def tests_work(slug):
                 continue
             files = {n: t for n, t in _as_files(snap.files).items()
                      if not n.lower().endswith(".md")}
-            files["main.py"] = snap.code
+            # main.py is a Python project's `code`; a web or Flask project
+            # is all files already, and an empty main.py among a web page's
+            # files would be a file the student never made.
+            if IDES[_ide_of(snap)]["entry_in_code"]:
+                files["main.py"] = snap.code
             work.append({"student": student.id, "name": student.display_name(), "files": files})
         return jsonify(work=work)
     finally:
@@ -2781,7 +2795,7 @@ def _lab_starter_notes(db, user, sc):
     has it, the library's whole point — else the ticket's starter notes
     (static/lab/scenarios/<id>.md), to be adopted as a new tutorial."""
     for other in (db.query(accounts.Assignment)
-                    .filter_by(teacher_id=user.id, app=APP_NAME, kind="lab")
+                    .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app.in_(EDITOR_IDES), accounts.Assignment.kind == "lab")
                     .order_by(accounts.Assignment.id.desc()).all()):
         if other.tutorial_id and (_lab_of(other) or {}).get("id") == sc["id"]:
             tut = db.query(accounts.LibraryItem).filter_by(id=other.tutorial_id).first()
@@ -2848,7 +2862,7 @@ def edit_lesson(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id or not _is_lesson(item):
             abort(404)
         lesson = _lesson_for(db, user, item)
@@ -2949,7 +2963,7 @@ def _old_decks(db, user):
     """This teacher's decks still only in teacher_decks, for the library's import."""
     rows = (db.query(TeacherDeck, accounts.Assignment)
             .join(accounts.Assignment, accounts.Assignment.id == TeacherDeck.assignment_id)
-            .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app == APP_NAME,
+            .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app.in_(EDITOR_IDES),
                     accounts.Assignment.deck_id.is_(None)).all())
     return [(a, d.name, d.html) for d, a in rows]
 
@@ -2981,7 +2995,7 @@ def turn_in_lesson(slug):
         user = current_user(db)
         if user is None:
             return jsonify(error="Sign in first, then you can turn it in."), 401
-        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if not _is_lesson(item):
             return jsonify(error="No such lesson."), 404
         if item.closed:
@@ -3167,7 +3181,7 @@ def teacher_home():
             return bounce
         show_archived = request.args.get("archived") == "1"
         items = (db.query(accounts.Assignment)
-                   .filter_by(teacher_id=user.id, app=APP_NAME)
+                   .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app.in_(EDITOR_IDES))
                    .all())
         # Most recently changed first (Assignment.changed): what the teacher
         # is working on now is at the top, not whatever was made last.
@@ -3328,7 +3342,7 @@ def rename_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
         title = clean((request.get_json(silent=True) or {}).get("title"), 200)
@@ -3354,8 +3368,7 @@ def archive_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
         item.archived = 0 if item.archived else 1
@@ -3383,8 +3396,7 @@ def delete_assignment(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="not allowed"), 403
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="no such assignment"), 404
 
@@ -3567,8 +3579,7 @@ def _own_assignment(db, slug):
     user = current_user(db)
     if user is None or not accounts.is_teacher(user.email):
         return None, None, (jsonify(error="Only the teacher can do that."), 403)
-    item = db.query(accounts.Assignment).filter_by(
-        slug=slug, app=APP_NAME).first()
+    item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
     if item is None or item.teacher_id != user.id:
         return None, None, (jsonify(error="No such assignment."), 404)
     return user, item, None
@@ -3589,8 +3600,7 @@ def give_feedback(slug):
         user = current_user(db)
         if user is None or not accounts.is_teacher(user.email):
             return jsonify(error="Only the teacher can do that."), 403
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             return jsonify(error="No such assignment."), 404
 
@@ -3651,8 +3661,7 @@ def teacher_assignment(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
 
@@ -3804,8 +3813,7 @@ def teacher_deck(slug):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        item = db.query(accounts.Assignment).filter_by(
-            slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None or item.teacher_id != user.id:
             abort(404)
         library.import_existing(db, user)
@@ -4893,7 +4901,7 @@ def _own_class(db, class_id):
     user = current_user(db)
     if user is None or not accounts.is_teacher(user.email):
         return None, None, (jsonify(error="Only the teacher can do that."), 403)
-    course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+    course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
     if course is None or course.teacher_id != user.id:
         return None, None, (jsonify(error="No such class."), 404)
     return user, course, None
@@ -4937,11 +4945,11 @@ def _my_classes(db, user):
     if user is None:
         return []
     if accounts.is_teacher(user.email):
-        q = db.query(accounts.Course).filter_by(teacher_id=user.id, app=APP_NAME)
+        q = db.query(accounts.Course).filter(accounts.Course.teacher_id == user.id, accounts.Course.app.in_(EDITOR_IDES))
     else:
         q = (db.query(accounts.Course)
                .join(accounts.Enrollment, accounts.Enrollment.class_id == accounts.Course.id)
-               .filter(accounts.Course.app == APP_NAME,
+               .filter(accounts.Course.app.in_(EDITOR_IDES),
                        accounts.Enrollment.email == (user.email or "").lower()))
     return q.order_by(accounts.Course.name, accounts.Course.id).all()
 
@@ -5172,8 +5180,10 @@ def duplicate_class(class_id):
                 item = items.get(r.assignment_id)
                 if item is None or item.archived:
                     continue
+                # Its own IDE, kept: a web assignment copied as "pyide" would
+                # open its HTML in the Python editor.
                 copy = accounts.Assignment(
-                    slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+                    slug=accounts.new_id(db, accounts.Assignment), app=_ide_of(item),
                     teacher_id=user.id, title=item.title, kind=item.kind,
                     code=item.code, files=item.files, out_of=item.out_of,
                     tutorial_id=item.tutorial_id, deck_id=item.deck_id)
@@ -5257,6 +5267,15 @@ def class_new_assignment(class_id):
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, code=NEW_PI_CODE % title,
                 files=json.dumps({CIRCUIT_FILE: ""}))
+        elif data.get("kind") in NEW_PROJECT_KINDS:
+            # HTML/CSS/JS, a Flask app, a SQL project or a PHP site: WebIDE's
+            # and FlaskIDE's own starters, as their Add to class made them.
+            # Its IDE is what it will open in (EDITOR_IDES).
+            ide, files = NEW_PROJECT_KINDS[data.get("kind")]
+            item = accounts.Assignment(
+                slug=accounts.new_id(db, accounts.Assignment), app=ide,
+                teacher_id=user.id, title=title, code="",
+                files=json.dumps(files))
         else:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
@@ -5316,9 +5335,7 @@ def class_item_copy(class_id, item_id):
         if row is None or row.kind != "material":
             return jsonify(error="No such material."), 404
         try:
-            target = db.query(accounts.Course).filter_by(
-                id=int((request.get_json(silent=True) or {}).get("class")),
-                app=APP_NAME, teacher_id=user.id).first()
+            target = db.query(accounts.Course).filter(accounts.Course.id == int((request.get_json(silent=True) or {}).get("class")), accounts.Course.app.in_(EDITOR_IDES), accounts.Course.teacher_id == user.id).first()
         except (TypeError, ValueError):
             target = None
         if target is None:
@@ -5344,7 +5361,7 @@ def teacher_material(class_id, item_id):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         if course is None or course.teacher_id != user.id:
             abort(404)
         row = _class_item(db, course, item_id)
@@ -5486,8 +5503,7 @@ def assignment_class(slug):
             db.commit()
             return jsonify(ok=True, url=url_for("teacher_home"))
         try:
-            course = db.query(accounts.Course).filter_by(
-                id=int(wanted), app=APP_NAME, teacher_id=user.id).first()
+            course = db.query(accounts.Course).filter(accounts.Course.id == int(wanted), accounts.Course.app.in_(EDITOR_IDES), accounts.Course.teacher_id == user.id).first()
         except (TypeError, ValueError):
             course = None
         if course is None:
@@ -5510,17 +5526,16 @@ def copy_assignment(slug):
         if bounce:
             return bounce
         try:
-            course = db.query(accounts.Course).filter_by(
-                id=int((request.get_json(silent=True) or {}).get("class")),
-                app=APP_NAME, teacher_id=user.id).first()
+            course = db.query(accounts.Course).filter(accounts.Course.id == int((request.get_json(silent=True) or {}).get("class")), accounts.Course.app.in_(EDITOR_IDES), accounts.Course.teacher_id == user.id).first()
         except (TypeError, ValueError):
             course = None
         if course is None:
             return jsonify(error="Choose a class to copy it to."), 404
         # The same tutorial and deck, linked (library.py): an edit to the
         # tutorial reaches every period's copy.
+        # Its own IDE, kept (see duplicate_class).
         copy = accounts.Assignment(
-            slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+            slug=accounts.new_id(db, accounts.Assignment), app=_ide_of(item),
             teacher_id=user.id, title=item.title, kind=item.kind,
             code=item.code, files=item.files, out_of=item.out_of,
             tutorial_id=item.tutorial_id, deck_id=item.deck_id)
@@ -5555,7 +5570,7 @@ def _class_rows(db, course, user=None, student=False):
     for live in (db.query(accounts.LiveSession)
                    .filter(accounts.LiveSession.assignment_id.in_(ids),
                            accounts.LiveSession.host_id == course.teacher_id,
-                           accounts.LiveSession.app == APP_NAME)
+                           accounts.LiveSession.app.in_(EDITOR_IDES))
                    .order_by(accounts.LiveSession.started_at,
                              accounts.LiveSession.id) if ids else []):
         lessons[live.assignment_id] = live          # the newest wins
@@ -5680,7 +5695,7 @@ def teacher_class(class_id):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         if course is None or course.teacher_id != user.id:
             abort(404)
         rows, archived = _class_rows(db, course)
@@ -5731,7 +5746,7 @@ def _view_token(db, course):
 def _viewed_class(db, token):
     if not token or not re.fullmatch(r"[A-Za-z0-9_-]{8,32}", token):
         return None
-    return db.query(accounts.Course).filter_by(view_token=token, app=APP_NAME).first()
+    return db.query(accounts.Course).filter(accounts.Course.view_token == token, accounts.Course.app.in_(EDITOR_IDES)).first()
 
 
 def _as_visitor(db):
@@ -5767,7 +5782,7 @@ def class_view_item(token, slug):
     db = SessionLocal()
     try:
         course = _viewed_class(db, token)
-        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         placed = (db.query(accounts.ClassItem).filter_by(
                      class_id=course.id, assignment_id=item.id).first()
                   if course is not None and item is not None else None)
@@ -5801,7 +5816,7 @@ def renew_view_link(class_id):
         user, bounce = _require_teacher(db)
         if bounce:
             return jsonify(error="Only the class's teacher can do that."), 403
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         if course is None or course.teacher_id != user.id:
             return jsonify(error="That isn't one of your classes."), 404
         course.view_token = secrets.token_urlsafe(12)
@@ -5825,7 +5840,7 @@ def student_class(class_id):
         user = current_user(db)
         if user is None:
             return redirect(url_for("login", next=request.path))
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         teacher = course is not None and course.teacher_id == user.id
         enrolled = course is not None and db.query(accounts.Enrollment).filter_by(
             class_id=course.id, email=(user.email or "").lower()).first() is not None
@@ -5923,7 +5938,7 @@ def class_attendance(class_id):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         if course is None or course.teacher_id != user.id:
             abort(404)
         # 45 days by default: a grading period, with room. The page is built
@@ -6067,7 +6082,7 @@ def _board(db, courses, me=None):
 
 def _teacher_classes(db, teacher_id):
     return (db.query(accounts.Course)
-              .filter_by(teacher_id=teacher_id, app=APP_NAME)
+              .filter(accounts.Course.teacher_id == teacher_id, accounts.Course.app.in_(EDITOR_IDES))
               .order_by(accounts.Course.name, accounts.Course.id).all())
 
 
@@ -6726,7 +6741,7 @@ PHOTO_MAX_BYTES = 600 * 1024
 
 def _photo(db, user, status):
     return (db.query(accounts.StudentPhoto)
-              .filter_by(user_id=user.id, status=status, app=APP_NAME)
+              .filter(accounts.StudentPhoto.user_id == user.id, accounts.StudentPhoto.status == status, accounts.StudentPhoto.app.in_(EDITOR_IDES))
               .order_by(accounts.StudentPhoto.id.desc()).first())
 
 
@@ -6737,7 +6752,7 @@ def _teaches(db, teacher, student):
         return False
     return db.query(accounts.Enrollment.id).join(
         accounts.Course, accounts.Course.id == accounts.Enrollment.class_id).filter(
-        accounts.Course.teacher_id == teacher.id, accounts.Course.app == APP_NAME,
+        accounts.Course.teacher_id == teacher.id, accounts.Course.app.in_(EDITOR_IDES),
         accounts.Enrollment.email == (student.email or "").lower()).first() is not None
 
 
@@ -6762,7 +6777,7 @@ def upload_photo():
         if kind is None:
             return jsonify(error="That isn't a PNG, JPEG, GIF or WebP picture."), 400
         (db.query(accounts.StudentPhoto)
-           .filter_by(user_id=user.id, status="pending", app=APP_NAME)
+           .filter(accounts.StudentPhoto.user_id == user.id, accounts.StudentPhoto.status == "pending", accounts.StudentPhoto.app.in_(EDITOR_IDES))
            .delete(synchronize_session=False))
         photo = accounts.StudentPhoto(slug=accounts.new_id(db, accounts.StudentPhoto),
                                       user_id=user.id, app=APP_NAME, content_type=kind,
@@ -6786,7 +6801,7 @@ def serve_photo(slug):
         # approved in another one a broken picture on this app's class pages.
         # Waiting: only the app it was sent in, as before.
         photo = db.query(accounts.StudentPhoto).filter_by(slug=clean(slug, 16)).first()
-        if photo is None or (photo.status != "approved" and photo.app != APP_NAME):
+        if photo is None or (photo.status != "approved" and photo.app not in EDITOR_IDES):
             abort(404)
         if photo.status != "approved":
             viewer = current_user(db)
@@ -6811,7 +6826,7 @@ def _pending_photos(db, course):
     rows = (db.query(accounts.StudentPhoto)
               .filter(accounts.StudentPhoto.user_id.in_(list(people)),
                       accounts.StudentPhoto.status == "pending",
-                      accounts.StudentPhoto.app == APP_NAME)
+                      accounts.StudentPhoto.app.in_(EDITOR_IDES))
               .order_by(accounts.StudentPhoto.created_at))
     return [{"id": p.id, "url": url_for("serve_photo", slug=p.slug),
              "name": people[p.user_id].display_name()} for p in rows]
@@ -6830,8 +6845,7 @@ def decide_photo(class_id, photo_id, decision):
             return bounce
         if decision not in ("approve", "reject"):
             abort(404)
-        photo = db.query(accounts.StudentPhoto).filter_by(
-            id=photo_id, status="pending", app=APP_NAME).first()
+        photo = db.query(accounts.StudentPhoto).filter(accounts.StudentPhoto.id == photo_id, accounts.StudentPhoto.status == "pending", accounts.StudentPhoto.app.in_(EDITOR_IDES)).first()
         student = (_class_student(db, course, photo.user_id) if photo is not None else None)
         if photo is None or student is None:
             return jsonify(error="That photo isn't waiting any more."), 404
@@ -6840,7 +6854,7 @@ def decide_photo(class_id, photo_id, decision):
             db.commit()
             return jsonify(ok=True)
         (db.query(accounts.StudentPhoto)
-           .filter_by(user_id=student.id, status="approved", app=APP_NAME)
+           .filter(accounts.StudentPhoto.user_id == student.id, accounts.StudentPhoto.status == "approved", accounts.StudentPhoto.app.in_(EDITOR_IDES))
            .delete(synchronize_session=False))
         photo.status = "approved"
         photo.decided_by, photo.decided_at = user.id, accounts.now()
@@ -6892,7 +6906,7 @@ def class_xp(class_id):
         user, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        course = db.query(accounts.Course).filter_by(id=class_id, app=APP_NAME).first()
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
         if course is None or course.teacher_id != user.id:
             abort(404)
         pairs = _class_students(db, course)
@@ -6984,7 +6998,7 @@ def class_give_xp(class_id):
 
 def _event_rows(db, course, limit=10):
     return (db.query(accounts.ClassEvent)
-              .filter_by(class_id=course.id, app=APP_NAME)
+              .filter(accounts.ClassEvent.class_id == course.id, accounts.ClassEvent.app.in_(EDITOR_IDES))
               .order_by(accounts.ClassEvent.created_at.desc(), accounts.ClassEvent.id.desc())
               .limit(limit).all())
 
@@ -7072,8 +7086,7 @@ def class_event_undo(class_id, event_id):
         user, course, bounce = _own_class(db, class_id)
         if bounce:
             return bounce
-        row = db.query(accounts.ClassEvent).filter_by(
-            id=event_id, class_id=course.id, app=APP_NAME).first()
+        row = db.query(accounts.ClassEvent).filter(accounts.ClassEvent.id == event_id, accounts.ClassEvent.class_id == course.id, accounts.ClassEvent.app.in_(EDITOR_IDES)).first()
         if row is None:
             return jsonify(error="No such event."), 404
         (db.query(accounts.XpAward)
@@ -8065,7 +8078,7 @@ def assignment_showing(slug):
     """
     db = SessionLocal()
     try:
-        item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+        item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
         if item is None:
             return jsonify(showing=False)
         live = _newest_lesson(db, item.teacher_id, item.id)
@@ -8683,7 +8696,7 @@ def _lab_notes(item):
 def _lab_for_student(db, slug):
     """(user, item, error response) for a student's own lab."""
     user = current_user(db)
-    item = db.query(accounts.Assignment).filter_by(slug=slug, app=APP_NAME).first()
+    item = db.query(accounts.Assignment).filter(accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
     if item is None or not _is_lab(item) or _lab_of(item) is None:
         return None, None, (jsonify(error="No such lab."), 404)
     if user is None:

@@ -1221,6 +1221,37 @@ body.ide-flaskide.is-resizing-y iframe { pointer-events: none; }
 }
 
 
+/* --------------------------------------------------------- new project */
+/* "New project ▾" (_new_project.html): the kinds of project, opened from one
+   button so a top bar keeps its room. A <details>, so it opens and closes
+   with no script, from the keyboard too. */
+.new-project { position: relative; display: inline-block; }
+.new-project > summary { list-style: none; cursor: pointer; }
+.new-project > summary::-webkit-details-marker { display: none; }
+.new-project-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow);
+}
+.new-project-menu a {
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.new-project-menu a:hover, .new-project-menu a:focus { background: var(--hover-bg); }
+.new-project-row { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+
 /* ----------------------------------------------------- completion popup */
 /* show-hint.css hardcodes a white box with black text, which would be a
    glaring rectangle in dark mode. Repaint it from the tokens. */

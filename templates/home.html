@@ -33,7 +33,7 @@
         <a class="btn btn-primary btn-big" href="{{ url_for('login', next='/') }}"
            title="With your school Google account: your classes, your saved work">Sign in</a>
       {% endif %}
-      <a class="btn btn-big" href="{{ url_for('index') }}">Open the editor</a>
+      {% with new_label="Open the editor", new_big=true %}{% include "_new_project.html" %}{% endwith %}
     </div>
     {% if login_enabled %}
       <p class="dim small">Sign in with your school account to see your classes

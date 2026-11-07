@@ -550,6 +550,60 @@ check("teaching a Flask assignment from the dashboard opens the Flask editor",
       "ide=flaskide" in loc and "teach=" in loc, loc)
 
 
+
+
+# --------------------------------------------------------------------------
+print("\nWebIDE's and FlaskIDE's classes are PyIDE's now")
+
+# A class made in WebIDE, before it moved in: its row says "webide".
+db = P.SessionLocal()
+wclass = accounts.Course(app="webide", teacher_id=TEACHER, name="Web Design 1")
+db.add(wclass)
+db.commit()
+db.add(accounts.Enrollment(class_id=wclass.id, email="kid2@example.org", name="B Student"))
+witem = db.query(accounts.Assignment).filter_by(slug=item.slug).first()
+P._place(db, wclass, witem)
+db.add(accounts.StudentPhoto(slug="wphoto1", user_id=OTHER, status="pending", app="webide",
+                             content_type="image/png", data=b"x"))
+db.commit()
+WCLASS = wclass.id
+db.close()
+
+check("a WebIDE class is on the teacher's dashboard", "Web Design 1" in teacher.get("/teacher").get_data(as_text=True))
+tpage = teacher.get("/teacher/class/%d" % WCLASS)
+check("  its page opens, with its web assignment on it",
+      tpage.status_code == 200 and item.slug in tpage.get_data(as_text=True))
+# (the dashboard lists assignments in no class; one in a class is on its page)
+check("a Flask assignment in no class is on the dashboard",
+      fitem.title in teacher.get("/teacher").get_data(as_text=True))
+check("  and its own page opens", teacher.get("/teacher/%s" % item.slug).status_code == 200)
+check("its student has the class among theirs", "Web Design 1" in other.get("/classes").get_data(as_text=True))
+spage = other.get("/class/%d" % WCLASS)
+check("  and its page, with the assignment", spage.status_code == 200 and item.slug in spage.get_data(as_text=True))
+# A web project of their own, in no assignment: only the draft list has it
+# (an assignment shows on My work through its turn-in as well).
+other.post("/api/draft", json={"ide": "webide", "title": "My own site", "files": WEB})
+check("a web project of their own is in My work", "My own site" in other.get("/my").get_data(as_text=True))
+db = P.SessionLocal()
+_course = db.query(accounts.Course).filter_by(id=WCLASS).first()
+with P.app.test_request_context():
+    _waiting = P._pending_photos(db, _course)
+db.close()
+check("a photo they sent in WebIDE still waits for the teacher here",
+      [w["url"].rsplit("/", 1)[-1] for w in _waiting] == ["wphoto1"], _waiting)
+r = teacher.post("/api/class/%d/new" % WCLASS, json={"title": "Day 2", "kind": "web"})
+check("Add to class in it makes a web assignment",
+      r.status_code == 200 and row(accounts.Assignment, slug=r.get_json()["slug"]).app == "webide", r.get_json())
+_work = teacher.get("/api/assignment/%s/tests/work" % item.slug).get_json()["work"]
+check("Check all is sent a web project's files as they are, with no main.py added",
+      _work and "index.html" in _work[0]["files"] and "main.py" not in _work[0]["files"],
+      [sorted(w["files"]) for w in _work])
+_front = client().get("/").get_data(as_text=True)
+check("the front door offers a new project of every kind",
+      all(u in _front for u in ('href="/new"', 'href="/new?ide=webide"', 'href="/new?ide=flaskide"',
+                                'href="/new?ide=flaskide&amp;kind=sql"', 'href="/new?ide=flaskide&amp;kind=php"')))
+
+
 # --------------------------------------------------------------------------
 print("\nThe tests grammar follows the IDE")
 

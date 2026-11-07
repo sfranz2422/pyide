@@ -26,7 +26,7 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
   <div class="meta"><span class="pagetitle">My work</span></div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('index') }}">New project</a>
+    {% include "_new_project.html" %}
     {% for c in my_classes %}
       <a class="btn" href="{{ c.url }}">{{ c.name }}</a>
     {% endfor %}

@@ -1,0 +1,29 @@
+{#  A new project of any kind the editor has (EDITOR_IDES in app.py), from the
+    same starters Add to class uses. Set `new_row` before including it for a
+    row of buttons (the front door); otherwise it is one "New project" button
+    that opens the choices, which is what fits on a page's top bar.
+    WebIDE and FlaskIDE moved in (Nov 2026): before, each kind of project was
+    a different site. #}
+{% set _kinds = [
+  ("Python", url_for('index')),
+  ("HTML / CSS / JS", url_for('index', ide='webide')),
+  ("Flask app", url_for('index', ide='flaskide')),
+  ("SQL", url_for('index', ide='flaskide', kind='sql')),
+  ("PHP site", url_for('index', ide='flaskide', kind='php')),
+] %}
+{% if new_row %}
+  <span class="new-project-row">
+    {% for label, href in _kinds %}
+      <a class="btn{% if new_big %} btn-big{% endif %}" href="{{ href }}">{{ label }}</a>
+    {% endfor %}
+  </span>
+{% else %}
+  <details class="new-project">
+    <summary class="btn{% if new_big %} btn-big{% endif %}">{{ new_label or "New project" }} ▾</summary>
+    <div class="new-project-menu">
+      {% for label, href in _kinds %}
+        <a href="{{ href }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </details>
+{% endif %}

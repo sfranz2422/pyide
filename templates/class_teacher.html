@@ -172,13 +172,26 @@
       <input id="new-title" class="field" type="text" maxlength="200"
              placeholder="Name of the new assignment or material" aria-label="New item's name">
       <select id="new-kind" class="field" aria-label="Kind"
-              title="Code: a project students write in the editor. Block world: a Raspberry Pi Minecraft project (mcpi) that builds in a 3D world. Raspberry Pi: a gpiozero project on a simulated Pi with a breadboard students wire. Lab (A+): a PC to build or fix, graded as they work — you pick the ticket next. Lesson: slides and questions. Material: text, links and pictures, nothing to open.">
-        <option value="code">Code</option>
-        <option value="world">Block world (Minecraft)</option>
-        <option value="pi">Raspberry Pi</option>
-        <option value="lab">Lab (A+)</option>
-        <option value="lesson">Lesson</option>
-        <option value="material">Material</option>
+              title="Python: a program students write in the editor. Block world: a Raspberry Pi Minecraft project (mcpi) that builds in a 3D world. Raspberry Pi: a gpiozero project on a simulated Pi with a breadboard students wire. HTML / CSS / JS: a web page, shown as they type. Flask app, SQL, PHP site: a site or a database, run in the browser. Lab (A+): a PC to build or fix, graded as they work — you pick the ticket next. Lesson: slides and questions. Material: text, links and pictures, nothing to open.">
+        {#  Every kind of project the editor has (EDITOR_IDES), each from its
+            own starter — the web and Flask ones are WebIDE's and FlaskIDE's,
+            which moved in (Nov 2026). #}
+        <optgroup label="Python">
+          <option value="code">Python</option>
+          <option value="world">Block world (Minecraft)</option>
+          <option value="pi">Raspberry Pi</option>
+        </optgroup>
+        <optgroup label="Web">
+          <option value="web">HTML / CSS / JS</option>
+          <option value="flask">Flask app</option>
+          <option value="sql">SQL</option>
+          <option value="php">PHP site</option>
+        </optgroup>
+        <optgroup label="Other">
+          <option value="lab">Lab (A+)</option>
+          <option value="lesson">Lesson</option>
+          <option value="material">Material</option>
+        </optgroup>
       </select>
       <button class="btn btn-primary" type="submit">Add to class</button>
     </form>

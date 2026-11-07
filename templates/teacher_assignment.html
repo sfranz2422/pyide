@@ -1095,6 +1095,60 @@
       document.head.appendChild(s);
     });
   }
+  /* Which checker, by the assignment's IDE (IDES in app.py): Python's here;
+     a web assignment's pages in hidden frames (WebIDE's runner.js and
+     autograde.js); a Flask app in Flask, or a PHP site in PHP (FlaskIDE's
+     flask.js, php.js and autograde.js) — each loaded only when pressed, as
+     WebIDE's and FlaskIDE's Check all did. A checker is checkOne(files). */
+  var IDE = {{ (assignment.app or "pyide")|tojson }};
+  var checker = null;
+  async function makeChecker() {
+    if (checker) return checker;
+    if (IDE === "webide") {
+      state.textContent = "Loading…";
+      if (!window.WebIDERun) await load({{ url_for('static', filename='web/runner.js')|tojson }});
+      if (!window.WebIDETests) await load({{ url_for('static', filename='web/autograde.js')|tojson }});
+      checker = function (files) { return window.WebIDETests.run(files, tests); };
+    } else if (IDE === "flaskide") {
+      checker = async function (files) {
+        var rt = flaskIsPhp(files) ? await phpRuntime() : await flaskPython();
+        return window.PyIDETests.run(rt, files, tests);
+      };
+    } else {
+      var py = await python();
+      checker = function (files) { return window.PyIDETests.run(py, files, tests); };
+    }
+    return checker;
+  }
+  /* A Flask project's Python and Flask, loaded the way the editor loads them
+     (flask/flask.js), and its tests (flask/autograde.js — PyIDETests too,
+     never on a page with Python's). */
+  var flaskRt = null;
+  async function flaskPython() {
+    if (flaskRt) return flaskRt;
+    state.textContent = "Loading Python…";
+    if (!window.loadPyodide) await load("https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.js");
+    if (!window.FlaskIDERuntime) await load({{ url_for('static', filename='flask/flask.js')|tojson }});
+    if (!window.PyIDETests) await load({{ url_for('static', filename='flask/autograde.js')|tojson }});
+    await window.FlaskIDERuntime.boot(function (note) { if (note) state.textContent = note; });
+    flaskRt = window.FlaskIDERuntime;
+    return flaskRt;
+  }
+  /* A PHP site (index.php and no app.py: flask_kind's rule) is checked in
+     PHP, decided per project from its own files. */
+  function flaskIsPhp(files) {
+    return "index.php" in files && !("app.py" in files) && !("query.sql" in files);
+  }
+  var php = null;
+  async function phpRuntime() {
+    if (php) return php;
+    state.textContent = "Loading PHP…";
+    if (!window.PhpRuntime) await load({{ url_for('static', filename='flask/php.js')|tojson }});
+    if (!window.PyIDETests) await load({{ url_for('static', filename='flask/autograde.js')|tojson }});
+    await window.PhpRuntime.boot(function (note) { if (note) state.textContent = note; });
+    php = window.PhpRuntime;
+    return php;
+  }
   async function python() {
     if (pyodide) return pyodide;
     state.textContent = "Loading Python…";
@@ -1141,14 +1195,14 @@
   btn.addEventListener("click", async function () {
     btn.disabled = true;
     try {
-      var py = await python();
+      var check = await makeChecker();
       state.textContent = "Fetching what was turned in…";
       var res = await fetch("/api/assignment/" + encodeURIComponent(slug) + "/tests/work");
       if (!res.ok) throw new Error("couldn't fetch the work");
       var work = (await res.json()).work;
       for (var i = 0; i < work.length; i++) {
         state.textContent = "Checking " + work[i].name + " (" + (i + 1) + " of " + work.length + ")…";
-        var got = await window.PyIDETests.run(py, work[i].files, tests);
+        var got = await check(work[i].files);
         var saved = await post(base + "/tests/verify", { student: work[i].student, results: got.results });
         if (!saved.ok) throw new Error(saved.d.error || "a result wasn't saved");
         paintRow(work[i].student, saved.d, got.results);
