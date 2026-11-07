@@ -1221,15 +1221,6 @@ body.ide-flaskide.is-resizing-y iframe { pointer-events: none; }
 }
 
 
-/* The dashboard's Copy WebIDE and FlaskIDE classes (teacher.html). */
-.copy-old {
-  margin: 12px 0;
-  padding: 12px 14px;
-  border: 1px dashed var(--accent);
-  border-radius: 8px;
-}
-.copy-old p { margin: 0 0 10px; }
-
 /* --------------------------------------------------------- new project */
 /* "New project ▾" (_new_project.html): the kinds of project, opened from one
    button so a top bar keeps its room. A <details>, so it opens and closes

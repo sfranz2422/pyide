@@ -59,21 +59,6 @@
       <p class="dim">A class is one period: its own page of assignments, which
         its students find under their name once its Classroom roster is synced.</p>
     {% endif %}
-    {#  WebIDE and FlaskIDE moved into PyIDE (Nov 2026), and are going away.
-        This copies each of their classes into a new PyIDE class — roster,
-        Classroom course, calendar, every assignment, students' work left in
-        the originals (copy_old_classes). Shown until every one is copied. #}
-    {% if old_classes %}
-      <div class="copy-old" id="copy-old-box">
-        <p><strong>{{ old_classes|length }} class{{ '' if old_classes|length == 1 else 'es' }} from WebIDE and FlaskIDE:</strong>
-          {% for c in old_classes %}{{ c.name }}{{ ', ' if not loop.last }}{% endfor %}.
-          Copy {{ 'it' if old_classes|length == 1 else 'them' }} into new PyIDE classes of the same name, with the
-          same students and Classroom course and every assignment. What students did stays in the
-          original{{ '' if old_classes|length == 1 else 's' }}, which you keep.</p>
-        <button id="copy-old" class="btn btn-primary" type="button">Copy into PyIDE classes</button>
-        <span id="copy-old-state" class="dim small"></span>
-      </div>
-    {% endif %}
     <form id="new-class" class="grade-line">
       <input id="new-class-name" class="field" type="text" maxlength="200"
              placeholder="New class, e.g. Intro to Programming — P4" aria-label="Class name">
@@ -202,26 +187,6 @@
 </main>
 
 <script>
-  /* Copy WebIDE and FlaskIDE classes into PyIDE (copy_old_classes): once,
-     then the page shows the classes it made. */
-  (function () {
-    var btn = document.getElementById("copy-old");
-    if (!btn) return;
-    var state = document.getElementById("copy-old-state");
-    btn.addEventListener("click", function () {
-      if (!confirm("Make a new PyIDE class for each of these, with its students, Classroom course and assignments? The originals stay as they are.")) return;
-      btn.disabled = true;
-      state.textContent = "Copying…";
-      fetch("/api/classes/copy-old", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-        .then(function (out) {
-          if (!out.ok) { state.textContent = out.d.error || "Not copied"; btn.disabled = false; return; }
-          state.textContent = "Copied " + out.d.copied.length + " class" + (out.d.copied.length === 1 ? "" : "es") + ".";
-          location.reload();
-        }).catch(function () { state.textContent = "Not copied — check your connection"; btn.disabled = false; });
-    });
-  })();
-
   /* New class: a name, and the period's Classroom class to take students
      from. The Classroom classes are the same list as below, asked once. */
   (function () {

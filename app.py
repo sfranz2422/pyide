@@ -473,20 +473,6 @@ class Snippet(Base):
         return bool(self.hidden)
 
 
-class ClassCopy(Base):
-    """A WebIDE or FlaskIDE class copied into a new PyIDE class (Copy WebIDE
-    and FlaskIDE classes, on the dashboard: _copy_old_classes). One row per
-    original, so pressing it again copies only what it hasn't. PyIDE's own
-    table, not accounts.py's, like teacher_decks: nothing to copy elsewhere."""
-    __tablename__ = "class_copies"
-
-    id = Column(Integer, primary_key=True)
-    old_class_id = Column(Integer, unique=True, nullable=False)
-    new_class_id = Column(Integer, nullable=False)
-    created_at = Column(DateTime, nullable=False,
-                        default=lambda: datetime.now(timezone.utc))
-
-
 class TeacherDeck(Base):
     """The teacher's own slides for an assignment: one HTML file they made
     elsewhere and present from, opened from the top of the assignment's page
@@ -3262,9 +3248,7 @@ def teacher_home():
         for cid, aid in (db.query(accounts.ClassItem.class_id, accounts.ClassItem.assignment_id)
                            .filter(accounts.ClassItem.assignment_id.in_(list(waiting) or [0]))):
             class_waiting[cid] = class_waiting.get(cid, 0) + waiting[aid]
-        ctx.update(waiting=waiting, class_waiting=class_waiting,
-                   # WebIDE's and FlaskIDE's classes not copied yet (copy_old_classes)
-                   old_classes=_old_classes(db, user))
+        ctx.update(waiting=waiting, class_waiting=class_waiting)
         ctx.update(assignments=live, archived=filed, counts=counts,
                    classes=classes, class_sizes=sizes,
                    show_archived=show_archived, kaypy=kaypy_status(),
@@ -5213,104 +5197,42 @@ def duplicate_class(class_id):
         name = clean((request.get_json(silent=True) or {}).get("name"), 200)
         if not name:
             return jsonify(error="Give the new class a name."), 400
-        new, copied = _copy_class(db, user, course, name)
+        new = accounts.Course(app=APP_NAME, teacher_id=user.id, name=name,
+                              banner=course.banner or "")
+        db.add(new)
+        db.commit()
+        rows = (db.query(accounts.ClassItem).filter_by(class_id=course.id)
+                  .order_by(accounts.ClassItem.position, accounts.ClassItem.id).all())
+        ids = [r.assignment_id for r in rows if r.assignment_id]
+        items = ({a.id: a for a in db.query(accounts.Assignment)
+                  .filter(accounts.Assignment.id.in_(ids))} if ids else {})
+        copied = 0
+        for at, r in enumerate(rows):
+            row = accounts.ClassItem(class_id=new.id, kind=r.kind, title=r.title,
+                                     hidden=r.hidden, show_live=r.show_live,
+                                     description=r.description or "", position=at)
+            if r.assignment_id:
+                item = items.get(r.assignment_id)
+                if item is None or item.archived:
+                    continue
+                # Its own IDE, kept: a web assignment copied as "pyide" would
+                # open its HTML in the Python editor.
+                copy = accounts.Assignment(
+                    slug=accounts.new_id(db, accounts.Assignment), app=_ide_of(item),
+                    teacher_id=user.id, title=item.title, kind=item.kind,
+                    code=item.code, files=item.files, out_of=item.out_of,
+                    tutorial_id=item.tutorial_id, deck_id=item.deck_id)
+                db.add(copy)
+                db.commit()
+                _store_quiz_keys(db, copy.id, copy.file_map().values())
+                row.assignment_id = copy.id
+                copied += 1
+            db.add(row)
+            db.commit()
+            if row.assignment_id and not _is_lab(copy):
+                _lesson_for(db, user, copy)     # its live link, made ahead
         return jsonify(ok=True, id=new.id, assignments=copied,
                        url=url_for("teacher_class", class_id=new.id))
-    finally:
-        db.close()
-
-
-def _copy_class(db, user, course, name, whole=False):
-    """A new PyIDE class laid out like `course`, with a fresh copy of each of
-    its assignments: duplicate_class's copy (see why there), and, `whole`,
-    the migration's (_copy_old_classes) — the same class for the same
-    students, now: its roster, its Classroom course and week's calendar too,
-    and every assignment, archived and closed ones kept so. Never students'
-    work: every copied assignment starts empty. Returns (class, copied)."""
-    new = accounts.Course(app=APP_NAME, teacher_id=user.id, name=name,
-                          banner=course.banner or "",
-                          **({"calendar": course.calendar or "",
-                              "course_id": course.course_id or "",
-                              "course_name": course.course_name or "",
-                              "roster_at": course.roster_at} if whole else {}))
-    db.add(new)
-    db.commit()
-    if whole:
-        for e in db.query(accounts.Enrollment).filter_by(class_id=course.id).all():
-            db.add(accounts.Enrollment(class_id=new.id, email=e.email, name=e.name))
-        db.commit()
-    rows = (db.query(accounts.ClassItem).filter_by(class_id=course.id)
-              .order_by(accounts.ClassItem.position, accounts.ClassItem.id).all())
-    ids = [r.assignment_id for r in rows if r.assignment_id]
-    items = ({a.id: a for a in db.query(accounts.Assignment)
-              .filter(accounts.Assignment.id.in_(ids))} if ids else {})
-    copied = 0
-    for at, r in enumerate(rows):
-        row = accounts.ClassItem(class_id=new.id, kind=r.kind, title=r.title,
-                                 hidden=r.hidden, show_live=r.show_live,
-                                 description=r.description or "", position=at)
-        copy = None
-        if r.assignment_id:
-            item = items.get(r.assignment_id)
-            if item is None or (item.archived and not whole):
-                continue
-            # Its own IDE, kept: a web assignment copied as "pyide" would
-            # open its HTML in the Python editor.
-            copy = accounts.Assignment(
-                slug=accounts.new_id(db, accounts.Assignment), app=_ide_of(item),
-                teacher_id=user.id, title=item.title, kind=item.kind,
-                code=item.code, files=item.files, out_of=item.out_of,
-                tutorial_id=item.tutorial_id, deck_id=item.deck_id,
-                **({"archived": item.archived, "closed": item.closed,
-                    "xp_bonus": item.xp_bonus} if whole else {}))
-            db.add(copy)
-            db.commit()
-            _store_quiz_keys(db, copy.id, copy.file_map().values())
-            row.assignment_id = copy.id
-            copied += 1
-        db.add(row)
-        db.commit()
-        if copy is not None and not _is_lab(copy):
-            _lesson_for(db, user, copy)     # its live link, made ahead
-    return new, copied
-
-
-#: The editors whose classes Copy WebIDE and FlaskIDE classes takes.
-OLD_CLASS_APPS = ("webide", "flaskide")
-
-
-def _old_classes(db, user):
-    """The teacher's WebIDE and FlaskIDE classes not copied into PyIDE yet."""
-    done = {r.old_class_id for r in db.query(ClassCopy.old_class_id)}
-    return [c for c in (db.query(accounts.Course)
-                          .filter(accounts.Course.teacher_id == user.id,
-                                  accounts.Course.app.in_(OLD_CLASS_APPS))
-                          .order_by(accounts.Course.name, accounts.Course.id).all())
-            if c.id not in done]
-
-
-@app.post("/api/classes/copy-old")
-def copy_old_classes():
-    """Copy WebIDE and FlaskIDE classes, from the dashboard: each of the
-    teacher's classes made in WebIDE or FlaskIDE becomes a new PyIDE class of
-    the same name — roster, Classroom course, calendar, layout and a fresh
-    copy of every assignment (_copy_class, whole) — before those two editors
-    are taken down. The originals are left exactly as they are, students'
-    work and all, and stay listed (the teacher's choice). Each is copied once
-    (ClassCopy): pressing it again copies only what is new."""
-    db = SessionLocal()
-    try:
-        user = current_user(db)
-        if user is None or not accounts.is_teacher(user.email):
-            return jsonify(error="Only a teacher can do that."), 403
-        made = []
-        for old in _old_classes(db, user):
-            new, copied = _copy_class(db, user, old, old.name, whole=True)
-            db.add(ClassCopy(old_class_id=old.id, new_class_id=new.id))
-            db.commit()
-            made.append({"name": new.name, "from": old.app, "assignments": copied,
-                         "url": url_for("teacher_class", class_id=new.id)})
-        return jsonify(ok=True, copied=made)
     finally:
         db.close()
 
