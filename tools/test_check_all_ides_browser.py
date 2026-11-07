@@ -9,7 +9,8 @@ teacher's browser, and its result is what counts toward the grade. The
 assignment page picks the checker by the assignment's IDE: WebIDE's for a
 web page, FlaskIDE's for a Flask app, PHP for a PHP site. A student turns
 each in; the teacher presses Check all; the verified result is kept, with
-the points the tests give.
+the points the tests give. Then the one library: Show by IDE, Link
+offering only that IDE's assignments, and New making one for the IDE shown.
 
 Needs Chrome and node; says "skip" without Chrome rather than failing.
 """
@@ -129,7 +130,7 @@ else:
     for ln in lines:
         label, _, detail = ln[5:].partition("\t")
         check(label, ln.startswith("ok"), "" if ln.startswith("ok") else detail[:300])
-    check("the browser run reported every check", len(lines) == 8,
+    check("the browser run reported every check", len(lines) == 11,
           (len(lines), out.stderr.strip()[-300:]))
     db = P.SessionLocal()
     try:
@@ -139,6 +140,13 @@ else:
     check("each Check all is kept as the verified result that counts, 1 of 2",
           len(kept) == 3 and all((k.earned, k.possible) == (1, 2) for k in kept),
           [(k.earned, k.possible) for k in kept])
+    db = P.SessionLocal()
+    try:
+        made = db.query(accounts.LibraryItem).filter_by(title="Made in the library").first()
+    finally:
+        db.close()
+    check("New tutorial, with web showing, makes a web tutorial", made is not None and made.app == "webide",
+          made and made.app)
     server.shutdown()
 
 failed = results.count(False)

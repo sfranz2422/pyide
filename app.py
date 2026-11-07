@@ -2959,6 +2959,39 @@ def _deck_of(db, item):
     return db.query(TeacherDeck).filter_by(assignment_id=item.id).first()
 
 
+# The IDEs a tutorial can be for, as the library page names them.
+LIBRARY_IDES = [("pyide", "Python"), ("webide", "HTML / CSS / JS"), ("flaskide", "Flask, SQL, PHP")]
+
+# How PresMaker writes and reads a tutorial's tests, by the IDE it is for:
+# Python's have a form; WebIDE's and FlaskIDE's are typed as lines, read by
+# their own autograde.js, with their examples (as their own library pages
+# had them). A Flask or web tutorial's save goes packed past Render's
+# firewall (pack.js), which turned away notes full of HTML and routes.
+LIBRARY_TESTS = {
+    "webide": {"pm_tests": "lines", "pm_autograde": "web/autograde.js", "pack_js": "flask/pack.js",
+               "pm_test_examples": ['has h1', 'has exactly 2 img', 'h1 contains Welcome', 'img has alt',
+                                    'links to about.html', 'h1 color is red', 'click #btn -> #out contains 1',
+                                    'logs Hello', 'uses addEventListener', 'defines greet',
+                                    'about.html: has h2  (2 points)']},
+    "flaskide": {"pm_tests": "lines", "pm_autograde": "flask/autograde.js", "pack_js": "flask/pack.js",
+                 "pm_test_examples": ['GET / -> 200', 'GET /nope -> 404', 'GET / contains Welcome',
+                                      'POST /login name=sam&pw=1 -> contains Hello, sam', 'uses render_template',
+                                      'avoids eval', 'defines home  (2 points)', 'returns 3 rows',
+                                      'result contains Alice']},
+}
+
+
+def _library_page(item=None):
+    """The library's pages: PyIDE's look, the IDEs a tutorial can be for, and
+    — editing one — how its IDE writes its tests (LIBRARY_TESTS)."""
+    page = {"brand": "PyIDE", "logo": "🐍", "ns": "PyIDE", "theme_key": "pyide-theme",
+            "home_url": url_for("teacher_home"), "help_url": url_for("help_questions"),
+            "max_tutorial": library.MAX_TUTORIAL, "ides": LIBRARY_IDES}
+    if item is not None and item.kind == "tutorial":
+        page.update(LIBRARY_TESTS.get(item.app, {}))
+    return page
+
+
 def _old_decks(db, user):
     """This teacher's decks still only in teacher_decks, for the library's import."""
     rows = (db.query(TeacherDeck, accounts.Assignment)
@@ -2978,9 +3011,11 @@ library.init(
     notes_of=lambda item: item.file_map().get(_notes_name(item), ""),
     write_notes=_write_notes,
     assignment_url=lambda item: url_for("teacher_assignment", slug=item.slug),
-    page=lambda db, user: {"brand": "PyIDE", "logo": "🐍", "ns": "PyIDE", "theme_key": "pyide-theme",
-                           "home_url": url_for("teacher_home"), "help_url": url_for("help_questions"),
-                           "max_tutorial": library.MAX_TUTORIAL},
+    page=lambda db, user: _library_page(),
+    # One shelf for every IDE the editor has: a tutorial is for one of them
+    # (its `app`), and links only to that IDE's assignments (library.py).
+    app_names=EDITOR_IDES,
+    page_for=lambda db, user, item: _library_page(item),
 )
 
 

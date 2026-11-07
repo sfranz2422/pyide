@@ -120,6 +120,23 @@ try {
     say(tests.indexOf(a.expect) >= 0, "  and shows " + a.expect, tests);
     await close(T);
   }
+  // ------------------------------------------------- the one library
+  // Each assignment's notes became a tutorial for its own IDE (import).
+  const L = await open("/teacher/tutorials", setup.teacherCookie);
+  await until(L, "document.querySelectorAll('[data-testid=library-row]').length >= 3", 20000);
+  await ev(L, "var s = document.querySelector('#lib-ide'); s.value = 'webide'; s.dispatchEvent(new Event('input'))");
+  const ides = await ev(L, "[...document.querySelectorAll('[data-testid=library-row] .library-ide')].map(x => x.dataset.ide)");
+  say(ides.length >= 1 && ides.every((x) => x === "webide"), "the library shows one kind of project at a time", ides);
+  await ev(L, "document.querySelector('[data-testid=library-row] [data-testid=library-link]').click()");
+  const offered = await ev(L, "[...document.querySelectorAll('#lib-link-list label')].map(l => l.textContent.trim())");
+  say(offered.length === 1 && offered[0].indexOf("A web page") === 0,
+      "  and a web tutorial is offered only the web assignments to link to", offered);
+  await ev(L, "document.querySelector('#lib-link').close('cancel')");
+  await ev(L, "window.__answer = 'Made in the library'; document.querySelector('#lib-new').click()");
+  await until(L, "location.pathname.endsWith('/edit')", 10000);
+  say(true, "(a new tutorial made with web showing)", "");
+  await close(L);
+
   say(alerts.length === 0, "no alerts: nothing the server refused", alerts.slice(0, 3));
   say(errors.length === 0, "no errors from the page's own scripts", errors.slice(0, 4));
 } catch (e) {

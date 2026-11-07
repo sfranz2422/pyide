@@ -212,12 +212,19 @@ check("pack.js's body is accepted by Update assignment",
 # The notes are the library's now (library.py), written there and nowhere
 # else: the editor's save keeps them as they were. A packed save to the
 # library, then — the firewall turned notes away there just the same.
-# (FlaskIDE then saved the notes, packed, through the library and opened
-# the assignment to find them. PyIDE's library links Python assignments
-# only until it takes every IDE — step 5 of the move — and those two checks
-# come back with it.)
+# The notes are the library's now (library.py), written there and nowhere
+# else: the editor's save keeps them as they were. A packed save to the
+# library, then — the firewall turned notes away there just the same. (The
+# library holds every IDE's tutorials, so a Flask assignment links here.)
+r_lib = c.post("/api/library", content_type="application/json", data=json.dumps(
+    {"_packed": base64.b64encode(json.dumps({"body": NOTES, "linkTo": SLUG}).encode("utf-8")).decode("ascii")}))
+check("the notes, packed, are saved exactly by the library",
+      r_lib.status_code == 201 and files_of(SLUG).get("notes.md") == NOTES, r_lib.status_code)
 check("the title, outside the files, came through too",
       (r.get_json() or {}).get("title") == "Day 4 ✏")
+page = c.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
+check("and they are there when the assignment is opened again",
+      "Welcome to Game Vault" in page and "127.0.0.1:5000" in page)
 
 r = c.post("/api/assignment/" + SLUG,
            json={"files": {"app.py": "plain = 1\n"}, "title": "Day 4"})

@@ -169,6 +169,18 @@ a student's classes, My work and the dashboard. The assignment page's
 Check all picks its checker by the assignment's IDE (WebIDE's, FlaskIDE's,
 PHP for a PHP site), loaded when pressed; `/tests/work` adds main.py for
 Python only. `test_check_all_ides_browser.py`.
+**One library for every IDE.** `library.py` (still the same file in all
+four repos) takes an optional `app_names` hook; PyIDE passes `EDITOR_IDES`.
+A tutorial's `app` is the IDE it is for: what you pick (the library's Show,
+or asked), its assignment's when made from one, and import groups notes by
+IDE as well as text. It links only to that IDE's assignments (`_same_ide`;
+a deck, the teacher's slides, links to any), an upload replaces only within
+its IDE, and an assignment's Use another offers its IDE's. `page_for` lets
+PresMaker edit a web or Flask tutorial with that IDE's tests (lines, its
+own autograde.js as `pm_autograde`, saves packed) — the generated
+presmaker.html takes both from the page (`tools/sync_presmaker.py`, synced
+to all three). The page's IDE filter appears only with more than one IDE,
+so WebIDE's and FlaskIDE's library pages are unchanged.
 
 ## Features worth knowing about
 

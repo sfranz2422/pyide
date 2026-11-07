@@ -604,6 +604,80 @@ check("the front door offers a new project of every kind",
                                 'href="/new?ide=flaskide&amp;kind=sql"', 'href="/new?ide=flaskide&amp;kind=php"')))
 
 
+
+
+# --------------------------------------------------------------------------
+print("\nOne library, each tutorial for one kind of project")
+
+# The same notes on a Python assignment and a web one: two tutorials, each
+# with the tests its own IDE runs.
+SAME = "# Shared words\n\n```tests\nuses for\n```\n"
+py_same = add_row(accounts.Assignment(slug="pysame1", app="pyide", teacher_id=TEACHER, title="Py same",
+                                      code="print(1)", files=json.dumps({"notes.md": SAME})))
+web_same = add_row(accounts.Assignment(slug="websame1", app="webide", teacher_id=TEACHER, title="Web same",
+                                       code="", files=json.dumps(dict(WEB, **{"notes.md": SAME}))))
+lib = teacher.get("/api/library").get_json()
+by_slug = {i["slug"]: i for i in lib["items"]}
+py_tut = row(accounts.Assignment, slug="pysame1").tutorial_id
+web_tut = row(accounts.Assignment, slug="websame1").tutorial_id
+check("the same notes on a Python and a web assignment become two tutorials",
+      py_tut and web_tut and py_tut != web_tut, (py_tut, web_tut))
+_pt = db_item = None
+db = P.SessionLocal()
+_pt = db.get(accounts.LibraryItem, py_tut)
+_wt = db.get(accounts.LibraryItem, web_tut)
+db.close()
+check("  each for its own IDE", _pt.app == "pyide" and _wt.app == "webide", (_pt.app, _wt.app))
+check("the library lists every IDE's tutorials, saying which",
+      {i["ide"] for i in lib["items"] if i["kind"] == "tutorial"} >= {"pyide", "webide", "flaskide"},
+      sorted({i["ide"] for i in lib["items"]}))
+check("  and every IDE's assignments, saying which",
+      {a.get("ide") for a in lib["assignments"]} >= {"pyide", "webide", "flaskide"})
+# A Flask assignment published from the editor (library.adopt): its notes
+# are its own tutorial at once, for its IDE.
+_ft = row(accounts.Assignment, slug=fitem.slug).tutorial_id
+db = P.SessionLocal()
+_ftut = db.get(accounts.LibraryItem, _ft) if _ft else None
+db.close()
+check("a Flask assignment published with notes gets its own Flask tutorial",
+      _ftut is not None and _ftut.app == "flaskide", _ftut and _ftut.app)
+
+r = teacher.post("/api/library", json={"title": "A Flask one", "body": "# A Flask one\n", "ide": "flaskide"})
+check("a new tutorial is for the IDE asked", row(accounts.LibraryItem, slug=r.get_json()["slug"]).app == "flaskide")
+r = teacher.post("/api/library", json={"title": "For it", "body": "# For it\n", "ide": "pyide", "linkTo": "websame1"})
+check("  but one made for an assignment is for that assignment's",
+      row(accounts.LibraryItem, slug=r.get_json()["slug"]).app == "webide")
+r = teacher.post("/api/library/%s/link" % _wt.slug, json={"link": ["pysame1"]})
+check("a web tutorial won't link to a Python assignment",
+      r.get_json().get("refused") == ["pysame1"] and row(accounts.Assignment, slug="pysame1").tutorial_id == py_tut,
+      r.get_json())
+import base64 as _b64                                         # noqa: E402
+up = lambda name, text, ide: teacher.post("/api/library/upload", json={
+    "ide": ide, "files": [{"name": name, "data": _b64.b64encode(text.encode()).decode()}]}).get_json()["report"][0]
+up("Same title.md", "# Same title\n\nweb words\n", "webide")
+got = up("Same title.md", "# Same title\n\npython words\n", "pyide")
+check("an upload replaces only a tutorial of its own IDE (a Python one can't overwrite a web one)",
+      got["result"] == "added", got)
+check("  and a second upload for that IDE does replace it",
+      up("Same title.md", "# Same title\n\nweb words, again\n", "webide")["result"] == "replaced")
+# (on its page; "For it", linked to it above, is its own now, so the shared
+# web tutorial is one of the others it could use)
+box = teacher.get("/teacher/websame1").get_data(as_text=True)
+_opts = re.findall(r'<option value="(\w+)">', box)
+check("a web assignment's Use another offers web tutorials only",
+      _wt.slug in _opts and _pt.slug not in _opts, (_wt.slug, _pt.slug, _opts[:8]))
+check("the library page can show one kind of project at a time",
+      'id="lib-ide"' in teacher.get("/teacher/tutorials").get_data(as_text=True)
+      and '"flaskide", "Flask, SQL, PHP"' in teacher.get("/teacher/tutorials").get_data(as_text=True))
+pm_web = teacher.get("/teacher/tutorials/%s/edit" % _wt.slug).get_data(as_text=True)
+pm_py = teacher.get("/teacher/tutorials/%s/edit" % _pt.slug).get_data(as_text=True)
+check("PresMaker reads a web tutorial's tests with WebIDE's reader, and packs its saves",
+      "/static/web/autograde.js" in pm_web and "/static/flask/pack.js" in pm_web
+      and '"tests": "lines"' in pm_web)
+check("  and a Python one's with Python's, as before",
+      "/static/autograde.js" in pm_py and "pack.js" not in pm_py and '"tests": "form"' in pm_py)
+
+
 # --------------------------------------------------------------------------
 print("\nThe tests grammar follows the IDE")
 
