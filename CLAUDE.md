@@ -71,11 +71,20 @@ branches and the sabotage hit the wrong copy.
 
 ## Things that are invisible from the code
 
-**`accounts.py` is one file living in three repos** — PyIDE, WebIDE and
-FlaskIDE — and it is byte-identical in all three. Change it here and copy it
-to the other two, or the shared tables drift. The five tables (`users`,
+**WebIDE and FlaskIDE are suspended on Render** (since 7 Nov 2026; to be
+deleted if the week goes well). Their projects and classes open here. So
+wherever this file says a file is "the same in all three" or is to be copied
+to WebIDE and FlaskIDE, **that copy is no longer needed**: change it here, and
+copy only what GameIDE shares too (`accounts.py`, `xp.py`, `library.py` into
+its `backend/`). The `~/webide` and `~/flaskide` repos are kept as they are in
+case a service has to come back; if one does, its shared files must be
+brought up to date first.
+
+**`accounts.py` is one file living in several repos** — PyIDE and GameIDE
+(and WebIDE and FlaskIDE while they ran) — byte-identical in each. Change it
+here and copy it, or the shared tables drift. The five tables (`users`,
 `assignments`, `drafts`, `submissions`, `live_sessions`) are shared across
-all three apps, which is why rows carry an `app` column.
+the apps, which is why rows carry an `app` column.
 
 **`gunicorn --workers 2`.** Two processes, no shared memory, nothing routing
 a person to a given one. Any per-session state in a module-level dict is
@@ -92,7 +101,7 @@ dashboard wins. Do not "fix" the file into force without asking.
 from an earlier deploy needs the explicit `ALTER TABLE`. Every default has to
 leave existing rows *correct*, not merely valid.
 
-**WebIDE and FlaskIDE are moving in** (Nov 2026; both services go down
+**WebIDE and FlaskIDE moved in** (Nov 2026; both services suspended
 after). A project's IDE is the `app` column the shared rows already carry —
 `_ide_of`, `IDES` in `app.py` — and `snippets.ide` for share snapshots;
 called `ide` because `Assignment.kind` already means code/lesson/lab. Each
