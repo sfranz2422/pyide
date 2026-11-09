@@ -34,7 +34,7 @@ from flask import (
 )
 from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, defer, sessionmaker
 
 import accounts
 import autograde
@@ -3239,7 +3239,11 @@ def teacher_home():
         if bounce:
             return bounce
         show_archived = request.args.get("archived") == "1"
+        # Without files and code, as on a class page (_class_rows): the
+        # dashboard lists titles, and loading every assignment's data files
+        # on each visit helped push PyIDE over its memory limit (Nov 2026).
         items = (db.query(accounts.Assignment)
+                   .options(defer(accounts.Assignment.files), defer(accounts.Assignment.code))
                    .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app.in_(EDITOR_IDES))
                    .all())
         # Most recently changed first (Assignment.changed): what the teacher
@@ -5623,7 +5627,12 @@ def _class_rows(db, course, user=None, student=False):
     rows = (db.query(accounts.ClassItem).filter_by(class_id=course.id)
               .order_by(accounts.ClassItem.position, accounts.ClassItem.id).all())
     ids = [r.assignment_id for r in rows if r.assignment_id]
+    # Not their files or code: a class page shows titles, links and grades,
+    # and `files` holds data files (a Netflix CSV is 1.7 MB a copy). Every
+    # student's every load of the class page read them all, which helped
+    # push PyIDE over its memory limit (Nov 2026).
     items = ({a.id: a for a in db.query(accounts.Assignment)
+              .options(defer(accounts.Assignment.files), defer(accounts.Assignment.code))
               .filter(accounts.Assignment.id.in_(ids))} if ids else {})
     lessons = {}
     for live in (db.query(accounts.LiveSession)

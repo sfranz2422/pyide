@@ -280,18 +280,11 @@ check("a student gets nothing from it",
 check("  nor anyone signed out", stranger.get("/api/library").status_code == 403
       and stranger.get("/teacher/tutorials/%s/edit" % loops["slug"]).status_code == 403)
 
-print("the same in all three")
+# WebIDE and FlaskIDE are suspended (Nov 2026) and their repos kept as they
+# were, so they are no longer held to PyIDE's copies: a service brought back
+# has its shared files brought up to date first (CLAUDE.md). GameIDE still is.
+print("the same in GameIDE")
 home = os.path.expanduser("~")
-for name in ("library.py", "static/library.js", "static/library.css", "templates/library.html",
-             "templates/presmaker.html", "tools/sync_presmaker.py", "static/presmaker/app.js",
-             "static/presmaker/bridge.js", "static/presmaker/dialogs.js", "tools/test_library.py", "accounts.py"):
-    mine_bytes = open(os.path.join(ROOT, name), "rb").read()
-    for repo in ("pyide", "webide", "flaskide"):
-        there = os.path.join(home, repo)
-        if os.path.realpath(there) == os.path.realpath(ROOT) or not os.path.isdir(there):
-            continue
-        path = os.path.join(there, name)
-        check("%s is the same as %s's" % (name, repo), os.path.exists(path) and open(path, "rb").read() == mine_bytes)
 
 # GameIDE keeps its copies in backend/ (its tutorial library is the same file).
 gb = os.path.join(home, "gameide", "backend")

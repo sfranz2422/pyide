@@ -34,6 +34,7 @@ import secrets
 
 from flask import Blueprint, Response, jsonify, redirect, render_template, request
 from sqlalchemy import func
+from sqlalchemy.orm import defer
 
 import accounts
 
@@ -155,7 +156,13 @@ def _own_item(db, user, slug):
 
 
 def _own_assignments(db, user):
+    # Without their files: a list of a teacher's assignments wants slugs and
+    # titles, and `files` holds data files too — a class's Netflix CSV is 1.7
+    # MB a copy. Loading them for every row on every library request was
+    # part of what pushed PyIDE over its memory limit (Nov 2026). Touching
+    # a.files still works; it is fetched then, for that row alone.
     return (db.query(accounts.Assignment)
+            .options(defer(accounts.Assignment.files), defer(accounts.Assignment.code))
             .filter(accounts.Assignment.teacher_id == user.id, accounts.Assignment.app.in_(_apps()))
             .order_by(accounts.Assignment.created_at.desc()).all())
 
@@ -432,7 +439,11 @@ def list_items():
         if bounce:
             return bounce
         import_existing(db, user)
+        # The list never sends a body, and a deck's body can be megabytes
+        # (pictures inlined): loading every one on every request was the
+        # biggest share of the memory that restarted PyIDE (Nov 2026).
         items = (db.query(accounts.LibraryItem)
+                 .options(defer(accounts.LibraryItem.body))
                  .filter(accounts.LibraryItem.teacher_id == user.id, accounts.LibraryItem.app.in_(_apps()),
                          accounts.LibraryItem.archived == 0)
                  .order_by(accounts.LibraryItem.updated_at.desc()).all())
