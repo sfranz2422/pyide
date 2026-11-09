@@ -42,6 +42,7 @@ try {
   // purpose below (nope()), in its own frame, so only what came from this
   // app's /static/ files counts.
   const errors = [];
+  const dialogs = [];
   ws.on("message", (m) => {
     const d = JSON.parse(m);
     if (d.id && waiting[d.id]) { waiting[d.id](d); delete waiting[d.id]; }
@@ -49,6 +50,12 @@ try {
       const x = d.params.exceptionDetails;
       const where = (x.url || "") + " " + ((x.exception && x.exception.description) || x.text || "");
       if (where.includes("/static/")) errors.push(where.slice(0, 300));
+    }
+    // A student's alert()/prompt(): answered "Ana", as a student would type.
+    if (d.method === "Page.javascriptDialogOpening") {
+      dialogs.push(d.params.type + ":" + d.params.message);
+      ws.send(JSON.stringify({ id: ++next, method: "Page.handleJavaScriptDialog",
+                               params: { accept: true, promptText: "Ana" }, sessionId: d.sessionId }));
     }
   });
   const send = (method, params = {}, sessionId) => new Promise((res, rej) => {
@@ -180,6 +187,21 @@ try {
   const auto = await until(P, "(document.querySelector('#preview').getAttribute('srcdoc') || '').includes('auto one')", 5000);
   say(auto, "the preview follows the typing (Auto)", (await shown(P)).slice(-120));
 
+  // alert() and prompt() show when Run made the page (allow-modals), and
+  // never on a redraw while typing: a prompt every time a student paused
+  // would make the page impossible to edit (runners/web.js, freshFrame).
+  dialogs.length = 0;
+  await setCode(P, "<!doctype html><p id='o'></p><script>var n = prompt('Your name?'); console.log('Hi ' + n);</script>");
+  await run(P);
+  const asked = await until(P, "document.querySelector('#output').textContent.includes('Hi Ana')", 8000);
+  say(asked && dialogs.some((x) => x === "prompt:Your name?"), "Run shows prompt(), and the page gets the answer",
+      { dialogs, out: (await output(P)).slice(-80) });
+  dialogs.length = 0;
+  await setCode(P, "<!doctype html><p>typed</p><script>alert('again?'); console.log('auto drew');</script>");
+  await until(P, "document.querySelector('#output').textContent.includes('auto drew')", 5000);
+  await sleep(500);
+  say(dialogs.length === 0 && (await shown(P)).includes("typed"), "a redraw while typing shows no alert()", dialogs);
+
   await setCode(P, "<!doctype html><script>while (true) {}</script>");
   await run(P);
   const busy = await until(P, "!document.querySelector('#stop').hidden", 5000);
@@ -200,6 +222,8 @@ try {
     const { sessionId: Q } = await send("Target.attachToTarget", { targetId: played.targetId, flatten: true });
     const there = await until(Q, "(document.querySelector('#preview') && document.querySelector('#preview').getAttribute('srcdoc') || '').includes('in a tab of its own')", 10000);
     say(there, "  showing the page as it is now");
+    say(await ev(Q, "document.querySelector('#preview').getAttribute('sandbox')") === "allow-scripts allow-forms allow-modals",
+        "  and its alert() and prompt() show", await ev(Q, "document.querySelector('#preview').getAttribute('sandbox')"));
     await send("Target.closeTarget", { targetId: played.targetId }).catch(() => {});
   }
 

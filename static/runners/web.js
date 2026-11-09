@@ -151,12 +151,18 @@
        navigate itself. Removing the element kills it outright, which is why
        Stop still works during an infinite loop. The editor stays responsive
        throughout because the null-origin frame runs in its own process. */
-    function freshFrame() {
+    /* `modals`: alert(), prompt() and confirm() only show in a frame made by
+       Run. Without allow-modals the browser ignores them (prompt() gives back
+       null), so Web Design 1's alert()/prompt() lessons did nothing at all.
+       But the preview also redraws on every pause in typing, and a prompt()
+       popping up each time a student stopped to think would make the page
+       impossible to edit — so auto-refresh never gets them. */
+    function freshFrame(modals) {
       var old = frame;
       var next = document.createElement("iframe");
       next.id = "preview";
       next.title = "Page preview";
-      next.setAttribute("sandbox", "allow-scripts allow-forms");
+      next.setAttribute("sandbox", "allow-scripts allow-forms" + (modals ? " allow-modals" : ""));
       old.parentNode.replaceChild(next, old);
       frame = next;
       return next;
@@ -170,7 +176,7 @@
 
     /* Render one page. `sent` carries what a form on the previous page
        submitted, so the page it lands on can say something about it. */
-    function render(name, sent) {
+    function render(name, sent, modals) {
       var files = allFiles();
       lastBuilt = "";
       if (!files[ENTRY]) {
@@ -198,7 +204,7 @@
       autoPaused = false;
 
       setBusy(true);
-      freshFrame().srcdoc = built.html;
+      freshFrame(modals).srcdoc = built.html;
       paintTrail();
       relayout();
     }
@@ -227,7 +233,7 @@
       // through switchTo, which lights the right tab and button as it goes.
       if (window.PyIDENotes.isMarkdown(ctx.active())) switchTo(ctx.lastCodeFile());
       trail = [];
-      render(ENTRY);
+      render(ENTRY, undefined, true);
       sharedPage = lastBuilt;
       hasRun = true;
       xpWatch = { token: token, failed: false };
@@ -256,12 +262,12 @@
     /* Follow a link or a form's action to another of the student's pages. */
     function goToPage(name, sent) {
       if (name !== page) trail.push(page);
-      render(name, sent);
+      render(name, sent, true);     // a click in the page: the student's own doing
     }
 
     function goBack() {
       if (!trail.length) return;
-      render(trail.pop());
+      render(trail.pop(), undefined, true);
     }
 
     function paintTrail() {

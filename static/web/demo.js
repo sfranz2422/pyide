@@ -157,7 +157,9 @@
     var next = document.createElement("iframe");
     next.id = "preview";
     next.title = "Page preview";
-    next.setAttribute("sandbox", "allow-scripts allow-forms");
+    // allow-modals: a page here is played on purpose, never redrawn while
+    // typing, so its alert() and prompt() show (runners/web.js, freshFrame).
+    next.setAttribute("sandbox", "allow-scripts allow-forms allow-modals");
     frame.parentNode.replaceChild(next, frame);
     frame = next;
     return next;
