@@ -193,6 +193,7 @@ window.WebIDERun = (function () {
      that doesn't match a project file (a CDN URL, say) is left alone. */
   function inline(html, files) {
     var out = String(html);
+    var deferred = [];
 
     out = out.replace(
       /<link\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
@@ -217,11 +218,26 @@ window.WebIDERun = (function () {
            report errors against the student's own line numbers.
            sourceURL additionally makes the browser name the file in the
            error and in devtools. */
-        return "<script" + keep + ">" + marker(name) + "\n" +
+        var built = "<script" + keep + ">" + marker(name) + "\n" +
                escapeForScriptTag(files[name]) +
                "\n//# sourceURL=" + name + "\n</script>";
+        /* An inlined script has no src, and a browser IGNORES defer on a
+           script without one: it runs where it stands, in the <head>, before
+           the page below it exists, so getElementById gives null. That is the
+           very thing defer is for, and Web Design 1's JavaScript Day 2 teaches
+           it — the lesson's exercise could not pass here (Nov 2026). So a
+           deferred file goes where defer would run it: after the whole page,
+           in the order written. lineOffsets finds files by their marker, so
+           error lines still come out right. */
+        if (/(^|\s)defer(\s|=|$)/i.test(attrs)) { deferred.push(built); return ""; }
+        return built;
       }
     );
+    if (deferred.length) {
+      var at = out.search(/<\/body\s*>(?![\s\S]*<\/body\s*>)/i);
+      out = at < 0 ? out + "\n" + deferred.join("\n")
+                   : out.slice(0, at) + deferred.join("\n") + "\n" + out.slice(at);
+    }
 
     return out;
   }

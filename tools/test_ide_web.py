@@ -28,6 +28,7 @@ every old snapshot reads as Python.
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -754,6 +755,58 @@ out = subprocess.run(
     cwd=PYIDE, env=env, capture_output=True, text=True)
 check("booting adds the column, and an old snapshot is Python",
       "IDE=pyide" in out.stdout, (out.stdout + out.stderr).strip()[-200:])
+
+
+# ------------------------------------------- defer on an inlined script.js
+# The preview pastes script.js into the page, and a browser ignores defer on
+# a script with no src: a <head> script with defer ran before the page below
+# it existed, so Web Design 1's JavaScript Day 2 exercise (keep the script in
+# the head, add defer) could never pass. runner.js moves a deferred file to
+# the end of <body>, where defer would have run it.
+print("\ndefer in a web project's preview")
+node = shutil.which("node")
+if not node:
+    check("node is here (brew install node)", False)
+else:
+    script = r"""
+global.window = {};
+eval(require("fs").readFileSync(%s, "utf8"));
+const R = window.WebIDERun;
+const files = {"index.html": "", "first.js": "one();", "a.js": "two();", "b.js": "three();", "late.js": "boom();"};
+const page = '<html><head><script src="first.js"></script><script src="a.js" defer></script>' +
+  '<script defer src="b.js"></script></head><body><h1 id="t">Hi</h1>\n<p>x</p>\n</body></html>';
+const out = R.inline(page, files);
+const at = s => out.indexOf(s);
+const plain = R.inline('<head><script src="a.js"></script></head><body><p>x</p></body>', files);
+const noBody = R.inline('<script src="a.js" defer></script><p>x</p>', files);
+const data = R.inline('<head><script data-defer="no" src="a.js"></script></head><body><p>x</p></body>', files);
+// An error on line 1 of a moved file must still be reported as line 1.
+const doc = R.assemble({"index.html": page, "first.js": "one();", "a.js": "two();", "b.js": "three();"}, "tok");
+const lines = doc.html.split("\n");
+const aLine = lines.findIndex(l => l.trim() === "two();") + 1;   // where a.js's line 1 really is
+console.log(JSON.stringify({
+  afterPage: at("two();") > at("<p>x</p>") && at("three();") > at("<p>x</p>"),
+  beforeBodyEnd: at("three();") < at("</body>"),
+  inOrder: at("two();") < at("three();"),
+  plainStays: at("one();") < at("<h1"),
+  untouchedWithoutDefer: plain.indexOf("two();") < plain.indexOf("<p>x</p>"),
+  noBodyStillAfter: noBody.indexOf("two();") > noBody.indexOf("<p>x</p>"),
+  dataDeferIsNotDefer: data.indexOf("two();") < data.indexOf("<p>x</p>"),
+  lineOne: R.locate("a.js", aLine, doc.offsets)
+}));
+""" % json.dumps(os.path.join(PYIDE, "static", "web", "runner.js"))
+    out = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    try:
+        r = json.loads(out.stdout)
+    except ValueError:
+        r = {}
+    check("a deferred script.js runs after the page, not in the <head>",
+          r.get("afterPage") and r.get("beforeBodyEnd"), out.stdout + out.stderr[-300:])
+    check("  two deferred files keep their order", r.get("inOrder"), r)
+    check("  a script without defer stays where it is", r.get("plainStays") and r.get("untouchedWithoutDefer"), r)
+    check("  a page with no </body> still gets it after the page", r.get("noBodyStillAfter"), r)
+    check("  data-defer is not defer", r.get("dataDeferIsNotDefer"), r)
+    check("  an error in a moved file is still on its own line 1", r.get("lineOne") == "a.js line 1", r)
 
 
 print()
