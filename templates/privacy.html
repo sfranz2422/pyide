@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>Privacy — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -22,20 +22,20 @@
 <body>
 
 {#  The privacy policy Google's consent screen links to. ONE page for all
-    three editors, because PyIDE, WebIDE and FlaskIDE share one Google OAuth
+    three editors, because Online IDE, WebIDE and FlaskIDE share one Google OAuth
     client and so one consent screen. Keep it true: if what the apps store
     changes, this changes with it — it is the one page here a stranger is
     entitled to hold us to. #}
 
 <header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">Privacy</span></div>
   <div class="actions"></div>
 </header>
 
 <main class="sheet prose policy">
   <h1>Privacy policy</h1>
-  <p class="dim">For PyIDE (pyide-mdfd.onrender.com), WebIDE (webide-4kiy.onrender.com)
+  <p class="dim">For the Online IDE (pyide-mdfd.onrender.com), WebIDE (webide-4kiy.onrender.com)
     and FlaskIDE (flaskide.onrender.com). Last updated October 2, 2026.</p>
 
   <p>These are browser-based coding editors that Steve Franz, a teacher, runs
@@ -108,7 +108,7 @@
   (function () {
     var who = ["stephenfranz22", "gmail.com"].join("@");
     var a = document.getElementById("contact");
-    a.href = "mailto:" + who + "?subject=" + encodeURIComponent("PyIDE privacy");
+    a.href = "mailto:" + who + "?subject=" + encodeURIComponent("Online IDE privacy");
     a.textContent = who;
   })();
 </script>

@@ -506,7 +506,7 @@ window.PyIDEWorldModel = (function () {
   async function decode(text, world) {
     var file = text ? JSON.parse(text) : null;
     if (file && (file.pyide_world !== 1 || file.gen !== GEN_VERSION)) {
-      throw new Error("This world was saved by a newer PyIDE.");
+      throw new Error("This world was saved by a newer version of the Online IDE.");
     }
     var seed = file ? file.seed | 0 : DEFAULT_SEED;
     if (!world || world.seed !== seed) world = create({ seed: seed });

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The app's mark: a code editor's </>, drawn as lines so it needs no font.
+       It replaced the snake when PyIDE became "Online IDE" (Nov 2026): the
+       app runs Python, web pages, Flask, SQL and PHP now, not only Python. -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#1f2937"/>
+  <g fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22,20 11,32 22,44"/>
+    <polyline points="42,20 53,32 42,44"/>
+    <line x1="36" y1="16" x2="28" y2="48" stroke="#f59e0b"/>
+  </g>
+</svg>

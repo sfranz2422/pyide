@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ assignment.title }} — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>{{ assignment.title }} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
@@ -26,8 +26,8 @@
 </head>
 <body>
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+<header class="bar bar-wrap">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">{{ assignment.title }}</span>
     {#  Long responses turned in and not marked yet; kept up to date by Mark. #}
     <span id="needs-grading" class="needs-grading" title="Long responses waiting for your points — they're under each student below"
@@ -49,6 +49,10 @@
     <a class="btn" id="deck-open" target="_blank" rel="noopener"
        href="{{ url_for('teacher_deck', slug=assignment.slug) }}"
        title="{{ deck.name if deck else '' }}" {% if not deck %}hidden{% endif %}>Teacher lesson ↗</a>
+    {#  The same slides in the library's PresMaker, to change them (Nov 2026).
+        The deck is the library's, so every assignment using it gets the edit. #}
+    <a class="btn" id="deck-edit" target="_blank" rel="noopener" href="{{ deck_edit or '#' }}"
+       title="Change these slides in PresMaker" {% if not deck_edit %}hidden{% endif %}>Edit teacher slides</a>
     {#  The same slides, shown on the screen of everyone on the lesson's live
         link and moved by the teacher (deck_show.js). Labs are never live. #}
     {% if assignment.kind != 'lab' %}
@@ -300,7 +304,7 @@
           {% if not posts %}
             <p class="dim small">Creates this assignment in that class with a link
               here, worth {{ assignment.out_of or "—" }} points. Grades can only be
-              sent to an assignment posted from PyIDE. If more than one class does
+              sent to an assignment posted from the Online IDE. If more than one class does
               this assignment, post it to each of them.</p>
           {% endif %}
         {% elif not posts %}
@@ -527,6 +531,11 @@
         }
         download.href = out.d.url + "?download=1";
         download.hidden = false;
+        var edit = document.getElementById("deck-edit");
+        if (edit && out.d.edit) {
+          edit.href = out.d.edit;
+          edit.hidden = false;
+        }
         button.textContent = "Replace teacher lesson";
       }).catch(function () {
         button.disabled = false;
@@ -872,7 +881,7 @@
   // Unlinking a class: forget it here, keep everything else.
   document.querySelectorAll(".gc-unlink").forEach(function (b) {
     b.addEventListener("click", function () {
-      if (!confirm("Unlink " + b.dataset.name + "? PyIDE forgets this Classroom "
+      if (!confirm("Unlink " + b.dataset.name + "? The Online IDE forgets this Classroom "
                    + "post: it won't send grades there, and you can post it again. "
                    + "Nothing in Google Classroom is changed, and this assignment, "
                    + "your students' work and their scores all stay.")) return;

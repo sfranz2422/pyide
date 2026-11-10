@@ -340,7 +340,9 @@ check("a student on the roster sees the class", "Hello World" in page and "Lists
 check("  but not what is hidden", ">Lists<" not in page)
 check("  the assignment's name opens their copy until they turn it in",
       'href="/a/%s"' % HELLO in page)
-check("  with its live link", re.search(r'href="/live/\w+"', page) is not None)
+# New in a class, its live link starts hidden (Nov 2026, the teacher's
+# choice); it is shown from the class page, below.
+check("  and its live link starts hidden from them", re.search(r'href="/live/\w+"', page) is None)
 check("  each assignment a card, with its description to render",
       page.count('<article class="card') == 2
       and 'class="md card-desc" data-md="Make a **list** of five things.' in page)
@@ -514,10 +516,15 @@ db.query(accounts.ClassroomPost).filter_by(assignment_id=a.id).delete()
 db.commit()
 db.close()
 
-# The live link: always made, shown to students unless the teacher hides it.
+# The live link: always made, and hidden from students until the teacher
+# shows it (a new assignment's starts hidden, Nov 2026).
 _live_code = q(accounts.LiveSession, assignment_id=a.id)[0].code
-check("a new assignment's live link is on the students' page",
-      'href="/live/%s"' % _live_code in kid1.get("/class/%d" % C4).get_data(as_text=True))
+check("a new assignment's live link is not on the students' page",
+      'href="/live/%s"' % _live_code not in kid1.get("/class/%d" % C4).get_data(as_text=True))
+r = teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": True})
+check("the teacher shows it, and it is",
+      r.status_code == 200 and r.get_json().get("show_live") is True
+      and 'href="/live/%s"' % _live_code in kid1.get("/class/%d" % C4).get_data(as_text=True))
 r = teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": False})
 check("the teacher hides it",
       r.status_code == 200 and r.get_json().get("show_live") is False

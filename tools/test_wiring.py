@@ -408,4 +408,20 @@ check("  and hiding them takes the light off their tab, unless the source is ope
                 r"active = lastCodeFile;\s*renderTabs\(\);", _app_js) is not None,
       "a hidden column's tab stayed lit, and took two presses to show the notes")
 
+# The app is "Online IDE", with a </> mark (static/logo.svg), not PyIDE and
+# its snake (Nov 2026): it runs web pages, Flask, SQL and PHP as well as
+# Python. A page copied from an old one would bring the snake back.
+print("\nThe app's name and mark")
+_pages = {p.name: p.read_text(encoding="utf-8") for p in sorted((ROOT / "templates").glob("*.html"))
+          if p.name != "presmaker.html"}            # made by tools/sync_presmaker.py
+_snake = [n for n, t in _pages.items() if "\U0001F40D" in t]
+check("no page shows the snake", not _snake, _snake)
+_named = [n for n, t in _pages.items()
+          if re.search(r"<title>[^<]*\bPyIDE\b", t) or re.search(r'class="brandlink"[^>]*>[^<]*(<[^>]*>)?[^<]*\bPyIDE\b', t)]
+check("no page is titled or branded PyIDE", not _named, _named)
+_branded = [n for n, t in _pages.items() if re.search(r'class="brandlink"[^>]*>[^\n]*Online IDE', t)]
+_bare = [n for n in _branded if not re.search(r'class="brandlink"[^>]*><img class="logo" src="/static/logo.svg"', _pages[n])]
+check("every page branded Online IDE shows the mark beside the name", _branded and not _bare, (len(_branded), _bare))
+check("  and the mark is there to be served", (ROOT / "static" / "logo.svg").exists())
+
 done()

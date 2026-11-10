@@ -146,6 +146,8 @@ html, body {
   white-space: nowrap;
 }
 .logo { margin-right: 4px; }
+/* The app's mark (static/logo.svg) sits in the brand where the snake emoji was, at the text's size. */
+img.logo { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
 
 .meta {
   display: flex;
@@ -176,6 +178,12 @@ html, body {
 .field-author { flex: 0 1 160px; }
 
 .actions { display: flex; gap: 8px; }
+/* A header with many buttons (an assignment's page: Edit project, its
+   teacher lesson's five, Classroom...) wraps them onto a second line rather
+   than squeezing the page's title to nothing behind them. */
+.bar.bar-wrap { height: auto; min-height: var(--bar-h); flex-wrap: wrap; row-gap: 6px; padding-top: 7px; padding-bottom: 7px; }
+.bar.bar-wrap .meta { flex: 1 1 180px; min-width: 160px; }
+.bar.bar-wrap .actions { flex-wrap: wrap; justify-content: flex-end; }
 
 /* "Hide code" — turns Share into a demo link. Deliberately understated: it
    sits next to Share rather than announcing itself, and reads as a modifier
@@ -2825,6 +2833,7 @@ body.is-sorting, body.is-sorting * { cursor: grabbing !important; user-select: n
 .front { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .front-card { text-align: center; max-width: 440px; }
 .front-logo { font-size: 56px; line-height: 1; }
+.front-logo img { width: 64px; height: 64px; }
 .front-card h1 { margin: 10px 0 6px; font-size: 32px; }
 .front-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 22px 0 14px; }
 .btn-big { font-size: 16px; padding: 12px 22px; }

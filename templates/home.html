@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -25,9 +25,9 @@
     teacher to their dashboard and a student to their classes (app.home). #}
 <main class="front">
   <div class="front-card">
-    <div class="front-logo">🐍</div>
-    <h1>PyIDE</h1>
-    <p class="dim">Write and run Python in your browser.</p>
+    <div class="front-logo"><img src="/static/logo.svg" alt=""></div>
+    <h1>Online IDE</h1>
+    <p class="dim">Write and run code in your browser: Python, web pages and more.</p>
     <div class="front-actions">
       {% if login_enabled %}
         <a class="btn btn-primary btn-big" href="{{ url_for('login', next='/') }}"

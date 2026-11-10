@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The block world — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>The block world — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -22,12 +22,12 @@
 <body>
 
 {#  Programs that import mcpi (the Raspberry Pi's Minecraft API) build in
-    PyIDE's block world (world_model.js, world.js). The blocks are read from
+    Online IDE's block world (world_model.js, world.js). The blocks are read from
     static/py/mcpi/block.py by help_world in app.py; their pictures are
     drawn here by world.js, the same painting the world uses. #}
 
 <header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">The block world</span></div>
   <div class="actions"></div>
 </header>
@@ -109,7 +109,7 @@ mc.setBlock(x + 2, y, z, block.STONE.id)</pre>
     <li>There's one player: you. <code>mc.getPlayerEntityIds()</code> is <code>[1]</code>.</li>
     <li>The world is 256 blocks across each way (<code>x</code> and <code>z</code> from -128 to 127) and
       <code>y</code> runs from -64 to 63. Blocks set outside it are left out.</li>
-    <li>Nothing here is Minecraft's: the world, its pictures and the <code>mcpi</code> package are PyIDE's own.</li>
+    <li>Nothing here is Minecraft's: the world, its pictures and the <code>mcpi</code> package are the Online IDE's own.</li>
   </ul>
 </main>
 

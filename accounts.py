@@ -650,6 +650,11 @@ class ClassItem(Base):
     #: the lesson is on the air it is offered regardless — a teacher who has
     #: gone live means the class to find it.
     show_live = Column(Integer, nullable=False, default=1)
+    #: Whether the class's students see the assignment's "Watch Teacher
+    #: Lecture" button (its teacher deck). Rows made before it are shown, as
+    #: they always were; PyIDE hides both on an assignment newly put in a
+    #: class (its _place, Nov 2026: the teacher shows them when wanted).
+    show_deck = Column(Integer, nullable=False, default=1)
     #: A group's heading. Unused for an assignment, whose title is its own.
     title = Column(String(200), nullable=False, default="")
     #: Hidden from the class's students; the teacher still sees it, marked.
@@ -971,6 +976,8 @@ LATER_COLUMNS = [
     # 1: every item from before showed its live link, and still should.
     ("class_items", "show_live",
      "ALTER TABLE class_items ADD COLUMN show_live INTEGER NOT NULL DEFAULT 1"),
+    ("class_items", "show_deck",
+     "ALTER TABLE class_items ADD COLUMN show_deck INTEGER NOT NULL DEFAULT 1"),
     # "" is true of every row made before materials: each is the assignment
     # or group heading its assignment_id already says.
     ("class_items", "kind",

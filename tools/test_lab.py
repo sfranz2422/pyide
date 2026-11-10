@@ -25,7 +25,7 @@ around it, through the Flask test client:
     and a live lesson can't take it
   * Delete works with saved machines and checked results (an FK on
     Postgres otherwise)
-  * the class pages: the Lab (A+) option, its tag, Open the lab
+  * the class pages: the Lab (A+) option, its tag, Open Lab
 """
 import json
 import os
@@ -271,7 +271,7 @@ def main():
           '<option value="lab">Lab (A+)</option>' in cp and ("/lab/scenarios?class=%d" % cls) in cp)
     check("…its row says lab, with Results and no Go live", 'kind-tag">lab<' in cp and "/teacher/%s/live" % slug not in cp)
     sc = kid.get("/class/%d" % cls)
-    check("a student's class page says Open the lab", "Open the lab" in sc.get_data(as_text=True), sc.status_code)
+    check("a student's class page says Open Lab", ">Open Lab<" in sc.get_data(as_text=True), sc.status_code)
 
     print("Delete")
     d2 = teacher.post("/api/class/%d/new" % cls, json={"kind": "lab", "scenario": "apipa"}).get_json()["slug"]

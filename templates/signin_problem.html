@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign-in problem — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>Sign-in problem — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -34,7 +34,7 @@
     {#  The Google Classroom connection, which only a teacher ever starts.
         Nothing here touches their sign-in, so the sign-in wording below
         would be wrong — they are signed in, and stay signed in. #}
-    <p class="dim">You're still signed in, and nothing in PyIDE has changed.</p>
+    <p class="dim">You're still signed in, and nothing in the Online IDE has changed.</p>
     <p>
       <a class="btn btn-primary" href="{{ url_for('classroom_connect') }}">Connect again</a>
       <a class="btn" href="{{ url_for('teacher_home') }}">Back to your assignments</a>

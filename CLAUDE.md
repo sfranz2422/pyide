@@ -1,6 +1,11 @@
 # PyIDE
 
-A browser-based Python IDE for intro programming classes. Student code runs
+A browser-based Python IDE for intro programming classes. **It is called
+"Online IDE" on every page** (Nov 2026, the teacher's choice: it runs web
+pages, Flask, SQL and PHP as well as Python), with a `</>` mark,
+`static/logo.svg`, where the 🐍 was. "PyIDE" stays the repo's, the code's
+(`window.PyIDENotes`, `ns: "PyIDE"`) and the address's name; `test_wiring.py`
+fails on a page titled or branded PyIDE, or showing the snake. Student code runs
 entirely in the browser via Pyodide, so the server never executes anything a
 student wrote — it stores and serves code, and nothing more.
 
@@ -44,7 +49,7 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by thirty-two of these: `test_deck_show.py`, `test_ide_web.py`, `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by thirty-three of these: `test_deck_show.py`, `test_ide_web.py`, `test_quiz_browser.py` (Chrome too), `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
@@ -331,6 +336,14 @@ difference. No draft; Turn in makes a Submission with an empty
 Open link. Anything that builds a `view_shared` link from a submission must
 allow for that empty slug.
 
+**New in a class, an assignment's live link and its Watch Teacher Lecture
+start hidden from students** (`_place`, Nov 2026, the teacher's choice), and
+the class page's Show live link / Show lecture make them visible. Rows from
+before keep what they had (`show_live`, `show_deck` default to shown). The
+student's buttons are **Watch Teacher Lecture, Open Live View, Open
+Assignment** (Open Lesson / Open Lab). The assignment page's **Edit teacher
+slides** opens its deck in the library's PresMaker.
+
 **Questions in the notes** (`quiz.py`, `notes.js`'s `parseQuiz`/`buildQuiz`,
 `/api/quiz/*`). A ```` ```quiz ```` block in an assignment's notes is a
 question: `- [x]` choices, or `answer:` lines for short answer, `points:`
@@ -341,6 +354,13 @@ files reach a student, `quiz.redact` on every live push — and kept in
 `quiz_questions`. A new route that hands out an assignment's files must
 redact too, and needs a line in `test_quiz.py`'s leak section: a missed exit
 leaks the answers with no visible sign.
+
+**A question works the moment it appears**, before the student's earlier
+answers (`/api/quiz/<slug>/mine`) come back, and is locked with its result
+when they do. It used to wait for them, disabled, and on a busy server every
+click in those seconds did nothing at all ("kids are clicking and the click
+doesn't work"); a second answer in the gap changes nothing, as the server
+keeps the first. `test_quiz_browser.py` clicks in Chrome with that request held.
 
 `type: long` in a quiz block makes a **long response**: a box with a small
 formatting toolbar, no key, marked by hand on the assignment's page
@@ -576,8 +596,9 @@ for a student to press. It needs no Go live and leaves the lesson's `version` al
 because slides usually come first. Its own table and poll, because a slide
 can be megabytes and the class loads the `live_sessions` row every second. A
 picture drawn on a `<canvas>` or a value typed into a slide's box doesn't go.
-Students also get **View teacher lesson** on the class page, on any assignment
-with a deck, apart from the live button. While the slides are up it covers the
+Students also get **Watch Teacher Lecture** on the class page, on an assignment
+with a deck whose row shows it (`ClassItem.show_deck`, Show/Hide lecture on the
+teacher's class page), apart from the live button. While the slides are up it covers the
 class page; otherwise pressing it does nothing, by the teacher's choice. It asks by
 slug (`/api/assignment/<slug>/showing`), so a hidden live link's code isn't in the
 page.

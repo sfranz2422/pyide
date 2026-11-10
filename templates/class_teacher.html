@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ course.name }} — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>{{ course.name }} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
@@ -25,7 +25,7 @@
 <body class="class-page class-teacher">
 
 <header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">{{ course.name }}</span></div>
   <div class="actions">
     <a class="btn" href="{{ url_for('library.library_page') }}" title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
@@ -263,6 +263,7 @@
                 {% endif %}
                 {% if r.hidden %}<span class="kind-tag">hidden</span>{% endif %}
                 {% if not r.show_live and r.kind != 'lab' %}<span class="kind-tag" title="Students don't see its live link — unless you're live on it">live link hidden</span>{% endif %}
+                {% if r.has_deck and not r.show_deck %}<span class="kind-tag" title="Students don't see Watch Teacher Lecture for it">lecture hidden</span>{% endif %}
                 {% if r.closed %}<span class="dim small"> · closed</span>{% endif %}
                 {% if r.on_air %}<span class="live-pill">● Live now</span>{% endif %}
                 {{ describe(r) }}
@@ -289,6 +290,10 @@
                     it. They do anyway while it is on the air. #}
                 {% if r.kind != 'lab' %}<button class="linkbtn js-live" data-show="{{ 1 if r.show_live else 0 }}"
                         title="Whether students see this assignment's live link (they always do while you're live on it)">{{ "Hide live link" if r.show_live else "Show live link" }}</button>{% endif %}
+                {#  Whether students see Watch Teacher Lecture (its slides). New
+                    assignments start with it hidden, like the live link. #}
+                {% if r.has_deck %}<button class="linkbtn js-deck" data-show="{{ 1 if r.show_deck else 0 }}"
+                        title="Whether students see Watch Teacher Lecture for this assignment">{{ "Hide lecture" if r.show_deck else "Show lecture" }}</button>{% endif %}
                 <button class="linkbtn js-archive">Archive</button>
                 {% if r.count == 0 %}<button class="linkbtn js-delete danger">Delete</button>{% endif %}
               </td>
@@ -608,8 +613,10 @@
       });
       return;
     }
-    if (t.contains("js-live")) {
-      send(api + "/item/" + row.dataset.item, { show_live: e.target.dataset.show !== "1" })
+    if (t.contains("js-live") || t.contains("js-deck")) {
+      var key = t.contains("js-live") ? "show_live" : "show_deck", change = {};
+      change[key] = e.target.dataset.show !== "1";
+      send(api + "/item/" + row.dataset.item, change)
         .then(function (out) {
           if (!out.ok) { alert(out.d.error || "Not changed"); return; }
           location.reload();

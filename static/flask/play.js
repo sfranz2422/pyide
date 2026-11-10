@@ -88,7 +88,7 @@
       return;
     }
     if (project.title) {
-      document.title = project.title + " — PyIDE";
+      document.title = project.title + " — Online IDE";
       $("play-title").textContent = project.title;
     }
     running = true;

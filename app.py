@@ -3008,7 +3008,7 @@ LIBRARY_TESTS = {
 def _library_page(item=None):
     """The library's pages: PyIDE's look, the IDEs a tutorial can be for, and
     — editing one — how its IDE writes its tests (LIBRARY_TESTS)."""
-    page = {"brand": "PyIDE", "logo": "🐍", "ns": "PyIDE", "theme_key": "pyide-theme",
+    page = {"brand": "Online IDE", "logo": "/static/logo.svg", "ns": "PyIDE", "theme_key": "pyide-theme",
             "home_url": url_for("teacher_home"), "help_url": url_for("help_questions"),
             "max_tutorial": library.MAX_TUTORIAL, "ides": LIBRARY_IDES}
     if item is not None and item.kind == "tutorial":
@@ -3840,7 +3840,11 @@ def teacher_assignment(slug):
         library.import_existing(db, user)
         db.refresh(item)
         ctx.update(library.tutorial_box(db, user, item))
-        ctx.update(deck=_deck_of(db, item))
+        lib_deck = library.deck_of(db, item)
+        ctx.update(deck=_deck_of(db, item),
+                   # Edit teacher slides: the library's PresMaker, for a deck
+                   # the library holds (one only in teacher_decks has none).
+                   deck_edit=url_for("library.library_edit_page", slug=lib_deck.slug) if lib_deck else "")
         return render_template("teacher_assignment.html", **ctx)
     finally:
         db.close()
@@ -3946,7 +3950,8 @@ def upload_teacher_deck(slug):
         db.refresh(item)
         deck = library.set_deck(db, item, name, html)
         return jsonify(ok=True, name=deck.title,
-                       url=url_for("teacher_deck", slug=item.slug))
+                       url=url_for("teacher_deck", slug=item.slug),
+                       edit=url_for("library.library_edit_page", slug=deck.slug))
     finally:
         db.close()
 
@@ -4130,7 +4135,7 @@ def _classroom_token(db, user):
     if data.get("error") == "invalid_grant":
         db.delete(link)
         db.commit()
-        return None, ("Google no longer accepts PyIDE's connection to your "
+        return None, ("Google no longer accepts the Online IDE's connection to your "
                       "Classroom. Connect it again.")
     return None, "Couldn't reach Google just now. Try again in a moment."
 
@@ -4184,7 +4189,7 @@ def classroom_connect():
 
 #: What Google's ?error= means, in words a teacher can act on.
 CLASSROOM_ERRORS = {
-    "access_denied": "You didn't allow PyIDE to use your Classroom, so "
+    "access_denied": "You didn't allow the Online IDE to use your Classroom, so "
                      "nothing was connected.",
     "admin_policy_enforced": "Your school's Google admin doesn't allow this "
                              "app to use Google Classroom. Ask your IT "
@@ -4240,7 +4245,7 @@ def classroom_callback():
         if missing:
             give_back()
             return _classroom_problem(
-                "PyIDE needs every Classroom permission on that screen to "
+                "The Online IDE needs every Classroom permission on that screen to "
                 "post assignments and send grades. Connect again and leave "
                 "all the boxes ticked.")
 
@@ -4252,7 +4257,7 @@ def classroom_callback():
         if status != 200 or google_email.lower() != user.email.lower():
             give_back()
             return _classroom_problem(
-                "You connected %s, but you're signed in to PyIDE as %s. "
+                "You connected %s, but you're signed in to the Online IDE as %s. "
                 "Connect again and choose %s."
                 % (google_email or "a different Google account", user.email,
                    user.email))
@@ -4454,7 +4459,7 @@ def classroom_post(slug):
             "POST", "%s/courses/%s/courseWork" % (CLASSROOM_API, course_id), access,
             body={
                 "title": item.title,
-                "description": how % "PyIDE",
+                "description": how % "the Online IDE",
                 "materials": [{"link": {"url": link}}],
                 "workType": "ASSIGNMENT",
                 "state": "DRAFT" if asked.get("draft") is True else "PUBLISHED",
@@ -4679,7 +4684,7 @@ def classroom_publish(slug):
         status, work = _google_get(url, access)
         if status == 404:
             _forget_post(db, item, post)
-            return jsonify(error="It was deleted in Google Classroom, so PyIDE "
+            return jsonify(error="It was deleted in Google Classroom, so the Online IDE "
                                  "has forgotten %s. Post it again if you want it "
                                  "there." % name, gone=True), 409
         if status != 200:
@@ -4992,7 +4997,11 @@ def _place(db, course, item):
     row = db.query(accounts.ClassItem).filter_by(assignment_id=item.id).first()
     top = _top_position(db, course.id)
     if row is None:
-        row = accounts.ClassItem(class_id=course.id, assignment_id=item.id)
+        # New in a class: its live link and its teacher lecture start hidden
+        # from students, and the teacher shows them on the class page when
+        # wanted (Nov 2026). An assignment moved from another class keeps its.
+        row = accounts.ClassItem(class_id=course.id, assignment_id=item.id,
+                                 show_live=0, show_deck=0)
         db.add(row)
     row.class_id, row.position, row.hidden = course.id, top, 0
     db.commit()
@@ -5237,7 +5246,7 @@ def duplicate_class(class_id):
         copied = 0
         for at, r in enumerate(rows):
             row = accounts.ClassItem(class_id=new.id, kind=r.kind, title=r.title,
-                                     hidden=r.hidden, show_live=r.show_live,
+                                     hidden=r.hidden, show_live=r.show_live, show_deck=r.show_deck,
                                      description=r.description or "", position=at)
             if r.assignment_id:
                 item = items.get(r.assignment_id)
@@ -5488,6 +5497,8 @@ def class_item_update(class_id, item_id):
             row.hidden = 1 if data.get("hidden") else 0
         if "show_live" in data:
             row.show_live = 1 if data.get("show_live") else 0
+        if "show_deck" in data:
+            row.show_deck = 1 if data.get("show_deck") else 0
         if "description" in data:
             text = data.get("description")
             if not isinstance(text, str):
@@ -5502,7 +5513,8 @@ def class_item_update(class_id, item_id):
             row.title = title
         db.commit()
         return jsonify(ok=True, hidden=bool(row.hidden), title=row.title,
-                       description=row.description, show_live=bool(row.show_live))
+                       description=row.description, show_live=bool(row.show_live),
+                       show_deck=bool(row.show_deck))
     finally:
         db.close()
 
@@ -5716,6 +5728,7 @@ def _class_rows(db, course, user=None, student=False):
                # View teacher lesson. Labs are never live.
                "has_deck": bool(a.deck_id) and a.kind != "lab",
                "show_live": bool(r.show_live),
+               "show_deck": bool(r.show_deck),
                "out_of": a.out_of or "", "count": counts.get(a.id, 0),
                # A quest: an assignment with an XP reward for full marks.
                "quest_xp": a.xp_bonus or 0,
@@ -5734,6 +5747,9 @@ def _class_rows(db, course, user=None, student=False):
             # air now, when hiding it would hide the lesson from the class.
             if not (r.show_live or row["on_air"]):
                 row["live_code"] = ""
+            # Watch Teacher Lecture only where the teacher shows it.
+            if not r.show_deck:
+                row["has_deck"] = False
             row.update(
                 turned_in=bool(sub),
                 grade=_score_text(total),

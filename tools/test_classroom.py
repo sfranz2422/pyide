@@ -307,7 +307,7 @@ check("  on a page about Classroom, not about signing in",
       and "without signing in" not in r.get_data(as_text=True))
 r = callback(teacher, error="access_denied")
 check("pressing Cancel on Google's screen is explained",
-      "allow PyIDE to use your Classroom" in r.get_data(as_text=True))
+      "allow the Online IDE to use your Classroom" in r.get_data(as_text=True))
 
 google["scope"] = "openid email https://www.googleapis.com/auth/classroom.courses.readonly"
 calls.clear()

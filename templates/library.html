@@ -10,7 +10,10 @@
     loaded before any other script so none keeps the plain fetch. #}
 {% if pack_js %}<script src="{{ url_for('static', filename='pack.js') }}"></script>{% endif %}
 <title>Tutorials — {{ brand }}</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>{{ logo }}</text></svg>">
+{# `logo` is a picture's address (PyIDE's /static/logo.svg, Nov 2026) or, in the
+    other editors, an emoji drawn as text. #}
+{% if logo.startswith("/") %}<link rel="icon" href="{{ logo }}" type="image/svg+xml">
+{% else %}<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>{{ logo }}</text></svg>">{% endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
@@ -27,7 +30,7 @@
 <body>
 
 <header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ home_url }}"><span class="logo">{{ logo }}</span> {{ brand }}</a></div>
+  <div class="brand"><a class="brandlink" href="{{ home_url }}">{% if logo.startswith("/") %}<img class="logo" src="{{ logo }}" alt="">{% else %}<span class="logo">{{ logo }}</span>{% endif %} {{ brand }}</a></div>
   <div class="meta"><span class="pagetitle">Tutorials</span></div>
   <div class="actions">
     <button id="lib-new" class="btn btn-primary" type="button">New tutorial</button>
@@ -56,7 +59,7 @@
       <option value="deck">Teacher decks</option>
     </select>
     {#  Which kind of project a tutorial is for, when this editor has more
-        than one (PyIDE, since WebIDE and FlaskIDE moved in). #}
+        than one (Online IDE, since WebIDE and FlaskIDE moved in). #}
     {% if ides and ides|length > 1 %}
     <select id="lib-ide" aria-label="For">
       <option value="">Every kind of project</option>

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% if live %}{{ live.title }} — live{% else %}Join a live lesson{% endif %} — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>{% if live %}{{ live.title }} — live{% else %}Join a live lesson{% endif %} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +34,7 @@
 <body class="is-live">
 
 <header class="bar">
-  <div class="brand"><a class="brand-link" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="brand"><a class="brand-link" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
 
   <div class="meta">
     {% if live %}

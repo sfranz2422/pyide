@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assignments — PyIDE</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+<title>Assignments — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
@@ -24,7 +24,7 @@
 <body>
 
 <header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><span class="logo">🐍</span> PyIDE</a></div>
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">Assignments</span></div>
   <div class="actions">
     <a class="btn" href="{{ url_for('library.library_page') }}" title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
@@ -149,10 +149,10 @@
         <div id="classroom-courses" class="dim">Loading your classes…</div>
         <form method="post" action="{{ url_for('classroom_disconnect') }}" class="classroom-off">
           <button class="linkbtn danger" type="submit"
-                  onclick="return confirm('Disconnect Google Classroom? PyIDE will no longer be able to post to your classes.')">Disconnect</button>
+                  onclick="return confirm('Disconnect Google Classroom? The Online IDE will no longer be able to post to your classes.')">Disconnect</button>
         </form>
       {% else %}
-        <p class="dim">Connect your Classroom so PyIDE can post assignments to
+        <p class="dim">Connect your Classroom so the Online IDE can post assignments to
           your classes and send grades back. Google will say it hasn't verified
           this app — choose <em>Advanced</em>, then the <em>Go to … (unsafe)</em> link. That warning is about Google not having reviewed this app; not about this site, which your class already uses.</p>
         <p><a class="btn btn-primary" href="{{ url_for('classroom_connect') }}">Connect Google Classroom</a></p>
@@ -160,7 +160,7 @@
     </section>
   {% endif %}
 
-  {#  The game engine PyIDE serves. It is vendored rather than installed in
+  {#  The game engine Online IDE serves. It is vendored rather than installed in
       each student's browser, so a new release does not arrive on its own —
       this is the thing that notices. PyPI is asked at most once a day, from
       the server, and only while this page is being looked at. #}
@@ -168,7 +168,7 @@
     <section class="engine {{ 'engine-new' if kaypy.newer }}">
       {% if kaypy.newer %}
         <p><strong>kaypy {{ kaypy.latest }} is out.</strong>
-          PyIDE is serving {{ kaypy.vendored }}. Update with:</p>
+          The Online IDE is serving {{ kaypy.vendored }}. Update with:</p>
         <p><code>python3 tools/vendor_kaypy.py --from ~/kaypy</code>, then deploy.</p>
       {% elif kaypy.vendored %}
         <p>Game engine: <strong>kaypy {{ kaypy.vendored }}</strong>{%
@@ -254,7 +254,7 @@
         ul.appendChild(li);
       });
       box.appendChild(ul);
-    }).catch(function () { box.textContent = "Couldn't reach PyIDE to load your classes."; });
+    }).catch(function () { box.textContent = "Couldn't reach the Online IDE to load your classes."; });
   })();
 
   /* Archive is reversible and needs no ceremony. Delete is refused by the

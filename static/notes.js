@@ -1628,6 +1628,15 @@ window.PyIDENotes = (function () {
       });
     });
 
+    /* Usable at once, then corrected when the student's earlier answers
+       arrive. It used to wait for them, disabled: on a busy server that
+       took seconds, and every click a student made meanwhile — on a bug
+       line, a choice — did nothing and said nothing (Nov 2026: "kids are
+       clicking and the click doesn't work"). Anything picked in the wait is
+       kept (pending), and a question they had already answered is locked
+       with its result when the answers come; answering it again in the gap
+       changes nothing, since the server keeps the first answer. */
+    box.paint();
     loadMine().then(function () { box.paint(); });
     return box;
   }
@@ -2080,6 +2089,7 @@ window.PyIDENotes = (function () {
       });
     });
 
+    box.paint();   // usable at once, as a question is (buildQuiz says why)
     loadMine().then(function () { box.paint(); });
     return box;
   }

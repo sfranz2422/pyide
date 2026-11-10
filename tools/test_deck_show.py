@@ -28,6 +28,7 @@ WHAT IS BEING GUARDED
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -236,8 +237,23 @@ db = P.SessionLocal()
 WITH_CODE = P._newest_lesson(db, TEACHER, WITH_ID).code
 db.close()
 page = amy.get("/class/%d" % COURSE).get_data(as_text=True)
-check("an assignment with slides has the button, in those words",
-      'data-slug="%s"' % WITH in page and ">View teacher lesson</button>" in page)
+# New in a class, its Watch Teacher Lecture starts hidden (Nov 2026, the
+# teacher's choice), with the way to show it on the teacher's row.
+check("a new assignment's Watch Teacher Lecture starts hidden from students",
+      "js-view-lesson" not in page)
+tpage = teacher.get("/teacher/class/%d" % COURSE).get_data(as_text=True)
+_wrow = re.search(r'<tr[^>]*data-item="(\d+)"[^>]*>(?:(?!</tr>)[\s\S])*?Has slides[\s\S]*?</tr>', tpage)
+check("  and the teacher's row says so, with the way to show it",
+      _wrow is not None and "lecture hidden" in _wrow.group(0) and ">Show lecture<" in _wrow.group(0)
+      and "js-deck" in _wrow.group(0))
+_shown = teacher.post("/api/class/%d/item/%s" % (COURSE, _wrow.group(1) if _wrow else 0), json={"show_deck": True})
+check("  the teacher shows it", _shown.status_code == 200 and _shown.get_json().get("show_deck") is True,
+      _shown.get_json())
+check("  a student cannot", amy.post("/api/class/%d/item/%s" % (COURSE, _wrow.group(1) if _wrow else 0),
+                                     json={"show_deck": False}).status_code == 403)
+page = amy.get("/class/%d" % COURSE).get_data(as_text=True)
+check("an assignment with slides then has the button, in those words",
+      'data-slug="%s"' % WITH in page and ">Watch Teacher Lecture</button>" in page)
 check("  one without has none", page.count("js-view-lesson") == 1 and 'data-slug="%s"' % BARE not in page)
 check("  the page can act on it", "deck_view.js" in page)
 check("  and a hidden live link's code isn't in the page", WITH_CODE not in page)

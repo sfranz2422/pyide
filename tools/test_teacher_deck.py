@@ -112,6 +112,10 @@ check("  and the page shows it after an upload", 'download.hidden = false' in ht
 check("  the link to open it is there but hidden",
       'id="deck-open"' in html
       and "hidden" in html[html.index('id="deck-open"'):html.index('>Teacher lesson')])
+check("  Edit teacher slides is there but hidden, with nothing to edit",
+      'id="deck-edit"' in html
+      and "hidden" in html[html.index('id="deck-edit"'):html.index('>Edit teacher slides')])
+check("  and an upload shows it, pointed at the deck", "edit.href = out.d.edit;" in html)
 check("  a lesson's page has the button too",
       'id="deck-upload"' in teacher.get("/teacher/les1").get_data(as_text=True))
 check("opening it before one is uploaded is a 404",
@@ -119,6 +123,7 @@ check("opening it before one is uploaded is a 404",
 
 print("uploading")
 r = send(teacher, "hw1", DECK, "Intro_to_Dictionaries_Teacher_Slides.html")
+r_up = r
 check("the teacher uploads a deck", r.status_code == 200, r.get_data(as_text=True)[:80])
 check("  and is told where it is", r.get_json().get("url") == "/teacher/hw1/slides")
 r = teacher.get("/teacher/hw1/slides")
@@ -136,6 +141,17 @@ at = html.index('id="deck-download"')
 tag = html[html.rindex("<a", 0, at):html.index(">", at)]
 check("  and a Download link, shown now", "hidden" not in tag
       and 'href="/teacher/hw1/slides?download=1"' in tag, tag)
+# Edit teacher slides: the deck in the library's PresMaker (Nov 2026).
+_edit = r_up.get_json().get("edit", "")
+at = html.index('id="deck-edit"')
+tag = html[html.rindex("<a", 0, at):html.index(">", at)]
+check("Edit teacher slides, shown now, opens the deck in PresMaker",
+      "hidden" not in tag and _edit and 'href="%s"' % _edit in tag, (tag, _edit))
+_pm = teacher.get(_edit)
+check("  which is the deck, in the slides editor",
+      _pm.status_code == 200 and "presmaker" in _pm.get_data(as_text=True).lower()
+      and '"kind": "deck"' in _pm.get_data(as_text=True).replace('"kind":"deck"', '"kind": "deck"'),
+      _pm.status_code)
 
 print("replacing")
 r = send(teacher, "hw1", NEWER)

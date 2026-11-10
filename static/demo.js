@@ -200,7 +200,7 @@
     if (!data || typeof data.code !== "string") {
       throw new Error("Nothing to play here. Press \u2197 New tab in the editor.");
     }
-    if (data.title) document.title = data.title + " \u2014 PyIDE";
+    if (data.title) document.title = data.title + " \u2014 Online IDE";
     return { code: data.code, files: data.files || {} };
   }
 

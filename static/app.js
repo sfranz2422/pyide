@@ -673,8 +673,8 @@
   if (support) {
     var who = ["stephenfranz22", "gmail.com"].join("\u0040");
     support.href = "mailto:" + who +
-      "?subject=" + encodeURIComponent("PyIDE — a question from a teacher");
-    support.title = "Email " + who + " about using PyIDE with your class";
+      "?subject=" + encodeURIComponent("Online IDE — a question from a teacher");
+    support.title = "Email " + who + " about using the Online IDE with your class";
   }
 
 
