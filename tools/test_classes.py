@@ -977,6 +977,27 @@ with _old.connect() as _c:
     _sl = _c.execute(sqlalchemy.text("SELECT show_live FROM class_items")).fetchall()
 check("  and its live link shown, as it always was", _sl == [(1,)], _sl)
 
+# Every lecture and live link already in a class hidden, once (the teacher's ask,
+# 2026-11-10): a lecture a teacher shows afterwards must stay shown through
+# the next deploy, or Show lecture would undo itself on every boot.
+P.Base.metadata.create_all(_old)
+with _old.begin() as _c:
+    _c.execute(sqlalchemy.text(
+        "INSERT INTO class_items (id, class_id, assignment_id, title, hidden, position, created_at, "
+        "show_deck, show_live) VALUES (2, 1, 7, '', 0, 1, '2026-10-08 10:00:00', 1, 1)"))
+_first = P._once("hide-lectures-and-live-2026-11-10", P.HIDE_OLD_LECTURES, _old)
+with _old.connect() as _c:
+    _sd = _c.execute(sqlalchemy.text("SELECT id, show_deck, show_live FROM class_items ORDER BY id")).fetchall()
+check("every assignment already in a class has its lecture and live link hidden",
+      _first and _sd[1] == (2, 0, 0) and _sd[0][1:] == (1, 1), _sd)
+with _old.begin() as _c:
+    _c.execute(sqlalchemy.text("UPDATE class_items SET show_deck = 1, show_live = 1 WHERE id = 2"))
+_again = P._once("hide-lectures-and-live-2026-11-10", P.HIDE_OLD_LECTURES, _old)
+with _old.connect() as _c:
+    _sd = _c.execute(sqlalchemy.text("SELECT show_deck, show_live FROM class_items WHERE id = 2")).fetchall()
+check("  once only: one the teacher shows afterwards stays shown",
+      not _again and _sd == [(1, 1)], _sd)
+
 # Tables from before the banner and before long responses: the columns must
 # be added, or the class pages and every quiz answer fail after the deploy.
 _older = sqlalchemy.create_engine("sqlite:///" + os.path.join(tempfile.mkdtemp(), "older.db"))

@@ -544,11 +544,51 @@ class LabState(Base):
     __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
 
 
+class OnceDone(Base):
+    """A change to existing rows that must happen exactly once (`_once`).
+    Run on every boot instead, it would undo what teachers chose after it:
+    hiding every lecture again each deploy would hide the ones they showed."""
+    __tablename__ = "pyide_once_done"
+
+    name = Column(String(64), primary_key=True)
+    done_at = Column(DateTime, nullable=False,
+                     default=lambda: datetime.now(timezone.utc))
+
+
 Base.metadata.create_all(engine)
 
 # Signing in, saved work, assignments and turning in. Its own metadata, so it
 # creates only its own tables and never touches snippets or WebIDE's.
 accounts.create_all(engine)
+
+
+def _once(name, sql, eng=None):
+    """Run `sql` once ever, remembered in the database rather than a flag file
+    (Render wipes the disk on deploy). The mark goes in the same transaction
+    as the change, so two workers booting together can't both run it: the
+    second's insert hits the primary key and its whole transaction rolls back."""
+    from sqlalchemy import text
+    eng = eng or engine
+    try:
+        with eng.begin() as conn:
+            if conn.execute(text("SELECT 1 FROM pyide_once_done WHERE name = :n"),
+                            {"n": name}).first():
+                return False
+            conn.execute(text("INSERT INTO pyide_once_done (name, done_at) VALUES (:n, :t)"),
+                         {"n": name, "t": datetime.now(timezone.utc)})
+            conn.execute(text(sql))
+        return True
+    except Exception:
+        return False
+
+
+# The teacher's ask (2026-11-10): Watch Teacher Lecture and the live link
+# hidden on every assignment already in a class, not only on new ones (_place
+# already starts those hidden). Show lecture / Show live link on the class page
+# brings one back, and it stays shown: this runs once ever, not every boot.
+HIDE_OLD_LECTURES = ("UPDATE class_items SET show_deck = 0, show_live = 0 "
+                     "WHERE assignment_id IS NOT NULL")
+_once("hide-lectures-and-live-2026-11-10", HIDE_OLD_LECTURES)
 
 
 # Columns added after the table first shipped, with the DDL to add each one.
