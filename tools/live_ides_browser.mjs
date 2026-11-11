@@ -167,7 +167,11 @@ try {
   await close(T);
 
   T = await open("/new?ide=flaskide&kind=sql", setup.teacherCookie);
-  await until(T, "(document.querySelector('#mode') || {}).textContent === 'SQL'", 30000);
+  // The editor up, not just #mode: the server writes "SQL" there itself, so
+  // the label is in before the scripts are, and Run clicked then does nothing
+  // (the same race tools/flask_browser.mjs had; see editorUp there).
+  await until(T, "document.readyState === 'complete' && !!window.PYIDE && !!document.querySelector('.CodeMirror')"
+    + " && (document.querySelector('#mode') || {}).textContent === 'SQL'", 60000);
   await ev(T, "document.querySelector('#run').click()");
   await until(T, "document.querySelectorAll('#sql-results table.sql-table').length > 0", 180000);
   await ev(T, "document.querySelector('#go-live').click()");

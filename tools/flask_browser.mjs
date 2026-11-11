@@ -118,10 +118,21 @@ try {
   const status = (p) => ev(p, "document.querySelector('#preview-status').textContent");
   const tabs = (p) => ev(p, "[...document.querySelectorAll('#file-tabs .tab')].map(t => t.firstChild.textContent).join(',')");
 
+  /* The editor is up: every script has run and CodeMirror is built, and the
+     mode says `label`. NOT the label alone: the server writes "Flask" (or
+     SQL, PHP) into #mode itself, so it's there the moment the HTML arrives,
+     while the parser is still blocked fetching CodeMirror from cdnjs — and a
+     step taken then finds no window.PYIDE ("Cannot read properties of
+     undefined (reading 'ide')"). That race passed whenever the CDN was fast,
+     and failed the whole run, from its first check, whenever it wasn't. */
+  const editorUp = (p, label, ms) => until(p, "document.readyState === 'complete' && !!window.PYIDE"
+    + " && !!document.querySelector('.CodeMirror')"
+    + " && (document.querySelector('#mode') || {}).textContent === " + JSON.stringify(label), ms);
+
   // ------------------------------------------------------ a Flask app
   let P = await open("/new?ide=flaskide");
   // The first page of a fresh profile fetches CodeMirror's modes and Pyodide's loader.
-  const ready = await until(P, "(document.querySelector('#mode') || {}).textContent === 'Flask'", 60000);
+  const ready = await editorUp(P, "Flask", 60000);
   say(ready && await ev(P, "window.PYIDE.ide") === "flaskide", "a new Flask app says Flask",
       await ev(P, "(document.querySelector('#mode') || {}).textContent || document.readyState"));
   const order = await tabs(P);
@@ -189,7 +200,7 @@ try {
 
   // ----------------------------------------------------- a SQL project
   P = await open("/new?ide=flaskide&kind=sql");
-  await until(P, "document.querySelector('#mode').textContent === 'SQL'", 20000);
+  await editorUp(P, "SQL", 60000);
   say(await tabs(P) === "query.sql,schema.sql" && await mode(P) === '"text/x-sql"'
       && await ev(P, "document.querySelector('#run-tab').hidden"), "a SQL project opens on query.sql, with no New tab", await tabs(P));
   await run(P);
@@ -199,7 +210,7 @@ try {
 
   // --------------------------------------------------------- a PHP site
   P = await open("/new?ide=flaskide&kind=php");
-  await until(P, "document.querySelector('#mode').textContent === 'PHP'", 20000);
+  await editorUp(P, "PHP", 60000);
   say(await ev(P, "[...document.querySelectorAll('#file-tabs .tab')][0].textContent") === "index.php", "a PHP site opens on index.php", await tabs(P));
   await run(P);
   const pages = await until(P, "document.querySelector('#output').textContent.includes('Pages:') && document.querySelector('#preview-status').textContent === '200'", 240000);
