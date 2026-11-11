@@ -3,10 +3,10 @@
  *
  * TWO WAYS IN, ONE DIFFERENCE. From the assignment link the student moves
  * through the slides at their own pace. From the live link the page asks
- * the lesson's row once a second and jumps to the teacher's slide each time
- * the teacher MOVES — the same rule the notes pane follows in a coding
- * lesson (live.js) — so a student who has read ahead is brought back by the
- * teacher moving on, not by the teacher typing.
+ * the lesson's row once a second and holds the student on the teacher's
+ * slide while the lesson is on the air (slideView's pin — the same rule
+ * as the notes pane in a coding lesson, live.js); they can't read ahead,
+ * and the teacher moving is what moves them. Ended, they're free again.
  *
  * Nothing here holds the answer key. The notes arrive with it taken out,
  * and every answer is marked by the server (notes.js, /api/quiz).
@@ -106,7 +106,7 @@
 
   /* "Back to the teacher's slide", while a student is on another one. */
   function paintBack() {
-    var away = teacherAt >= 0 && slides.count() > 0 && slides.at() !== teacherAt;
+    var away = teacherAt >= 0 && slides.count() > 0 && slides.pinned() < 0 && slides.at() !== teacherAt;
     back.hidden = !away;
     back.textContent = away ? "Back to the teacher's slide (" + (teacherAt + 1) + ")" : "";
   }
@@ -123,7 +123,7 @@
     if (slides.at() !== was) paintBack();
   });
 
-  /* Only a MOVE snaps (see the top of this file). */
+  /* Only a MOVE re-draws: the teacher typing on a slide mustn't. */
   function apply(data) {
     if (typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
@@ -136,10 +136,13 @@
     }
     // Before the teacher has sent anything, the lesson as saved.
     slides.show(data.notes || L.notes, jump);
+    // Held on the teacher's slide while on the air; free once it ends
+    // (slideView's pin, the same as live.js).
+    slides.pin(data.ended ? -1 : teacherAt);
     paintBack();
   }
 
-  apply({ notes: "", slide: L.slide });
+  apply({ notes: "", slide: L.slide, ended: L.ended || L.waiting });
 
   // ENDED_MS: an ended lesson keeps checking, so teaching it again brings
   // the class along without a reload (the same as live.js).

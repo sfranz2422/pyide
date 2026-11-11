@@ -189,12 +189,17 @@ try {
   say((await dot(St)).on, "held still for five seconds, it stays lit");
 
   const arrows = `document.querySelector("#live-notes").nextSibling.querySelectorAll("button")`;
+  // Pinned to the teacher's slide while live (notes.js, slideView's pin):
+  // the arrows are off, so pressing one leaves the student where the dot is.
+  // (Before the pin, a student could read ahead, and the dot went out.)
+  const where = `document.querySelector("#live-notes").nextSibling.querySelector(".slide-pos").textContent`;
+  const was = await ev(St, where);
   await ev(St, arrows + "[1].click()");
   await sleep(500);
-  say(!(await dot(St)).on, "a student who has read ahead sees no dot");
-  await ev(St, arrows + "[0].click()");
-  await sleep(500);
-  say((await dot(St)).on, "  and sees it again on coming back");
+  say((await ev(St, where)) === was && (await ev(St, arrows + "[1].disabled")) === true,
+      "a student can't read ahead of the teacher's slide: ▶ is off and moves nothing",
+      { was, now: await ev(St, where) });
+  say((await dot(St)).on, "  so the dot is still there for them");
 
   await move(T, nudge(at, 40), false);
   await sleep(1500);

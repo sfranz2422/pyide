@@ -455,6 +455,8 @@ window.PyIDENotes = (function () {
      Re-renders only when what is on screen would change. A live page calls
      show() once a second; rendering that often would replace a link, or a
      question's half-typed answer, under the student's hand. */
+  var PINNED_WHY = "Your teacher is moving the slides";
+
   function slideView(body, opts) {
     var bar = document.createElement("div");
     bar.className = "slide-nav";
@@ -473,6 +475,17 @@ window.PyIDENotes = (function () {
     body.parentNode.insertBefore(bar, body.nextSibling);
 
     var md = null, cut = [], at = 0, drawn = null, moved = null, theme = "";
+
+    /* PINNED TO THE TEACHER'S SLIDE (`pin(i)`, the live pages, Nov 2026, the
+       teacher's choice). While a lesson is on the air, a student is held on
+       the slide the teacher is on: no arrows, no keys, no Check my work
+       jumping to a card on another slide — every way of moving goes through
+       go() or step(), and both stay put. The teacher moving is the only
+       thing that moves them. It used to be free, snapping back only when the
+       teacher moved; the teacher wants the class kept on their slide. pin(-1)
+       lets go: the lesson ended, or the teacher isn't on a slide. Nothing
+       here is kept in the browser, so a reload is pinned by the next poll. */
+    var pinned = -1;
 
     /* PLAYED A SECTION AT A TIME (`animate:` in the notes, and only where
        the page asks — a student reading their notes; never live, never the
@@ -560,6 +573,12 @@ window.PyIDENotes = (function () {
       var more = unfinished();
       next.disabled = busy || hold || (!more && at >= cut.length - 1);
       next.title = hold ? holdWhy()[0] : more ? "Play the next part of this slide" : "Next slide";
+      if (pinned >= 0) {
+        next.disabled = prev.disabled = true;
+        next.title = prev.title = PINNED_WHY;
+      } else {
+        prev.title = "Previous slide";
+      }
       // Time to move on: the arrow pulses (style.css, .is-ready).
       next.classList.toggle("is-ready", !!mode && !next.disabled && !more);
     }
@@ -747,7 +766,7 @@ window.PyIDENotes = (function () {
       bar.hidden = !cut.length;
       if (cut.length) {
         pos.textContent = (at + 1) + " / " + cut.length;
-        prev.disabled = at <= 0;
+        prev.disabled = at <= 0 || pinned >= 0;
       }
       arrows();
       // The theme is part of what is on screen: changing only the theme
@@ -769,20 +788,21 @@ window.PyIDENotes = (function () {
       bar.hidden = !cut.length;
       if (cut.length) {
         pos.textContent = (at + 1) + " / " + cut.length;
-        prev.disabled = at <= 0 || busy;
+        prev.disabled = at <= 0 || busy || pinned >= 0;
       }
       paintPlayer();
     }
 
     function go(i) {
       if (!cut.length) return Promise.resolve(true);
+      if (pinned >= 0) i = pinned;          // whoever asked: the teacher's slide
       at = Math.max(0, Math.min(cut.length - 1, i));
       paintBar();
       return draw();
     }
 
     function step(by) {
-      if (!cut.length || busy) return;
+      if (!cut.length || busy) return;   // pinned: go() holds them
       if (by > 0 && unfinished()) { playNext(); return; }   // checksHold is playNext's own guard
       if (by > 0 && checksHold()) return;
       // Through, so this slide holds nothing any more — checks or none.
@@ -850,7 +870,7 @@ window.PyIDENotes = (function () {
          (checks_in_notes.js), and must never skip them past a held slide.
          True when it turned. */
       reach: function (i) {
-        if (!cut.length || i < 0 || i >= cut.length || i === at) return false;
+        if (!cut.length || i < 0 || i >= cut.length || i === at || pinned >= 0) return false;
         if (i > at && mode && i > reached.slide) return false;
         // Held only by a slide on the way that has checks, a prediction or cards
         // and isn't passed: one with neither holds nothing, as its own arrow doesn't.
@@ -860,6 +880,21 @@ window.PyIDENotes = (function () {
         if (moved) moved(at);
         return true;
       },
+      /* Hold the reader on slide i (from 0), or let go with -1. */
+      pin: function (i) {
+        var was = pinned;
+        pinned = typeof i === "number" && i >= 0 ? i : -1;
+        if (pinned === was) return Promise.resolve(true);
+        if (pinned >= 0 && cut.length && at !== Math.min(pinned, cut.length - 1)) {
+          var turned = go(pinned);
+          if (moved) moved(at);
+          return turned;
+        }
+        if (cut.length) prev.disabled = at <= 0 || busy || pinned >= 0;
+        arrows();
+        return Promise.resolve(true);
+      },
+      pinned: function () { return pinned; },
       at: function () { return at; },
       count: function () { return cut.length; },
       onMove: function (fn) { moved = fn; },

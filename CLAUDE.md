@@ -288,9 +288,14 @@ could destroy something. `draftFresh`, sent by the server, is what decides.
 **Slides, and links made ahead.** Notes with `---` are always shown as
 slides (`notes.js`, `slideView`), in the editor and on the class's page. A
 live push sends the whole notes file and the teacher's slide (`"3/5"`);
-each student moves through the slides freely and is jumped to the teacher's
-slide only when the teacher *moves* — typing on the same slide must not drag
-back a student who has read ahead. The assignment page makes the lesson's
+while the lesson is on the air, each student is **pinned to the teacher's
+slide** (`slideView`'s `pin`, Nov 2026, the teacher's choice: arrows off,
+`go`/`reach` held, on all four live pages — Python, web, Flask and a
+lesson's live link) and let go when it ends. It used to be free reading,
+snapped back only when the teacher moved; the teacher wants the class kept
+on their slide. Only a *move* re-draws: typing on the same slide must not
+re-render a half-typed answer. `locked: yes` never applies live — the pin
+is the lock there. The assignment page makes the lesson's
 link ahead of time (`_lesson_for`) so it can be posted in Classroom the day
 before: an ended lesson with `version` 0 is "not started yet" (`_waiting`),
 which is why a lesson started normally begins at `version` 1.

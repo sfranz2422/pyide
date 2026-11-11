@@ -26,7 +26,7 @@ Two halves. The SERVER half pins the route and the poll:
 The BROWSER half (tools/laser_browser.mjs) runs the real pages in a real
 Chrome, teacher and students on screens of different sizes, and checks the
 dot lands on the very letter pointed at — from the code, a slide, the
-pop-out and a lesson — goes out on letting go, on reading ahead, and by
+pop-out and a lesson — goes out on letting go, stays for a student who presses ▶ (pinned), and by
 itself when the teacher's tab vanishes mid-point. It needs Chrome and node,
 and says "skip" without Chrome rather than failing.
 """

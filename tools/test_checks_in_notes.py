@@ -339,6 +339,34 @@ var tick = function () { return new Promise(function (r) { setTimeout(r, 0); });
   k2.pane.remove();
   window.matchMedia = still;
 
+  // ---------------------------------------------------- pinned to the teacher (live)
+  // How every live page makes its viewer: no options, then show() with the
+  // teacher's slide when they move, and pin() with it while on the air.
+  var pdk = "# One\n---\n# Two\n---\n# Three\n---\n# Four";
+  var pv = await viewer(pdk, undefined);
+  var prevB = pv.v.bar.children[0];
+  var both = function () { pv.next.handlers.click.forEach(function (f) { f(); }); prevB.handlers.click.forEach(function (f) { f(); }); };
+  await pv.v.show(pdk, 1); await pv.v.pin(1);
+  out.pin = { at: pv.v.at(), next: pv.next.disabled, prev: prevB.disabled, title: pv.next.title, prevTitle: prevB.title };
+  both(); await tick();
+  out.pin.afterArrows = pv.v.at();
+  pv.v.go(3);                      // ← and → on a lesson's live link, or the Back link
+  out.pin.afterGo = pv.v.at();
+  out.pin.reach = pv.v.reach(0);   // Check my work turning to a card elsewhere
+  out.pin.afterReach = pv.v.at();
+  await pv.v.show(pdk + "\nmore");  // the teacher typing on the same slide
+  out.pin.afterType = pv.v.at();
+  await pv.v.show(pdk, 2); await pv.v.pin(2);   // the teacher moving on
+  out.pin.moved = pv.v.at();
+  await pv.v.pin(0);
+  out.pin.pinMoves = pv.v.at();
+  await pv.v.pin(1);
+  await pv.v.pin(-1);              // the lesson ended
+  out.pin.prevAtOnce = prevB.disabled;   // before anything else redraws the bar
+  pv.next.handlers.click.forEach(function (f) { f(); }); await tick();
+  out.pin.free = { at: pv.v.at(), next: pv.next.disabled, prev: prevB.disabled, title: prevB.title };
+  pv.pane.remove();
+
   console.log(JSON.stringify(out));
 })().catch(function (e) { console.log(JSON.stringify({ error: String(e && e.stack || e) })); });
 """ % GLOBAL
@@ -432,6 +460,21 @@ if "error" not in got:
     check("  a box drawn again after it ran isn't asked for twice", got["pRedrawn"] is False)
     check("  and a prediction holds nothing where the page doesn't lock", got["pFree"] is False and got["pFreeBox"])
 
+    print("\nPinned to the teacher's slide (live)")
+    pn = got["pin"]
+    check("pinned, a student is on the teacher's slide with both arrows off, saying why",
+          pn["at"] == 1 and pn["next"] is True and pn["prev"] is True
+          and pn["title"] == pn["prevTitle"] == "Your teacher is moving the slides", pn)
+    check("  the arrows move nobody", pn["afterArrows"] == 1, pn)
+    check("  nor do keys or the Back link (go)", pn["afterGo"] == 1, pn)
+    check("  nor Check my work turning to a card on another slide (reach)",
+          pn["reach"] is False and pn["afterReach"] == 1, pn)
+    check("  the teacher typing on the slide leaves them there", pn["afterType"] == 1, pn)
+    check("  the teacher moving moves them", pn["moved"] == 2 and pn["pinMoves"] == 0, pn)
+    check("  and once the lesson ends they move freely again",
+          pn["prevAtOnce"] is False
+          and pn["free"] == {"at": 2, "next": False, "prev": False, "title": "Previous slide"}, pn)
+
 print("\nWhere it's on")
 pages = {}
 for name in ("app.js", "live.js", "autograde.js"):
@@ -452,6 +495,16 @@ for name in ("app.js", "live.js"):
 check("the editor locks for a student only — never the teacher writing them, nor live",
       re.search(r"locked: function \(\) \{ return !(?:window\.\w+|cfg)\.authoring && !(?:window\.\w+|cfg)\.readonly && !liveCode; \}",
                 pages["app.js"]) is not None)
+# Every live page pins while on the air and lets go when ended. A page
+# that drops the call goes back to free reading with no visible sign.
+for name in ("live.js", "web/live.js", "flask/live.js"):
+    src = open(os.path.join(STATIC, name)).read()
+    check("  %s pins the class to the teacher's slide while on the air" % name,
+          "notesSlides.pin(data.ended ? -1 : teacherAt);" in src)
+lesson_js = open(os.path.join(STATIC, "lesson.js")).read()
+check("  lesson.js too, from its first draw (ended or not started: free)",
+      "slides.pin(data.ended ? -1 : teacherAt);" in lesson_js
+      and "apply({ notes: \"\", slide: L.slide, ended: L.ended || L.waiting });" in lesson_js)
 check("  the live page never locks", "locked:" not in re.findall(r"slideView\([^)]*\)", pages["live.js"])[0]
       if re.findall(r"slideView\([^)]*\)", pages["live.js"]) else True)
 for t in ("index.html", "live.html"):

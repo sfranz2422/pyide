@@ -937,12 +937,14 @@
      they have `---` in them (notes.js, slideView). The teacher's editor
      sends the WHOLE file and "3/5", the slide the teacher is on.
 
-     A student can move through the slides on their own — read ahead, go
-     back to a question — and every time the teacher moves, this jumps to
-     the teacher's slide: the class is brought back together by the person
-     teaching, not kept there. Only a MOVE snaps. The teacher typing on the
-     same slide leaves a student who has gone ahead where they are, or they
-     would be pulled back on every keystroke.
+     While the lesson is on the air a student is PINNED to the teacher's
+     slide (slideView's pin, Nov 2026, the teacher's choice): the arrows are
+     off and only the teacher moving moves them. It used to be free — read
+     ahead, go back, snapped to the teacher's slide only when the teacher
+     moved; the teacher wants the class kept on their slide.
+     Once the lesson ends they're let go, to go back over it on their own.
+     Still, only a MOVE re-draws: the teacher typing on the same slide must
+     not re-render a half-typed answer.
 
      The viewer only re-renders when what is on screen changes, because
      every poll carries the notes whole, and rendering once a second would
@@ -960,7 +962,7 @@
   function paintTeacherMark() {
     if (!slideMark || !notesSlides) return;
     var away = teacherAt >= 0 && notesSlides.count() > 0
-      && notesSlides.at() !== teacherAt;
+      && notesSlides.pinned() < 0 && notesSlides.at() !== teacherAt;
     slideMark.hidden = !away;
     slideMark.textContent = away ? "Back to the teacher's slide (" + (teacherAt + 1) + ")" : "";
   }
@@ -991,6 +993,7 @@
       if (teacherAt >= 0) jump = teacherAt;
     }
     notesSlides.show(data.notes, jump);
+    notesSlides.pin(data.ended ? -1 : teacherAt);
     paintTeacherMark();
   }
 
