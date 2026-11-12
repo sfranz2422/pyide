@@ -202,6 +202,15 @@ for (const name of Object.keys(programs)) {
 // by "prints the AREA is 12".
 out.casing = await window.PyIDETests.run(py, { "main.py": "print('The area is  12')" },
   window.PyIDETests.parse("```tests\nprints the AREA is 12\nprints exactly The area is 12\n```").tests);
+// Quotes and the spaces around punctuation: Programming 1 couldn't pass a
+// dictionary lesson's last check over "Stand:{...}" (Nov 2026). Forgiven by
+// prints; still not a wrong value, nor by prints exactly.
+out.lenient = await window.PyIDETests.run(py, { "main.py":
+    "stand = {'apples': 3, 'maple syrup': 12}\nprint('Stand:' + str(stand))\n"
+  + "print('Pets: {\"cat\": 1}')\nprint('Items :5')\n" },
+  window.PyIDETests.parse("```tests\nprints Stand: {'apples': 3, 'maple syrup': 12}\n"
+  + "prints Pets: {'cat': 1}\nprints Items: 5\nprints Stand: {'apples': 4, 'maple syrup': 12}\n"
+  + "prints Stand: {'apples': 3, 'maplesyrup': 12}\nprints exactly Stand: {'apples': 3, 'maple syrup': 12}\n```").tests);
 // Operators: a student's print(3+4) failed `uses +` while plainly using it.
 out.ops = await window.PyIDETests.run(py, { "main.py": "print(3+4)\nif 2 == 2 and True:\n    x = 'a-b'\n" },
   window.PyIDETests.parse("```tests\nuses +\nuses ==\nuses and\nuses -\navoids *\n```").tests);
@@ -225,7 +234,7 @@ try:
     ran = json.loads(out.stdout)
 except ValueError:
     ran = {}
-check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 4, out.stderr[-400:])
+check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 5, out.stderr[-400:])
 
 
 def lines(name):
@@ -273,6 +282,10 @@ check("exact output includes the prompts, as a terminal shows them",
 c = ran.get("casing", {}).get("results", [{}, {}])
 check("prints ignores case and extra spaces", c[0].get("ok"), c[0])
 check("  but prints exactly doesn't", c[1].get("ok") is False, c[1])
+le = [x.get("ok") for x in ran.get("lenient", {}).get("results", [])]
+check("prints forgives no space after a colon, and double quotes for single", le[:3] == [True, True, True], ran.get("lenient"))
+check("  but not a wrong value, or two words run together", le[3:5] == [False, False], le)
+check("  and prints exactly still wants it exactly", le[5:6] == [False], le)
 check("uses import math sees the import", lines("right")["Uses import math"]["ok"]
       and not lines("unreadable")["Uses import math"]["ok"])
 ops = [x.get("ok") for x in ran.get("ops", {}).get("results", [])]

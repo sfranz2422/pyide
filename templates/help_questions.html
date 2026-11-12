@@ -90,7 +90,10 @@ avoids sum                            the name sum appears nowhere
 defines area                          there is a def area
 # a line starting with # is a comment
 ```</pre>
-  <p class="dim">"prints" ignores capitals and extra spaces. A program that runs longer than 5
+  <p class="dim">"prints" ignores capitals, extra spaces, single vs double quotes, and spaces
+    around <code>: , ; =</code> and brackets — <code>Stand:{"apples":3}</code> passes
+    <code>prints Stand: {'apples': 3}</code>. The words, numbers and their order still count;
+    "prints exactly" counts everything. A program that runs longer than 5
     seconds, or asks for more input than the test types, fails that test and says why.</p>
 
   {#  WebIDE's and FlaskIDE's, as their own help had them: those editors

@@ -163,7 +163,7 @@ window.PyIDETests = (function () {
      from there). */
   var HARNESS = [
     "import ast as _ag_ast, builtins as _ag_b, contextlib as _ag_ctx, io as _ag_io",
-    "import json as _ag_json, math as _ag_math, os as _ag_os, sys as _ag_sys, time as _ag_time",
+    "import json as _ag_json, math as _ag_math, os as _ag_os, re as _ag_re, sys as _ag_sys, time as _ag_time",
     "",
     "class _AgNoInput(Exception): pass",
     "class _AgTimeUp(Exception): pass",
@@ -242,8 +242,18 @@ window.PyIDETests = (function () {
     "        _ag_time.sleep, _ag_os._exit, _ag_threading.Thread.start = real_sleep, real_exit, real_start",
     "    return out.getvalue(), problem, scope",
     "",
+    // What `prints` (not `prints exactly`) forgives: capitals, extra spaces,
+    // single vs double quotes, and spaces around : , ; = and brackets. The
+    // teacher's Programming 1 class couldn't pass a dictionary lesson's last
+    // check (Nov 2026): print("Stand:" + str(stand)) prints "Stand:{...}" and
+    // the line said "Stand: {...}", and quotes came out other than Python's own
+    // single ones. What's printed is still checked — the words, the numbers,
+    // the keys, in order — only not how it's spaced or which quote it uses.
+    "_AG_QUOTES = str.maketrans({'\"': \"'\", '\u2018': \"'\", '\u2019': \"'\", '\u201c': \"'\", '\u201d': \"'\"})",
+    "",
     "def _ag_norm(text):",
-    "    return ' '.join(str(text).split()).lower()",
+    "    text = ' '.join(str(text).split()).lower().translate(_AG_QUOTES)",
+    "    return _ag_re.sub(r' ?([:,;=()\\[\\]{}]) ?', r'\\1', text)",
     "",
     "def _ag_same(a, b):",
     "    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):",
