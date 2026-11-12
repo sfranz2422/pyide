@@ -516,6 +516,28 @@ class DeckShow(Base):
     frame = Column(Text, nullable=False, default="")
 
 
+class ClassPicker(Base):
+    """The name picker for one class (class_picker; "Name picker" on the
+    teacher's class page): one row per class, rewritten in place.
+
+    `beat` is when the picker page last said it's open, so the class's pages
+    ask quickly only while it is (xp.js; PICKER_OPEN_SECONDS). `seq`, `name`,
+    `email` and `picked` are the last name picked: the first name the class
+    is shown, and whose it is, so that student's page can say "It's you".
+    The names cycle on the teacher's screen only; the server is told just
+    the one it landed on. PyIDE's own table, like deck_shows, so accounts.py
+    is untouched; times in plain milliseconds for the reason DeckShow says.
+    """
+    __tablename__ = "class_pickers"
+
+    class_id = Column(Integer, primary_key=True, autoincrement=False)
+    beat = Column(BigInteger, nullable=False, default=0)
+    seq = Column(Integer, nullable=False, default=0)
+    name = Column(String(120), nullable=False, default="")
+    email = Column(String(320), nullable=False, default="")
+    picked = Column(BigInteger, nullable=False, default=0)
+
+
 engine = create_engine(
     _database_url(),
     pool_pre_ping=True,
@@ -6092,6 +6114,189 @@ def class_attendance(class_id):
 
 
 # --------------------------------------------------------------------------
+# The name picker
+# --------------------------------------------------------------------------
+# A teacher's tool for calling on someone (Nov 2026, the teacher's request;
+# nothing to do with the name wheel inside their own slide decks). The page
+# cycles the class's first names on the teacher's screen — the projector —
+# and lands on one; only that one is sent here, and every signed-in student
+# of the class sees it flash big in the middle of whatever page they're on
+# (xp.js, pickFlash). Students never see the tool or the roster.
+#
+# Students' pages learn of it through the XP news they already ask for every
+# 20 seconds. That's too slow for a name, so while a picker page is open
+# (its beat, every PICKER_BEAT_SECONDS) the news says `picking`, and xp.js
+# asks /api/me/pick every couple of seconds until it isn't. The rest of the
+# time the picker costs the class nothing.
+
+#: The picker page says it's open this often; a beat older than
+#: PICKER_OPEN_SECONDS means it's closed (a tab shut without saying so).
+PICKER_BEAT_SECONDS = 10
+PICKER_OPEN_SECONDS = 30
+#: How long after a pick a student's page still flashes it — one opened a
+#: moment late still sees who was called; one opened later than that doesn't.
+PICK_SHOW_SECONDS = 25
+
+
+def _picker_names(db, course):
+    """[{id, name}] for the picker: each student on the class's Classroom
+    roster by first name. Their own Google first name when they've signed in
+    here (sign-in stores it, and it gets "Mary Ann" right); else the first
+    word of the roster's full name; else their email's first part. Two
+    students with one first name get their last initials, or the class
+    couldn't tell which Ana was called. Sorted by that name."""
+    rows = (db.query(accounts.Enrollment).filter_by(class_id=course.id)
+              .order_by(accounts.Enrollment.name, accounts.Enrollment.email).all())
+    users = {}
+    emails = [r.email.lower() for r in rows]
+    if emails:
+        for u in db.query(accounts.User).filter(func.lower(accounts.User.email).in_(emails)):
+            users[(u.email or "").lower()] = u
+    people = []
+    for r in rows:
+        u = users.get(r.email.lower())
+        full = (r.name or "").split()
+        first = ((u.first_name or "").strip() if u is not None else "") or (full[0] if full else "")
+        last = ((u.last_name or "").strip() if u is not None else "") or (full[-1] if len(full) > 1 else "")
+        if not first:
+            first = r.email.split("@")[0].replace(".", " ").split(" ")[0].capitalize() or "Student"
+        people.append({"id": r.id, "first": first, "last": last})
+    count = {}
+    for p in people:
+        count[p["first"].lower()] = count.get(p["first"].lower(), 0) + 1
+    out = []
+    for p in people:
+        name = p["first"]
+        if count[name.lower()] > 1 and p["last"]:
+            name += " " + p["last"][0].upper() + "."
+        out.append({"id": p["id"], "name": name})
+    out.sort(key=lambda p: p["name"].lower())
+    return out
+
+
+def _here_today(db, course):
+    """Roster ids of the students who've come into the class today (school
+    time), from attendance (Visit), for the picker's "Only who's here"."""
+    midnight = datetime.now(SCHOOL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    seen = {(v.email or "").lower() for v in db.query(accounts.Visit).filter(
+        accounts.Visit.class_id == course.id,
+        accounts.Visit.last_at >= midnight.astimezone(timezone.utc))}
+    return [e.id for e in db.query(accounts.Enrollment).filter_by(class_id=course.id)
+            if e.email.lower() in seen]
+
+
+def _ms():
+    return int(time.time() * 1000)
+
+
+@app.get("/teacher/class/<int:class_id>/picker")
+def class_picker(class_id):
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id, accounts.Course.app.in_(EDITOR_IDES)).first()
+        if course is None or course.teacher_id != user.id:
+            abort(404)
+        ctx = user_context(db)
+        ctx.update(course=course, names=_picker_names(db, course), here=_here_today(db, course),
+                   beat_seconds=PICKER_BEAT_SECONDS)
+        return render_template("class_picker.html", **ctx)
+    finally:
+        db.close()
+
+
+def _picker_row(db, class_id):
+    row = db.get(ClassPicker, class_id)
+    if row is None:
+        row = ClassPicker(class_id=class_id)
+        db.add(row)
+    return row
+
+
+@app.post("/api/class/<int:class_id>/picker/beat")
+def picker_beat(class_id):
+    """The picker page is open (or, with open: false, has just closed)."""
+    db = SessionLocal()
+    try:
+        user, course, err = _own_class(db, class_id)
+        if err:
+            return err
+        row = _picker_row(db, course.id)
+        row.beat = _ms() if (request.get_json(silent=True) or {}).get("open", True) else 0
+        try:
+            db.commit()
+        except IntegrityError:          # two first beats at once: either made the row
+            db.rollback()
+        return jsonify(ok=True)
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/picker/pick")
+def picker_pick(class_id):
+    """The name the teacher's picker landed on, to flash on the class's
+    screens. By roster id, never by a name the page sends: what the class is
+    shown is always a name on this class's roster, worked out here."""
+    db = SessionLocal()
+    try:
+        user, course, err = _own_class(db, class_id)
+        if err:
+            return err
+        try:
+            wanted = int((request.get_json(silent=True) or {}).get("id"))
+        except (TypeError, ValueError):
+            return jsonify(error="Which student?"), 400
+        who = db.query(accounts.Enrollment).filter_by(class_id=course.id, id=wanted).first()
+        name = next((p["name"] for p in _picker_names(db, course) if p["id"] == wanted), None)
+        if who is None or name is None:
+            return jsonify(error="That student isn't on this class's roster."), 404
+        row = _picker_row(db, course.id)
+        row.seq = (row.seq or 0) + 1
+        row.name, row.email = name[:120], who.email.lower()[:320]
+        row.picked = row.beat = _ms()
+        db.commit()
+        return jsonify(ok=True, seq=row.seq, name=row.name)
+    finally:
+        db.close()
+
+
+def _pick_news(db, user):
+    """{picking, pick} for a student's pages: whether a picker is open for
+    one of their classes, and the name it last landed on if that was in the
+    last PICK_SHOW_SECONDS — `key` to show it once, `me` when it's them."""
+    classes = [e.class_id for e in db.query(accounts.Enrollment).filter(
+        func.lower(accounts.Enrollment.email) == (user.email or "").lower())]
+    if not classes:
+        return {"picking": False, "pick": None}
+    now = _ms()
+    rows = db.query(ClassPicker).filter(ClassPicker.class_id.in_(classes)).all()
+    picking = any(r.beat and now - r.beat < PICKER_OPEN_SECONDS * 1000 for r in rows)
+    recent = [r for r in rows if r.seq and r.picked and now - r.picked < PICK_SHOW_SECONDS * 1000]
+    pick = None
+    if recent:
+        r = max(recent, key=lambda r: r.picked)
+        pick = {"key": "%d:%d" % (r.class_id, r.seq), "name": r.name,
+                "me": r.email == (user.email or "").lower()}
+    return {"picking": picking, "pick": pick}
+
+
+@app.get("/api/me/pick")
+def me_pick():
+    """The quick ask while a picker is open (xp.js). A GET to /api/, so it's
+    never activity and can't keep an idle student signed in."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if not _earns_xp(user):
+            return jsonify(picking=False, pick=None)
+        return jsonify(**_pick_news(db, user))
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
 # XP
 # --------------------------------------------------------------------------
 # Points for doing the work, levels and badges they add up to, tokens the
@@ -6413,26 +6618,30 @@ def xp_news():
     try:
         user = current_user(db)
         if not _earns_xp(user):
-            return jsonify(user=None, latest=0, awards=[], events=[], events_latest=0)
+            return jsonify(user=None, latest=0, awards=[], events=[], events_latest=0,
+                           picking=False, pick=None)
         try:
             events_after = int(request.args["events_after"]) if "events_after" in request.args else None
         except ValueError:
             events_after = None
         events, events_latest = _event_news(db, user, events_after)
+        # The name picker (_pick_news): whether to ask quickly, and a name
+        # just picked, for a page that wasn't asking quickly yet.
+        picks = _pick_news(db, user)
         mine = db.query(accounts.XpAward).filter(accounts.XpAward.user_id == user.id)
         newest = mine.order_by(accounts.XpAward.id.desc()).first()
         latest = newest.id if newest is not None else 0
         try:
             after = int(request.args.get("after", ""))
         except ValueError:
-            return jsonify(user=user.id, latest=latest, awards=[], events=events, events_latest=events_latest)
+            return jsonify(user=user.id, latest=latest, awards=[], events=events, events_latest=events_latest, **picks)
         awards = []
         for a in mine.filter(accounts.XpAward.id > after).order_by(accounts.XpAward.id).limit(10):
             kind = a.source.split(":", 1)[0]
             if kind in ("run", "quiz", "all", "selftest", "predict") or (kind == "event" and events_after is not None):
                 continue
             awards.append({"xp": a.xp, "reason": a.reason, "kind": kind})
-        return jsonify(user=user.id, latest=latest, awards=awards, events=events, events_latest=events_latest)
+        return jsonify(user=user.id, latest=latest, awards=awards, events=events, events_latest=events_latest, **picks)
     finally:
         db.close()
 

@@ -145,8 +145,78 @@ window.PyIDEXP = window.PyIDEXP || (function () {
         }
         newsMark({ user: d.user, after: d.latest,
                    events: typeof d.events_latest === "number" ? d.events_latest : undefined });
+        takePicks(d);
       })
       .catch(function () {});
+  }
+
+  /* THE NAME PICKER (the teacher's class page → Name picker; _pick_news in
+     app.py). The names cycle on the teacher's screen only; the one it lands
+     on flashes here, big in the middle of whatever page this is. The news
+     above says `picking` while a picker is open for one of their classes,
+     and then this asks /api/me/pick every PICK_MS, not every 20 seconds —
+     a name that arrives 20 seconds after it was called is no use. It stops
+     asking as soon as the answer says the picker has closed.
+
+     Each pick flashes once per browser: its key is kept in localStorage, so
+     the second tab, or the next page, doesn't call the same name again. */
+  var PICK_MS = 2500;
+  var PICK_KEY = "pyide-pick-seen";
+  var pickSeenHere = "";
+  var pickTimer = null;
+  function pickSeen(set) {
+    if (set) {
+      pickSeenHere = set;
+      try { localStorage.setItem(PICK_KEY, set); } catch (e) {}
+      return set;
+    }
+    try { return localStorage.getItem(PICK_KEY) || pickSeenHere; } catch (e) { return pickSeenHere; }
+  }
+  function takePicks(d) {
+    if (!d) return;
+    if (d.pick && d.pick.key && pickSeen() !== d.pick.key) {
+      pickSeen(d.pick.key);
+      pickFlash(d.pick);
+    }
+    if (d.picking && !pickTimer) {
+      pickTimer = setInterval(function () { if (!document.hidden) askPick(); }, PICK_MS);
+    } else if (!d.picking && pickTimer) {
+      clearInterval(pickTimer);
+      pickTimer = null;
+    }
+  }
+  function askPick() {
+    fetch("/api/me/pick", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(takePicks)
+      .catch(function () {});     // school wifi drops one; the next ask catches up
+  }
+  /* The name, big in the middle (style.css, .pick-flash). Takes no clicks —
+     it must never land on a button under a student's hand — and goes by
+     itself when its animation ends. */
+  var flashEl = null;
+  function pickFlash(pick) {
+    if (flashEl) flashEl.remove();
+    flashEl = document.createElement("div");
+    flashEl.className = "pick-flash" + (pick.me ? " is-me" : "");
+    flashEl.setAttribute("role", "status");
+    flashEl.setAttribute("aria-live", "assertive");
+    var card = document.createElement("div");
+    card.className = "pick-flash-card";
+    var name = document.createElement("div");
+    name.className = "pick-flash-name";
+    name.textContent = pick.name;
+    card.appendChild(name);
+    if (pick.me) {
+      var you = document.createElement("div");
+      you.className = "pick-flash-you";
+      you.textContent = "That's you!";
+      card.appendChild(you);
+    }
+    flashEl.appendChild(card);
+    document.body.appendChild(flashEl);
+    var gone = flashEl;
+    setTimeout(function () { if (gone.parentNode) gone.remove(); if (flashEl === gone) flashEl = null; }, 5200);
   }
   function watch() {
     if (watching) return;
@@ -225,5 +295,6 @@ window.PyIDEXP = window.PyIDEXP || (function () {
   }
 
   return { ran: ran, hash: hash, toast: toast, watch: watch, namedTheme: namedTheme, clearTheme: clearTheme,
-           lastTheme: lastTheme, restoreTheme: restoreTheme };
+           lastTheme: lastTheme, restoreTheme: restoreTheme,
+           takePicks: takePicks };     // the picker's news, for tools/test_picker.py
 })();

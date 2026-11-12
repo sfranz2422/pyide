@@ -49,12 +49,12 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by thirty-three of these: `test_deck_show.py`, `test_ide_web.py`, `test_quiz_browser.py` (Chrome too), `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by thirty-four of these: `test_deck_show.py`, `test_ide_web.py`, `test_quiz_browser.py` (Chrome too), `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py` and `test_autograde.py`. They run
+`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py`, `test_autograde.py` and `test_picker.py` (Chrome too). They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -737,6 +737,24 @@ Stop would stop it — so a lesson's loop is checked on what it printed and
 did. Before, every such check failed with "No module named gpiozero". The
 teacher's page and the live page load pi.js and world_model.js for this
 only. `test_autograde.py` runs them.
+
+**The name picker** ("The name picker" in `app.py`, `ClassPicker` — PyIDE's
+own table, one row per class; `class_picker.html`, `static/picker.js`; Name
+picker on the teacher's class page, Nov 2026). Pick cycles the class's
+first names on the TEACHER's screen only and lands on one; only that one
+goes to the server, **by roster id** (`Enrollment`), never a name the page
+sends, and it flashes big in the middle of every signed-in student's page
+in that class (`xp.js`, `pickFlash`; "That's you!" for the one picked) for
+`PICK_SHOW_SECONDS`, once per browser. Names come from the Classroom roster:
+the student's Google first name if they've signed in, else the roster's
+first word, with last initials for two of one name (`_picker_names`). No
+repeats, left-out names and "Only who's here today" (attendance) are kept
+in the teacher's browser per class. Students' pages learn of a pick from the
+XP news they already ask every 20 s; while a picker page beats
+(`PICKER_OPEN_SECONDS`) the news says `picking` and xp.js asks `/api/me/pick`
+every 2.5 s, stopping when it closes — so the tool costs nothing the rest
+of the time. Not the name wheel in the teacher's own slide decks.
+`test_picker.py` (node and Chrome).
 
 **The week's calendar** (`static/calendar.js`, the same file in all three;
 `Course.calendar`; `/api/class/<id>/calendar`). The teacher pastes one block

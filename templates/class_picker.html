@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name picker · {{ course.name }} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<script>
+  try {
+    var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) {}
+</script>
+</head>
+<body class="class-page class-teacher picker-page">
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
+  <div class="meta"><span class="pagetitle">{{ course.name }} · Name picker</span></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
+  </div>
+</header>
+
+{#  The names cycle HERE only, on the teacher's screen (static/picker.js).
+    The class is sent just the name it lands on, which flashes on their
+    screens (xp.js, pickFlash). Nothing on this page reaches a student. #}
+<main class="sheet picker-sheet">
+  {% if not names %}
+    <h1 class="picker-title">Name picker</h1>
+    <p class="dim">This class has no roster yet, so there are no names to pick from.
+      Sync it from Google Classroom on the <a href="{{ url_for('teacher_class', class_id=course.id) }}">class's page</a>.</p>
+  {% else %}
+    <div class="picker-stage" id="pick-stage" aria-live="polite">
+      <div class="picker-name" id="pick-name">?</div>
+    </div>
+    <div class="picker-controls">
+      <button class="btn btn-primary picker-go" id="pick-go" type="button"
+              title="Pick a name (Space)">🎲 Pick a name</button>
+      <label class="picker-opt"><input type="checkbox" id="pick-norepeat" checked>
+        No repeats until everyone's had a turn</label>
+      <label class="picker-opt"><input type="checkbox" id="pick-send" checked>
+        Show the name on students' screens</label>
+    </div>
+    <p class="picker-status dim" id="pick-status"></p>
+
+    <section class="picker-names">
+      <div class="picker-names-head">
+        <h2>Who can be picked</h2>
+        <div class="picker-names-tools">
+          <button class="btn" type="button" id="pick-all">Everyone</button>
+          <button class="btn" type="button" id="pick-here"
+                  title="Only the students who've opened something of this class today (Attendance)">Only who's here today</button>
+          <button class="btn" type="button" id="pick-reset"
+                  title="Everyone back in the hat">Start over</button>
+        </div>
+      </div>
+      <p class="dim small">Click a name to leave it out (absent, say). A ✓ has already been picked.</p>
+      <div class="picker-grid" id="pick-grid"></div>
+    </section>
+  {% endif %}
+</main>
+
+<script type="application/json" id="pick-data">{{ {"classId": course.id, "names": names, "here": here, "beatSeconds": beat_seconds}|tojson }}</script>
+<script src="{{ url_for('static', filename='picker.js') }}"></script>
+</body>
+</html>

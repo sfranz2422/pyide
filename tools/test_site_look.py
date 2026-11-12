@@ -46,7 +46,7 @@ def check(label, condition, detail=""):
     print("  %-4s %-66s %s" % ("ok" if condition else "FAIL", label, detail))
 
 
-PAGES = ("teacher class_teacher teacher_assignment class_xp shop_teacher attendance "
+PAGES = ("teacher class_teacher teacher_assignment class_xp shop_teacher attendance class_picker "
          "material_teacher class_student classes my my_xp avatar").split()
 EDITORS = ("index", "live", "lesson")
 CSS = open(os.path.join(ROOT, "static", "site_look.css")).read()

@@ -31,6 +31,8 @@
     <a class="btn" href="{{ url_for('library.library_page') }}" title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
     <a class="btn" href="{{ url_for('student_class', class_id=course.id) }}"
        title="This page as the class sees it: hidden ones left out">Student view</a>
+    <a class="btn" href="{{ url_for('class_picker', class_id=course.id) }}" target="_blank" rel="noopener"
+       title="Pick a student's name at random: it cycles on your screen and flashes on theirs">Name picker</a>
     <a class="btn" href="{{ url_for('class_attendance', class_id=course.id) }}"
        title="Who came into this class, day by day">Attendance</a>
     <a class="btn" href="{{ url_for('class_xp', class_id=course.id) }}"
