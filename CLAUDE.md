@@ -745,7 +745,11 @@ first names on the TEACHER's screen only and lands on one; only that one
 goes to the server, **by roster id** (`Enrollment`), never a name the page
 sends, and it flashes big in the middle of every signed-in student's page
 in that class (`xp.js`, `pickFlash`; "That's you!" for the one picked) for
-`PICK_SHOW_SECONDS`, once per browser. Names come from the Classroom roster:
+`PICK_SHOW_SECONDS`, once per browser. Once it lands, **⭐ Right answer
++10 XP** under the name gives that student `PICK_XP` — only when pressed,
+never automatic (the teacher's choice); the source is a token made for that
+landing, so a double click pays once, and it's greyed out for a student who
+never signed in. Names come from the Classroom roster:
 the student's Google first name if they've signed in, else the roster's
 first word, with last initials for two of one name (`_picker_names`). No
 repeats, left-out names and "Only who's here today" (attendance) are kept

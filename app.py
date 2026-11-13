@@ -6136,6 +6136,10 @@ PICKER_OPEN_SECONDS = 30
 #: How long after a pick a student's page still flashes it — one opened a
 #: moment late still sees who was called; one opened later than that doesn't.
 PICK_SHOW_SECONDS = 25
+#: XP for a right answer from the one picked — the teacher's button, never
+#: automatic. The same as xp.BEHAVIORS' "Answered a question in class".
+PICK_XP = 10
+PICK_XP_REASON = "Answered a question in class"
 
 
 def _picker_names(db, course):
@@ -6160,7 +6164,7 @@ def _picker_names(db, course):
         last = ((u.last_name or "").strip() if u is not None else "") or (full[-1] if len(full) > 1 else "")
         if not first:
             first = r.email.split("@")[0].replace(".", " ").split(" ")[0].capitalize() or "Student"
-        people.append({"id": r.id, "first": first, "last": last})
+        people.append({"id": r.id, "first": first, "last": last, "xp": u is not None})
     count = {}
     for p in people:
         count[p["first"].lower()] = count.get(p["first"].lower(), 0) + 1
@@ -6169,7 +6173,9 @@ def _picker_names(db, course):
         name = p["first"]
         if count[name.lower()] > 1 and p["last"]:
             name += " " + p["last"][0].upper() + "."
-        out.append({"id": p["id"], "name": name})
+        # `xp`: signed in here, so has somewhere to keep XP (the right-answer
+        # button is greyed out for a student who never has).
+        out.append({"id": p["id"], "name": name, "xp": p["xp"]})
     out.sort(key=lambda p: p["name"].lower())
     return out
 
@@ -6201,7 +6207,7 @@ def class_picker(class_id):
             abort(404)
         ctx = user_context(db)
         ctx.update(course=course, names=_picker_names(db, course), here=_here_today(db, course),
-                   beat_seconds=PICKER_BEAT_SECONDS)
+                   beat_seconds=PICKER_BEAT_SECONDS, pick_xp=PICK_XP)
         return render_template("class_picker.html", **ctx)
     finally:
         db.close()
@@ -6258,6 +6264,42 @@ def picker_pick(class_id):
         row.picked = row.beat = _ms()
         db.commit()
         return jsonify(ok=True, seq=row.seq, name=row.name)
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/picker/xp")
+def picker_xp(class_id):
+    """XP for a right answer from the student just picked: the teacher's
+    button under the name, pressed only if they want to (Nov 2026, the
+    teacher's request). By roster id, like the pick. `token` is the page's
+    own for that one landing, and it is the award's source, so a double
+    click — or two clicks racing on the two workers — pays once
+    (xp.award's unique source); the next pick has a new token."""
+    db = SessionLocal()
+    try:
+        user, course, err = _own_class(db, class_id)
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        token = str(data.get("token") or "")
+        if not re.fullmatch(r"[0-9a-f]{8,32}", token):
+            return jsonify(error="Pick a name first."), 400
+        try:
+            wanted = int(data.get("id"))
+        except (TypeError, ValueError):
+            return jsonify(error="Which student?"), 400
+        who = None
+        for e, u in _class_students(db, course):
+            if e.id == wanted:
+                who = (e, u)
+        if who is None:
+            return jsonify(error="That student isn't on this class's roster."), 404
+        if who[1] is None:
+            return jsonify(error="They haven't signed in here yet, so there's nowhere to keep XP."), 409
+        got = xp.award(db, who[1].id, "pick:%d:%s" % (course.id, token), PICK_XP,
+                       PICK_XP_REASON, APP_NAME, by_id=user.id)
+        return jsonify(ok=True, xp=got or 0, again=not got)
     finally:
         db.close()
 

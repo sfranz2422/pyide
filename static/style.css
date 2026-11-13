@@ -3531,6 +3531,10 @@ a:not([class]):hover { color: var(--accent-hover); }
 .picker-stage.is-landed .picker-name { color: var(--green); animation: picker-pop .5s ease; }
 @keyframes picker-pop { 0% { transform: scale(.7); } 60% { transform: scale(1.12); } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .picker-stage.is-landed .picker-name { animation: none; } }
+/* Under the name: XP for a right answer, pressed or not as the teacher likes. */
+.picker-stage { grid-auto-flow: row; align-content: center; gap: 14px; }
+.picker-xp { justify-self: center; font-size: 18px; padding: 10px 20px; }
+.picker-xp.is-given { border-color: var(--green); color: var(--green); opacity: 1; }
 .picker-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
 .picker-go { font-size: 22px; padding: 14px 28px; }
 .picker-opt { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }

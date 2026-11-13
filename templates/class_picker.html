@@ -40,6 +40,8 @@
   {% else %}
     <div class="picker-stage" id="pick-stage" aria-live="polite">
       <div class="picker-name" id="pick-name">?</div>
+      {# Only after a landing, and only if pressed: never automatic. #}
+      <button class="btn picker-xp" id="pick-xp" type="button" hidden>⭐ Right answer +{{ pick_xp }} XP</button>
     </div>
     <div class="picker-controls">
       <button class="btn btn-primary picker-go" id="pick-go" type="button"
@@ -68,7 +70,7 @@
   {% endif %}
 </main>
 
-<script type="application/json" id="pick-data">{{ {"classId": course.id, "names": names, "here": here, "beatSeconds": beat_seconds}|tojson }}</script>
+<script type="application/json" id="pick-data">{{ {"classId": course.id, "names": names, "here": here, "beatSeconds": beat_seconds, "pickXp": pick_xp}|tojson }}</script>
 <script src="{{ url_for('static', filename='picker.js') }}"></script>
 </body>
 </html>

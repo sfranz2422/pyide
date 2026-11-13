@@ -155,6 +155,33 @@ check("  another class's students see nothing", quick(OUT)["pick"] is None)
 key = got["key"]
 t.post(pick, json={"id": E_MARY})
 check("a second pick is a new key", quick(ANA)["pick"]["key"] != key and quick(ANA)["pick"]["name"] == "Mary Ann")
+
+print("\nXP for a right answer (the teacher's button, never automatic)")
+give = "/api/class/%d/picker/xp" % CLASS
+TOK = "0123abcd0123abcd"
+check("picking pays nobody", P.xp.total(P.SessionLocal(), ANA) == 0 and P.xp.total(P.SessionLocal(), MARY) == 0)
+check("a student can't give it", client(ANA).post(give, json={"id": E_ANA, "token": TOK}).status_code == 403)
+check("  nor another teacher", client(OTHER).post(give, json={"id": E_ANA, "token": TOK}).status_code == 404)
+check("  nor to another class's student", t.post(give, json={"id": E_OUT, "token": TOK}).status_code == 404)
+check("  nor without a pick's token", t.post(give, json={"id": E_ANA}).status_code == 400
+      and t.post(give, json={"id": E_ANA, "token": "x'; drop"}).status_code == 400)
+r = t.post(give, json={"id": E_ANA2, "token": TOK})
+check("  a student who never signed in is told so, not paid", r.status_code == 409 and "signed in" in r.get_json()["error"],
+      r.get_json())
+r = t.post(give, json={"id": E_ANA, "token": TOK})
+check("the teacher gives the one picked PICK_XP", r.status_code == 200 and r.get_json()["xp"] == P.PICK_XP
+      and P.xp.total(P.SessionLocal(), ANA) == P.PICK_XP, r.get_json())
+r = t.post(give, json={"id": E_ANA, "token": TOK})
+check("  a double click pays once", r.get_json()["again"] is True and P.xp.total(P.SessionLocal(), ANA) == P.PICK_XP)
+t.post(give, json={"id": E_ANA, "token": "feedfacefeedface"})
+check("  the next pick (a new token) can pay again", P.xp.total(P.SessionLocal(), ANA) == 2 * P.PICK_XP)
+db = P.SessionLocal()
+reasons = [a.reason for a in db.query(accounts.XpAward).filter_by(user_id=ANA)]
+db.close()
+check("  with a reason the student sees", reasons == [P.PICK_XP_REASON] * 2, reasons)
+check("the page knows who can be given XP", data["names"] and {n["id"]: n["xp"] for n in data["names"]}
+      == {E_ANA: True, E_ANA2: False, E_MARY: True, E_NONAME: False}, data["names"])
+
 db = P.SessionLocal()
 row = db.get(P.ClassPicker, CLASS)
 row.picked -= (P.PICK_SHOW_SECONDS + 1) * 1000
@@ -306,7 +333,7 @@ else:
     for ln in lines:
         label, _, detail = ln[5:].partition("\t")
         check(label, ln.startswith("ok"), "" if ln.startswith("ok") else detail[:300])
-    check("the browser run reported every check", len(lines) == 7, (len(lines), out.stderr[-300:]))
+    check("the browser run reported every check", len(lines) == 11, (len(lines), out.stderr[-300:]))
     server.shutdown()
 
 failed = results.count(False)

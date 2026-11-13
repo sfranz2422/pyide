@@ -17,6 +17,11 @@
  * next period keeps the round going; a student no longer on the roster is
  * dropped from both.
  *
+ * Under the name, once it lands, ⭐ Right answer gives the one picked a
+ * little XP — only when the teacher presses it, after they've answered.
+ * Each landing has its own token, which is the award's source on the
+ * server, so a double click pays once and the next pick can pay again.
+ *
  * While the page is open it beats (/picker/beat) so the class's pages ask
  * for picks every couple of seconds rather than every twenty, and says it's
  * closing as it goes.
@@ -90,6 +95,25 @@ window.PyIDEPicker = (function () {
   noRep.checked = state.noRepeats;
   send.checked = state.send;
   var spinning = false;
+  var xpBtn = $("pick-xp"), xpFor = null;   // {id, token} of the name landed on
+
+  function token() {
+    var a = new Uint8Array(8);
+    (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(a)
+      : a.forEach(function (_, i) { a[i] = Math.floor(Math.random() * 256); });
+    return Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+  }
+  function xpReady(id) {
+    xpFor = id == null ? null : { id: id, token: token() };
+    xpBtn.hidden = xpFor == null;
+    xpBtn.classList.remove("is-given");
+    if (xpFor == null) return;
+    var signed = byId[id].xp !== false;
+    xpBtn.disabled = !signed;
+    xpBtn.textContent = "⭐ Right answer +" + (data.pickXp || 10) + " XP";
+    xpBtn.title = signed ? "Give " + byId[id].name + " XP for a right answer"
+      : byId[id].name + " hasn't signed in here yet, so there's nowhere to keep XP";
+  }
 
   function say(text) { status.textContent = text; }
   function counts() {
@@ -138,6 +162,7 @@ window.PyIDEPicker = (function () {
     var shown = route(p.ids, winner, waits.length, Math.random);
     spinning = true;
     go.disabled = true;
+    xpReady(null);
     stage.classList.remove("is-landed");
     stage.classList.add("is-spinning");
     say(p.fresh ? "Everyone's had a turn — starting a new round." : "");
@@ -156,6 +181,7 @@ window.PyIDEPicker = (function () {
     void stage.offsetWidth;            // the pop plays again on a second pick
     stage.classList.add("is-landed");
     if (state.noRepeats && state.picked.indexOf(id) < 0) state.picked.push(id);
+    xpReady(id);
     keep();
     drawGrid();
     var left = counts();
@@ -169,6 +195,24 @@ window.PyIDEPicker = (function () {
       .catch(function () { say(head + "Not shown on their screens: no connection. " + left); });
   }
 
+  xpBtn.addEventListener("click", function () {
+    if (!xpFor || xpBtn.disabled) return;
+    var asked = xpFor, who = byId[asked.id].name;
+    xpBtn.disabled = true;
+    post("xp", asked)
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (x) {
+        if (xpFor !== asked) return;         // picked again meanwhile
+        if (x.ok) {
+          xpBtn.classList.add("is-given");
+          xpBtn.textContent = "✓ +" + (data.pickXp || 10) + " XP to " + who;
+          return;
+        }
+        xpBtn.disabled = false;
+        say("No XP given: " + (x.d.error || "the server said no"));
+      })
+      .catch(function () { if (xpFor === asked) { xpBtn.disabled = false; say("No XP given: no connection."); } });
+  });
   go.addEventListener("click", pick);
   noRep.addEventListener("change", function () { state.noRepeats = noRep.checked; keep(); drawGrid(); say(counts()); });
   send.addEventListener("change", function () { state.send = send.checked; keep(); });

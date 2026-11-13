@@ -86,6 +86,11 @@ try {
   await until(S, "document.readyState === 'complete' && !!window.PyIDEXP", 15000);
   await sleep(1500);
 
+  say(await ev(T, "document.querySelector('#pick-xp').hidden"), "no XP button before a pick");
+  // Leave out who never signed in, so the name it lands on can be given XP.
+  await ev(T, "(() => { const d = JSON.parse(document.getElementById('pick-data').textContent);"
+    + " const no = d.names.filter(n => !n.xp).map(n => n.name);"
+    + " document.querySelectorAll('#pick-grid .picker-chip').forEach(c => { if (no.includes(c.textContent.replace(/^✓ /, ''))) c.click(); }); })()");
   await ev(T, "document.querySelector('#pick-go').click()");
   const spinning = await until(T, "document.querySelector('#pick-stage').classList.contains('is-spinning')", 2000);
   const early = await ev(T, "document.querySelector('#pick-name').textContent");
@@ -94,6 +99,8 @@ try {
   say(!!spinning, "Pick cycles the names on the teacher's screen", { early, later });
   const landed = await until(T, "document.querySelector('#pick-stage').classList.contains('is-landed') && document.querySelector('#pick-name').textContent", 8000);
   say(!!landed && setup.names.includes(landed), "  and lands on one of them", landed);
+  say(await ev(T, "!document.querySelector('#pick-xp').hidden && !document.querySelector('#pick-xp').disabled"),
+      "once landed, ⭐ Right answer is offered");
   await shot(T, "picker-teacher");
 
   const flash = await until(S, "(document.querySelector('.pick-flash-name') || {}).textContent", 6000);
@@ -107,8 +114,18 @@ try {
   await shot(S, "picker-student");
   const status = await ev(T, "document.querySelector('#pick-status').textContent");
   say(/Shown on the class's screens/.test(status), "the teacher's page says the class was shown it", status);
+  await ev(T, "document.querySelector('#pick-xp').click()");
+  const given = await until(T, "document.querySelector('#pick-xp.is-given') && document.querySelector('#pick-xp').textContent", 5000);
+  say(!!given && given.includes(landed), "  pressed, it gives that student XP and says so", given);
   await sleep(5000);
   say(!(await ev(S, "!!document.querySelector('.pick-flash')")), "  and it goes by itself");
+  // Now only who never signed in: the button is there, greyed, saying why.
+  await ev(T, "document.querySelectorAll('#pick-grid .picker-chip').forEach(c => c.click())");
+  await ev(T, "document.querySelector('#pick-go').click()");
+  const unsigned = await until(T, "document.querySelector('#pick-stage').classList.contains('is-landed') && !document.querySelector('#pick-xp').hidden"
+    + " && { disabled: document.querySelector('#pick-xp').disabled, title: document.querySelector('#pick-xp').title }", 8000);
+  say(unsigned && unsigned.disabled && /signed in/.test(unsigned.title),
+      "a student who never signed in can't be given XP, and the button says why", unsigned);
 } catch (e) {
   say(false, "the browser run itself", String(e && e.stack || e).slice(0, 400));
 } finally {
