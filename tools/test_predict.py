@@ -200,6 +200,12 @@ check("node ran snippets.js", "error" not in got, got.get("error"))
 
 # ```html predict with # choice: lines — the student picks what the page
 # shows (Nov 2026, for WebIDE's lessons, where nothing is printed).
+def xp_pick_code(text):
+    sys.path.insert(0, ROOT)
+    import xp
+    return xp.pick_code(text)
+
+
 PICK_HARNESS = DOM + SNIPPETS_JS + r"""
 var S = window.IDESnippets;
 var out = {};
@@ -249,6 +255,20 @@ S.configure({ claim: function (code) { claims.push(code); } });
   t.show.click();
   out.teacherShown = { frame: t.frame.hidden, marked: t.rows[0].className, predicted: t.box.hasAttribute("data-predicted") };
   S.configure({ teacher: false });
+  // # show: page — the page from the start, in a window, never the code.
+  var PAGE = "<h3>Snow Day Alarm</h3>\n<button>Check yesterday</button>\n# show: page\n# choice: easy but no real need\n# choice: warns in time\n# answer: easy but no real need\n# hint: when does it tell you?";
+  var pg = pickBlock(PAGE);
+  var asked = pg.box.querySelector(".snippet-ask");
+  out.page = { code: !!pg.area, win: !!pg.box.querySelector(".pick-window") && pg.frame.parentNode === pg.box.querySelector(".pick-window"), frame: pg.frame.hidden,
+               src: pg.frame.srcdoc, ask: asked && asked.textContent, check: pg.check.textContent, n: pg.rows.length,
+               held: !pg.box.hasAttribute("data-predicted") };
+  pick(pg, 1); pg.check.click(); await tick();
+  out.pageWrong = { held: !pg.box.hasAttribute("data-predicted"), hints: pg.hints.children.length, frame: pg.frame.hidden };
+  var before = claims.length;
+  var pg2 = pickBlock(PAGE.replace("Snow", "Rain"));
+  pick(pg2, 0); pg2.check.click(); await tick();
+  out.pageRight = { predicted: pg2.box.hasAttribute("data-predicted"), run: pg2.run.hidden, frame: pg2.frame.hidden,
+                    claim: claims.slice(before), code: !!pg2.area };
   out.split = ["<p>a</p>\n# choice: x\n  #ANSWER: y\n# hint: h\n#menu { color: red }\n\n", "# choice:\n<b>"].map(function (x) {
     var q = S._splitPick(x); return [q.code, q.choices, q.answer, q.hints]; });
   console.log(JSON.stringify(out));
@@ -286,6 +306,19 @@ if "error" not in pk:
           pk["first"]["claims"] == ["<b>Pie</b>"] and "first try" in pk["first"]["status"], pk["first"])
     check("without choices it's the plain html run box, holding nothing",
           "snippet-html" in pk["plain"]["kind"] and not pk["plain"]["predict"] and pk["plain"]["run"], pk["plain"])
+    pg = pk["page"]
+    check("# show: page: the page is shown from the start, in a window, and the code isn't on the slide",
+          pg["code"] is False and pg["win"] and pg["frame"] is False and pg["src"].startswith("<h3>Snow Day Alarm</h3>")
+          and "show:" not in pg["src"] and pg["n"] == 2, pg)
+    check("  it asks which one this is, Check my answer, and still holds the slide",
+          "Which one is this" in (pg["ask"] or "") and "Check my answer" in pg["check"] and pg["held"], pg)
+    check("  a wrong pick: still held, the first hint, the page still there",
+          pk["pageWrong"] == {"held": True, "hints": 1, "frame": False}, pk["pageWrong"])
+    pr = pk["pageRight"]
+    check("  the right pick passes it, with no Run (there's no code to change), and claims XP for the page without the line",
+          pr["predicted"] and pr["run"] and not pr["frame"] and pr["claim"] == ["<h3>Rain Day Alarm</h3>\n<button>Check yesterday</button>"], pr)
+    check("  and xp.py reads the block as the page does",
+          xp_pick_code("<h3>Rain Day Alarm</h3>\n<button>Check yesterday</button>\n# show: page\n# answer: a") == pr["claim"][0] if pr["claim"] else False)
     check("a teacher's page has Show the answer: it marks the answer and shows the page, passing nothing",
           pk["teacher"]["show"] is False and not pk["teacherShown"]["frame"] and "is-answer" in pk["teacherShown"]["marked"]
           and not pk["teacherShown"]["predicted"], pk)

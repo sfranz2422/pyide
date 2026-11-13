@@ -1734,6 +1734,18 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .quiz-predict-run[hidden] { display: none; }
 .quiz-predict-run .snippet-out { flex-basis: 100%; border: 1px solid var(--line); border-radius: 6px; }
 .snippet-frame { display: block; width: 100%; height: 220px; border: 0; border-top: 1px solid var(--line); background: #fff; }
+/* `# show: page`: the page is the question, shown at the top in a little
+   browser window (snippets.js buildPick) where the code would have been. */
+.snippet-pick.is-page .pick-window { max-width: 560px; margin: 14px auto 6px; border: 1px solid #c9ced6;
+  border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, .14); }
+.pick-window-bar { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: #eceff3;
+  border-bottom: 1px solid #d6dae1; }
+.pick-window-dots { flex: none; width: 42px; height: 10px;
+  background: radial-gradient(circle at 5px 5px, #ff5f57 4.5px, transparent 5px),
+              radial-gradient(circle at 21px 5px, #febc2e 4.5px, transparent 5px),
+              radial-gradient(circle at 37px 5px, #28c840 4.5px, transparent 5px); }
+.pick-window-url { flex: 1; height: 14px; border-radius: 7px; background: #fff; border: 1px solid #d6dae1; }
+.snippet-pick.is-page .snippet-frame { border: 0; height: 160px; }
 .quiz-long-box p { margin: 0 0 .5em; }
 .prose .quiz.quiz-marked { border-left-color: var(--green); }
 

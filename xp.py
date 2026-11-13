@@ -508,7 +508,8 @@ def avatars_for_page():
 
 _PREDICT_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*(py(?:thon)?|html|sql|php)[ \t]+predict[ \t]*$", re.I)
 _PREDICT_HINT = re.compile(r"^\s*#\s*hint\s*:", re.I)
-_PICK_LINE = re.compile(r"^\s*#\s*(choice|answer|hint)\s*:", re.I)
+# `show` is snippets.js's `# show: page`: shown as a page, not code.
+_PICK_LINE = re.compile(r"^\s*#\s*(choice|answer|hint|show)\s*:", re.I)
 
 
 def predict_code(text):

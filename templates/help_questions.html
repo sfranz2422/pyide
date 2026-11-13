@@ -214,7 +214,10 @@ Press ✔ Check my work on the card below.
     A page can't be predicted by typing what it prints, so an <code>html predict</code> block
     with <code># choice:</code> lines asks students to <strong>pick</strong> what it will show
     (<code># answer:</code> names the right one); a wrong pick is marked ✗ with the next hint,
-    and the page appears once they're right. Without the line, the tests still show and check in the notes,
+    and the page appears once they're right. Add <code># show: page</code> when the question is about
+    the screen and not the tags ("is this app useful, or only usable?"): the page is shown from the
+    start in a little browser window, the code never is, and students pick which one it is.
+    Without the line, the tests still show and check in the notes,
     and students move through the slides freely. Your own previews are never held, and neither is a live lesson by this line:
     there every student stays on <em>your</em> slide while you're live, and moves when you do.</p>
   <pre class="help-src">locked: yes

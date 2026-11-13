@@ -569,10 +569,19 @@ window.IDESnippets = (function () {
      lines are taken out of the code shown and rendered, as hints are, and
      xp.py pick_code reads a block alike (or no claim would ever match).
      A ```html predict block with no choices is the plain ```html run box
-     it always was, so older notes don't change. */
-  var PICK_LINE = /^\s*#\s*(choice|answer|hint)\s*:\s*(.*)$/i;
+     it always was, so older notes don't change.
+
+     `# show: page` (Nov 2026, Intro to Information Systems): the PAGE is
+     shown from the start, in place of the code, and the student picks
+     what it shows. Those lessons ask about a screen ("an app that solves
+     no real need"), not about tags, and a class that has never read HTML
+     was being asked to read <h3> and <button> to get to the question. The
+     same rules otherwise: right to go on, hints, XP on the first try. It is
+     taken out like the other lines, so the block's key (and a student's
+     saved state, and xp.py's claim) is the same with it or without. */
+  var PICK_LINE = /^\s*#\s*(choice|answer|hint|show)\s*:\s*(.*)$/i;
   function splitPick(text) {
-    var code = [], choices = [], hints = [], answer = "";
+    var code = [], choices = [], hints = [], answer = "", show = false;
     String(text).split("\n").forEach(function (ln) {
       var m = ln.match(PICK_LINE);
       if (!m) { code.push(ln); return; }
@@ -580,10 +589,11 @@ window.IDESnippets = (function () {
       if (!v) return;
       if (k === "choice") choices.push(v);
       else if (k === "hint") hints.push(v);
+      else if (k === "show") show = show || /^page$/i.test(v);
       else answer = v;
     });
     if (answer && choices.indexOf(answer) < 0) choices.push(answer);
-    return { code: code.join("\n").replace(/\s+$/, ""), choices: choices, answer: answer, hints: hints };
+    return { code: code.join("\n").replace(/\s+$/, ""), choices: choices, answer: answer, hints: hints, page: show };
   }
 
   var pickCount = 0;
@@ -591,16 +601,36 @@ window.IDESnippets = (function () {
     var original = parts.code, hints = parts.hints, choices = parts.choices;
     var st = loadState(original);
     if (!st.no) st.no = [];               // the wrong picks so far, by their words
-    var box = el("div", "snippet snippet-html snippet-predict snippet-pick");
+    var asPage = !!parts.page;
+    var box = el("div", "snippet snippet-html snippet-predict snippet-pick" + (asPage ? " is-page" : ""));
     box.setAttribute("data-predict", "");
 
     var area = el("textarea", "snippet-code");
     area.spellcheck = false;
     area.value = original;
     area.rows = Math.max(2, Math.min(24, original.split("\n").length));
-    box.appendChild(area);
+    // The page in a frame: under the bar after a right pick, or — `# show:
+    // page` — at the top from the start, where the code would have been,
+    // and the code never shown at all.
+    var frame = el("iframe", "snippet-frame");
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.setAttribute("title", "What this page looks like");
+    frame.hidden = true;
+    if (asPage) {
+      // A little browser window round the page, so it reads as a screen
+      // the class is being shown, not as part of the slide.
+      var win = el("div", "pick-window");
+      var bar0 = el("div", "pick-window-bar");
+      bar0.setAttribute("aria-hidden", "true");
+      bar0.appendChild(el("span", "pick-window-dots"));
+      bar0.appendChild(el("span", "pick-window-url"));
+      win.appendChild(bar0);
+      win.appendChild(frame);
+      box.appendChild(win);
+    } else box.appendChild(area);
 
-    box.appendChild(el("div", "snippet-ask small", "🤔 What will this page show? Pick one."));
+    box.appendChild(el("div", "snippet-ask small", asPage ? "🤔 Which one is this? Pick one."
+                                                          : "🤔 What will this page show? Pick one."));
     var list = el("div", "snippet-choices");
     var name = "pick" + (++pickCount), picked = -1, rows = [];
     choices.forEach(function (text, i) {
@@ -620,7 +650,7 @@ window.IDESnippets = (function () {
     box.appendChild(list);
 
     var bar = el("div", "snippet-bar");
-    var check = el("button", "btn btn-primary snippet-run", "✔ Check my prediction");
+    var check = el("button", "btn btn-primary snippet-run", asPage ? "✔ Check my answer" : "✔ Check my prediction");
     check.type = "button";
     var run = el("button", "btn btn-primary snippet-run", "▶ Run");
     run.type = "button";
@@ -636,13 +666,16 @@ window.IDESnippets = (function () {
     var hintList = el("ul", "snippet-hints");
     hintList.hidden = true;
     box.appendChild(hintList);
-    var frame = el("iframe", "snippet-frame");
-    frame.setAttribute("sandbox", "allow-scripts");
-    frame.setAttribute("title", "What this page looks like");
-    frame.hidden = true;
-    box.appendChild(frame);
+    if (!asPage) box.appendChild(frame);
 
-    function showPage(code) { frame.hidden = false; frame.srcdoc = code; }
+    function showPage(code) {
+      frame.hidden = false;
+      // Shown first, the page is the question, so it's sized to fit: a
+      // tall phone wireframe cut off at a fixed height would hide half of
+      // what the choices are about. The frame has no same-origin, so the
+      // page reports its own height (FIT_SCRIPT, below).
+      frame.srcdoc = asPage ? code + FIT_SCRIPT : code;
+    }
     function paint() {
       rows.forEach(function (r) {
         var wrong = st.no.indexOf(r.text) >= 0, right = st.right && r.text === parts.answer;
@@ -655,7 +688,7 @@ window.IDESnippets = (function () {
       area.title = st.right ? "Change it and run it again" : "Predict it first; then you can change it";
       check.hidden = st.right;
       check.disabled = picked < 0 || st.no.indexOf(choices[picked]) >= 0;
-      run.hidden = reset.hidden = !st.right;
+      run.hidden = reset.hidden = !st.right || asPage;   // no code shown to change
       show.hidden = !teacher() || st.right;
       if (st.right) box.setAttribute("data-predicted", "");
       else box.removeAttribute("data-predicted");
@@ -675,7 +708,7 @@ window.IDESnippets = (function () {
         status.className = "snippet-status small is-right";
         status.textContent = first ? "✓ Right on the first try!" : "✓ Right!";
         paint();
-        showPage(original);
+        if (!asPage) showPage(original);
         tellLock(box);
         if (first && page.claim) { try { page.claim(original); } catch (e) { /* XP is a bonus */ } }
         return;
@@ -698,11 +731,33 @@ window.IDESnippets = (function () {
 
     if (st.right) {
       status.className = "snippet-status small is-right";
-      status.textContent = "✓ You predicted this one.";
+      status.textContent = asPage ? "✓ You answered this one." : "✓ You predicted this one.";
       showPage(original);
-    }
+    } else if (asPage) showPage(original);
     paint();
     return box;
+  }
+
+  /* A `# show: page` frame's height. The page is sandboxed without
+     same-origin, so this side can't measure it: a line added to the page
+     says how tall it is, and the frame it came from (matched by its
+     window, so no other frame can size it) takes that height.
+     It measures the body's own box, not documentElement.scrollHeight:
+     these pages have no <!doctype>, and in that (quirks) mode that is the
+     frame's height, so a page taller than the frame reported the frame
+     and kept its scroll bar. Sent again whenever the body changes size. */
+  var FIT_SCRIPT = "<script>(function(){function t(){var b=document.body;if(!b)return;" +
+    "var m=parseFloat(getComputedStyle(b).marginBottom)||0;" +
+    "parent.postMessage({pyidePickHeight:Math.max(b.scrollHeight,b.getBoundingClientRect().bottom)+m},'*')}" +
+    "addEventListener('load',t);if(window.ResizeObserver)new ResizeObserver(t).observe(document.body);t()})()<\/script>";
+  if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined") {
+    window.addEventListener("message", function (e) {
+      var h = e.data && e.data.pyidePickHeight;
+      if (typeof h !== "number" || !document.querySelectorAll) return;
+      Array.prototype.forEach.call(document.querySelectorAll(".snippet-pick.is-page .snippet-frame"), function (f) {
+        if (f.contentWindow === e.source) f.style.height = Math.max(60, Math.min(640, Math.ceil(h) + 4)) + "px";
+      });
+    });
   }
 
   var KINDS = [
