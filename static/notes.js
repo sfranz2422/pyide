@@ -388,8 +388,16 @@ window.PyIDENotes = (function () {
      between each pair into a div — so what's inside is ordinary markdown,
      code fences included. Never inside fenced code, where `:::` could be
      anything. A pop left open ends where its section does. */
-  var POP_OPEN = /^ {0,3}:::\s*pop\s*$/i, POP_CLOSE = /^ {0,3}:::\s*$/;
+  var POP_OPEN = /^ {0,3}:::\s*pop(\s+editor)?\s*$/i, POP_CLOSE = /^ {0,3}:::\s*$/;
   var POP_START = "%%POPSTART%%", POP_END = "%%POPEND%%";
+  /* `:::pop editor` (v10 lessons, Nov 2026, the teacher's request): the same
+     box on the slide, and its words ALSO shown in a bubble in the student's
+     editor, under their last line, while it's the step they're on — the
+     slide says "type title = "Mohawk"" and so does the place they type.
+     The box is marked .to-editor here; slideView works out which one is
+     current (editorTip) and says so with an "ide-editor-tip" event, and the
+     editor page draws the bubble (app.js). */
+  var POP_START_ED = "%%POPSTARTEDITOR%%";
   function popMarks(md) {
     var fence = null;
     return String(md).split("\n").map(function (ln) {
@@ -400,7 +408,8 @@ window.PyIDENotes = (function () {
         return ln;
       }
       if (fence !== null) return ln;
-      if (POP_OPEN.test(ln)) return "\n" + POP_START + "\n";
+      var pm = ln.match(POP_OPEN);
+      if (pm) return "\n" + (pm[1] ? POP_START_ED : POP_START) + "\n";
       if (POP_CLOSE.test(ln)) return "\n" + POP_END + "\n";
       return ln;
     }).join("\n");
@@ -408,11 +417,12 @@ window.PyIDENotes = (function () {
   function wrapPops(root) {
     var marks = Array.prototype.filter.call(root.querySelectorAll("p"), function (p) {
       var t = p.textContent.trim();
-      return t === POP_START || t === POP_END;
+      return t === POP_START || t === POP_START_ED || t === POP_END;
     });
     marks.forEach(function (mark) {
-      if (!mark.parentNode || mark.textContent.trim() !== POP_START) return;
-      var box = el("div", "pop-box");
+      var t = mark.textContent.trim();
+      if (!mark.parentNode || (t !== POP_START && t !== POP_START_ED)) return;
+      var box = el("div", t === POP_START_ED ? "pop-box to-editor" : "pop-box");
       mark.parentNode.insertBefore(box, mark);
       var node = mark.nextSibling;
       while (node && !(node.nodeType === 1 && node.tagName === "P" && node.textContent.trim() === POP_END)) {
@@ -562,7 +572,43 @@ window.PyIDENotes = (function () {
     }
     /* The arrows, from everything that can hold the way on: a slide still
        playing (animate:), and checks not yet passed (locked:). */
+    /* THE EDITOR'S GUIDE BUBBLE (`:::pop editor`, editorTips in the page's
+       options: the student's own editor only). The current step is the first
+       .to-editor box on the slide whose tests card — the first one after it —
+       hasn't passed; once they all have, the last one, passed, so the bubble
+       can say ✓ and go. A box with no card after it stays current until the
+       slide changes. Worked out again whenever the arrows are (every part
+       played, every check, every slide), and said only when it changes. */
+    var tipSaid = "";      // nothing said yet: a page without the bubble never hears a word
+    function tipsWanted() {
+      var t = opts && opts.editorTips;
+      return !!t && (typeof t === "function" ? t() : true);
+    }
+    function editorTip() {
+      var tip = null;
+      if (tipsWanted()) {
+        var boxes = body.querySelectorAll(".pop-box.to-editor");
+        var cards = body.querySelectorAll(".tests-card[data-checks]");
+        for (var i = 0; i < boxes.length; i++) {
+          var card = null;
+          for (var j = 0; j < cards.length; j++) {
+            if (boxes[i].compareDocumentPosition(cards[j]) & 4) { card = cards[j]; break; }   // FOLLOWING
+          }
+          var passed = !!card && card.hasAttribute("data-passed");
+          tip = { html: boxes[i].innerHTML, passed: passed, slide: at, step: i };
+          if (!passed) break;
+        }
+      }
+      var said = tip ? tip.slide + "/" + tip.step + "/" + tip.passed + "/" + tip.html : "";
+      if (said === tipSaid || typeof document.dispatchEvent !== "function") return;
+      tipSaid = said;
+      var ev;
+      try { ev = new CustomEvent("ide-editor-tip", { detail: tip }); }
+      catch (e) { ev = document.createEvent("CustomEvent"); ev.initCustomEvent("ide-editor-tip", false, false, tip); }
+      document.dispatchEvent(ev);
+    }
     function arrows() {
+      editorTip();
       var hold = checksHold();
       body.classList.toggle("tests-locking", hold);
       if (!cut.length) return;

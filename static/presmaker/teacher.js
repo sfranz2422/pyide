@@ -55,7 +55,7 @@
         top().push({ type: "fence", info: words[0] || "", words: words, body: body.join("\n") });
         continue;
       }
-      if (/^ {0,3}:::\s*pop\s*$/i.test(ln)) {
+      if (/^ {0,3}:::\s*pop(\s+editor)?\s*$/i.test(ln)) {   // `:::pop editor` too: the same box (v10)
         flush();
         var pop = { type: "pop", items: [] };
         top().push(pop);

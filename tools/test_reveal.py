@@ -84,6 +84,7 @@ out.speeds = N.SPEEDS;
 out.pauses = [N.pauseLines("One\\n^\\nTwo"), N.pauseLines("One\\n\\n^^\\n\\nTwo"), N.pauseLines("- a\\n\\n^\\n- b"),
               N.pauseLines("```\\n^\\n```\\nx"), N.pauseLines("x ^ y"), N.pauseLines(":::pop\\nLook\\n:::\\n^\\nx"), N.pauseLines(N.popMarks("A\\n\\n^\\n:::pop\\nLook\\n:::"))];
 out.pops = N.popMarks(":::pop\\nLook!\\n:::\\n```\\n:::pop\\n```\\n::: pop\\nx");
+out.edPops = N.popMarks(":::pop editor\\nType this\\n:::\\n:::pop editors\\nx\\n:::");
 console.log(JSON.stringify(out));
 """ % (GLOBAL, json.dumps(CASES), json.dumps(SECTIONS))
 res = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
@@ -140,6 +141,11 @@ if got:
           pops[:4] == ["", "%%POPSTART%%", "", "Look!"] and "%%POPEND%%" in pops[4:7], pops)
     check("  but not inside fenced code", "```\n:::pop\n```" in got["pops"], got["pops"])
     check("  ::: pop with a space opens one too", got["pops"].count("%%POPSTART%%") == 2, got["pops"])
+    # `:::pop editor` (v10): the same box, marked for the editor's guide bubble.
+    ed = got["edPops"].split("\n")
+    check(":::pop editor opens a box marked for the editor (its own marker)",
+          "%%POPSTARTEDITOR%%" in ed and ed.count("%%POPSTART%%") == 0 and "Type this" in ed, ed)
+    check("  and only that word: ':::pop editors' is no pop at all", ":::pop editors" in got["edPops"], got["edPops"])
 check("nothing pops by itself: only what's wrapped",
       'block.classList.contains("pop-box") ? "reveal-pop" : ""' in NOTES_JS
       and not re.search(r"/check my work/i|CHECK_WORDS|language-text", NOTES_JS))

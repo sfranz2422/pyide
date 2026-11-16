@@ -284,8 +284,15 @@
     key: (window.PYIDE.authoring ? "author:" : "") + (window.PYIDE.assignmentSlug || location.pathname),
     // `locked: yes` holds the next slide until its checks pass — for a
     // student working, never the teacher writing them, nor while live.
-    locked: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; }
+    locked: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; },
+    // `:::pop editor` steps also show in a bubble in the editor: for a
+    // student working, as the lock is — never the teacher writing them.
+    editorTips: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; }
   });
+
+  // The guide bubble for `:::pop editor` steps (editor_tip.js), in this
+  // editor; notes.js says which step is current (editorTips above).
+  if (window.PyIDEEditorTip) window.PyIDEEditorTip.attach(editor);
 
   function showNotes(name) {
     notesName.textContent = name;

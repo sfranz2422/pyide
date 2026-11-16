@@ -1722,6 +1722,26 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .prose .pop-box { border-left: 4px solid var(--accent); padding: 8px 12px; margin: 0 0 1em; border-radius: 8px;
                   background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .prose .pop-box > :last-child { margin-bottom: 0; }
+/* The same step in the editor (`:::pop editor`, app.js): a bubble under the
+   student's last line, pointing up at where the line goes. Clicks go through
+   it, so it never stops the typing it asks for. */
+.editor-tip { position: absolute; z-index: 5; pointer-events: none; max-width: min(420px, 80%);
+              margin: 6px 0 0 8px; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
+              color: var(--text); background: var(--bg-panel); border: 1px solid var(--accent);
+              border-left: 4px solid var(--accent); box-shadow: 0 6px 18px var(--shadow);
+              animation: editor-tip-in .25s ease-out; }
+.editor-tip::before { content: ""; position: absolute; top: -7px; left: 18px; width: 12px; height: 12px;
+                      background: var(--bg-panel); border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
+                      transform: rotate(45deg); }
+.editor-tip > :first-child { margin-top: 0; }
+.editor-tip > :last-child { margin-bottom: 0; }
+.editor-tip p { margin: 0 0 4px; }
+.editor-tip code { font-size: 13px; }
+.editor-tip.is-done { border-color: var(--green); }
+.editor-tip.is-done::before { border-color: var(--green); }
+.editor-tip-done { color: var(--green); font-weight: 700; }
+@keyframes editor-tip-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .editor-tip { animation: none; } }
 .reveal-skip[hidden], .reveal-replay[hidden] { display: none; }
 /* A pause (`^`) in played notes: a place to wait, never shown. */
 .reveal-pause { display: none; }

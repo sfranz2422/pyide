@@ -951,7 +951,13 @@
      replace a link — or a half-typed answer — under the student's hand. */
   var notesView = $("live-notes-view");
   var notesBody = $("live-notes");
-  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody) : null;
+  /* `:::pop editor` steps show in a bubble in the student's own editor (the
+     one they type in, never the teacher's mirror above it): the teacher
+     uses live a lot, and the bubble is for the class too (editor_tip.js,
+     Nov 2026). The slide is pinned to the teacher's here, and shown whole —
+     the bubble follows whichever step on it the student hasn't passed. */
+  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true }) : null;
+  if (notesSlides && window.PyIDEEditorTip && mine) window.PyIDEEditorTip.attach(mine);
   var teacherSlide = null;           // the last "3/5" the teacher sent
   var teacherAt = -1;                // and that slide, from 0
 
