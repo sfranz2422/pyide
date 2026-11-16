@@ -518,6 +518,27 @@
     }
     lineInsert(":::pop\nWhat should stand out.\n:::", 1, "What should stand out.".length);
   }
+  /* A step students type in their own editor (PyIDE's v10 lessons, Nov 2026):
+     `:::pop editor` shows in a pop-up in the student's editor, not on their
+     slide, and the tests block after it is that step's check (the pop-up has
+     the Check my work button). With a selection, the selection is wrapped, as
+     Pop box does. Otherwise a whole step — and with a real check in it: an
+     empty tests block has nothing to pass, so it would hold a locked slide
+     for good, with no way on for anyone. */
+  function insertEditorPop() {
+    if (cm.somethingSelected()) {
+      var from = cm.getCursor("from"), to = cm.getCursor("to");
+      var last = to.ch === 0 && to.line > from.line ? to.line - 1 : to.line;
+      cm.operation(function () {
+        cm.replaceRange("\n:::", { line: last, ch: cm.getLine(last).length });
+        cm.replaceRange(":::pop editor\n", { line: from.line, ch: 0 });
+      });
+      cm.focus();
+      return;
+    }
+    lineInsert(":::pop editor\nA sentence on what it means.\n\n✏ **Type this:**\n\n`print(\"hello\")`\n:::\n\n```tests\nprints hello\n```",
+               1, "A sentence on what it means.".length);
+  }
   var SNIPPETS = {
     cards: "```cards\nloop -> code that runs more than once\nvariable -> a name for a value\n```",
     checklist: "- [ ] Read the notes\n- [ ] Try the example\n- [ ] Turn it in",
@@ -832,7 +853,7 @@
         case "slide": return DE.insert("step");
         case "present": return DE.present();
         case "themes": return D.themes({ theme: function () { return window.PMDeckFile.themeOf(DE._state().d); }, use: DE.useTheme });
-        case "question": case "tests": case "part": case "pause": case "pop": case "cards": case "checklist":
+        case "question": case "tests": case "part": case "pause": case "pop": case "editor-pop": case "cards": case "checklist":
         case "run-code": case "predict-code": case "export": case "export-pdf": case "follow":
           return say("That's for markdown lessons. In teacher slides, use + Slide, click the words, or the HTML panel.");
       }
@@ -863,6 +884,7 @@
       case "part": return insertPart();
       case "pause": return insertPause();
       case "pop": return insertPop();
+      case "editor-pop": return insertEditorPop();
       case "cards": case "checklist": case "run-code": case "predict-code": return putBlock(SNIPPETS[name]);
     }
   }

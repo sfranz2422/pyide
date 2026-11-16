@@ -1,2 +1,2 @@
 Copied from ~/presMaker/web by tools/sync_presmaker.py. Edit PresMaker, then sync.
-dc212fc 2026-11-01 Sync from PyIDE: HTML predict picks
+2e34f93 2026-11-16 Teacher view: :::pop editor is a pop box too
