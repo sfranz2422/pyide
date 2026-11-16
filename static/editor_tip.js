@@ -27,6 +27,10 @@ window.PyIDEEditorTip = (function () {
     function place() {
       if (!bubble) return;
       if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+      // One whole line lower than the last line with code: the empty line
+      // they're about to type on stays in sight above it (the teacher, Nov
+      // 2026: it sat on the very line they had to type into).
+      bubble.style.marginTop = (Math.round(editor.defaultTextHeight()) + 12) + "px";
       editor.addWidget({ line: lastLine(), ch: 0 }, bubble, false);
     }
     function remove() {
@@ -48,7 +52,8 @@ window.PyIDEEditorTip = (function () {
       }
       bubble.innerHTML = t.html;
       bubble.classList.toggle("is-done", !!t.passed);
-      if (!t.passed && window.IDENotesChecks) {
+      // A step with no check (a challenge) gets no button: nothing to pass.
+      if (!t.passed && t.card && window.IDENotesChecks) {
         /* Check my work, right where they typed: the step is said only here,
            so the way to check it is here too. It runs the same check as the
            card on the slide (checks_in_notes.js), whose result moves the
@@ -82,10 +87,13 @@ window.PyIDEEditorTip = (function () {
                 });
               }
               nope.appendChild(document.createTextNode("Not yet."));
+              // A few at most: a coding exercise's card has a dozen lines,
+              // and a bubble that long would cover the code it's about.
+              if (why.length > 3) why = why.slice(0, 3).concat(["and " + (why.length - 3) + " more"]);
               why.forEach(function (line) {
                 var p = document.createElement("div");
                 p.className = "editor-tip-why";
-                p.textContent = "✗ " + line;
+                p.textContent = (/^and \d+ more$/.test(line) ? "" : "✗ ") + line;
                 nope.appendChild(p);
               });
               bubble.insertBefore(nope, foot);

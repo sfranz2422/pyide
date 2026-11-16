@@ -1728,13 +1728,18 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 /* Where the bubble is drawn, the step is said only there (notes.js editorTip). */
 .editor-tips-on .pop-box.to-editor, .editor-tips-on .tests-card.for-editor { display: none; }
 .editor-tip { position: absolute; z-index: 5; pointer-events: none; max-width: min(560px, 90%);
-              margin: 16px 0 0 8px; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
+              margin: 32px 0 0 8px;   /* app.js/live.js set it: one line lower than the code (editor_tip.js) */ padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
               color: var(--text); background: var(--bg-panel); border: 1px solid var(--accent);
               border-left: 4px solid var(--accent); box-shadow: 0 6px 18px var(--shadow);
               animation: editor-tip-in .25s ease-out; }
 .editor-tip::before { content: ""; position: absolute; top: -7px; left: 18px; width: 12px; height: 12px;
                       background: var(--bg-panel); border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
                       transform: rotate(45deg); }
+/* Words in the page's own font: inside the editor they'd take its monospace,
+   which is hard to read as sentences. Code keeps the mono. */
+.editor-tip { font-family: var(--sans); }
+.editor-tip code, .editor-tip pre { font-family: var(--mono); }
+.editor-tip pre { margin: 4px 0 6px; padding: 6px 8px; border-radius: 6px; background: var(--bg); overflow-x: auto; }
 .editor-tip > :first-child { margin-top: 0; }
 .editor-tip > :last-child { margin-bottom: 0; }
 .editor-tip p { margin: 0 0 4px; }

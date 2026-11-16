@@ -66,6 +66,7 @@ try {
   out.underLast = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
     const line = c.charCoords({ line: 1, ch: 0 }, 'page'); const r = t.getBoundingClientRect();
     return r.top + window.scrollY >= line.bottom - 1 && r.top + window.scrollY < line.bottom + 40; })()`);
+  out.lineHeight = await ev(`${cm}.defaultTextHeight()`);
   out.gap = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
     const line = c.charCoords({ line: 1, ch: 0 }, 'page'); return t.getBoundingClientRect().top + window.scrollY - line.bottom; })()`);
   // A wrong first step, checked from the bubble: it says Not yet.
@@ -101,6 +102,9 @@ try {
   for (let k = 0; k < 600; k++) { await sleep(150); if (await ev("[...document.querySelectorAll('.tests-card')].every(c => c.hasAttribute('data-passed'))")) break; }
   await sleep(300);
   out.allPassed = await ev("[...document.querySelectorAll('.tests-card')].every(c => c.hasAttribute('data-passed'))");
+  // Check my work runs the program too, so its output is on screen.
+  for (let k = 0; k < 60; k++) { await sleep(150); if (await ev("/hawk/.test(document.getElementById('output').textContent)")) break; }
+  out.outputAfterCheck = await ev("document.getElementById('output').textContent");
   out.done = await ev(tipText);
   await sleep(2000);
   out.goneAfter = await ev(`!${TIP}`);
@@ -125,7 +129,7 @@ try {
   out.liveInMine = await lv("!!(document.querySelector('.CodeMirror .editor-tip') && document.getElementById('mine').nextElementSibling.contains(document.querySelector('.CodeMirror .editor-tip')))");
   out.liveInMirror = await lv("!!document.getElementById('mirror').nextElementSibling.querySelector('.editor-tip')");
   out.liveStepOnSlide = await lv(VIS('.pop-box.to-editor'));
-  await lv("document.getElementById('mine').nextElementSibling.CodeMirror.setValue('title = \"Mohawk\"\\n')");
+  await lv("document.getElementById('mine').nextElementSibling.CodeMirror.setValue('title = \"Mohawk\"\\nprint(title)\\n')");
   await lv("document.querySelector('.CodeMirror .editor-tip .editor-tip-check').click()");
   for (let k = 0; k < 600; k++) {
     await sleep(150);
@@ -134,6 +138,18 @@ try {
   await sleep(500);
   out.livePassed = await lv("document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')");
   out.liveSecond = await lv(tipText);
+  for (let k = 0; k < 60; k++) { await sleep(150); if (await lv("/Mohawk/.test(document.getElementById('output').textContent)")) break; }
+  out.liveOutput = await lv("document.getElementById('output').textContent");
+
+  // ---- an exercise: directions grouped under one card, then a challenge
+  const ex = await open(cfg.student, cfg.page2);
+  out.groupTip = await ex(tipText);
+  await ex(`${cm}.setValue('fruit = "pear"\\ncount = 3\\n')`);
+  await ex(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await ex(`/Challenge/.test(${tipText})`)) break; }
+  await sleep(300);
+  out.challengeTip = await ex(tipText);
+  out.challengeButton = await ex(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-check'))`);
 } catch (e) {
   out.error = String(e);
 } finally {

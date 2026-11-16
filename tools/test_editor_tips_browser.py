@@ -112,6 +112,29 @@ prints hawk
 ## The end
 """
 
+# A coding exercise: two directions checked by ONE card, said together; then
+# a challenge, never checked, said with no Check my work.
+NOTES2 = """locked: yes
+# Exercise
+
+:::pop editor
+✏ **Your turn:** make `fruit` hold `"pear"`.
+:::
+
+:::pop editor
+✏ **Then:** make `count` hold `3`.
+:::
+
+```tests
+fruit == "pear"
+count == 3
+```
+
+:::pop editor
+★ **Challenge** (not checked): print `fruit` three times.
+:::
+"""
+
 print("The editor's guide bubble, in a real browser")
 chrome = find_chrome()
 if chrome is None or shutil.which("node") is None:
@@ -125,6 +148,8 @@ else:
     made = teacher.post("/api/assignment", json={"title": "Slices", "code": "# Slices\n",
                                                  "files": {"notes.md": NOTES}})
     slug = made.get_json()["slug"]
+    slug2 = teacher.post("/api/assignment", json={"title": "Exercise", "code": "# Exercise\n",
+                                                  "files": {"notes.md": NOTES2}}).get_json()["slug"]
     # And live (the teacher's request: "I've been using live mode a lot"):
     # the teacher goes live on it, on the slide with the steps.
     code = teacher.post("/api/live/start", json={"assignment": slug, "body": "# Slices\n",
@@ -138,7 +163,7 @@ else:
     sign = P.app.session_interface.get_signing_serializer(P.app)
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code,
+        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2,
                    "student": sign.dumps({"uid": sid}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "editor_tips_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -154,8 +179,8 @@ else:
           r.get("stepOnSlide") is False and r.get("explainOnSlide") is True, (r.get("stepOnSlide"), r.get("explainOnSlide")))
     check("  the code on a line of its own, kept on one line",
           r.get("codeAlone") is True and r.get("codeNowrap") == "nowrap", (r.get("codeAlone"), r.get("codeNowrap")))
-    check("  with room above it: it doesn't touch the line it sits under",
-          (r.get("gap") or 0) >= 10, r.get("gap"))
+    check("  a whole line lower than the code, so the line to type on stays in sight",
+          (r.get("gap") or 0) >= (r.get("lineHeight") or 99), (r.get("gap"), r.get("lineHeight")))
     check("  and its own Check my work button, which takes clicks",
           r.get("bubbleButton") is True and r.get("buttonClicks") == "auto", (r.get("bubbleButton"), r.get("buttonClicks")))
     check("  clicks go through it to the code", r.get("clicksThrough") == "none", r.get("clicksThrough"))
@@ -173,6 +198,8 @@ else:
     check("the last step passed: the bubble says so", r.get("allPassed") is True and "✓" in (r.get("done") or ""),
           r.get("done"))
     check("  and then goes", r.get("goneAfter") is True, r.get("goneAfter"))
+    check("Check my work runs their program too: its output is on screen",
+          "hawk" in (r.get("outputAfterCheck") or ""), (r.get("outputAfterCheck") or "")[-80:])
     check("the teacher writing the notes gets no bubble",
           r.get("teacherHasEditor") is True and r.get("teacherCard") is True and r.get("teacherTip") is False,
           (r.get("teacherHasEditor"), r.get("teacherCard"), r.get("teacherTip")))
@@ -185,6 +212,13 @@ else:
     check("  and the step is hidden on the live slide too", r.get("liveStepOnSlide") is False, r.get("liveStepOnSlide"))
     check("  and it moves on when that step's check passes",
           r.get("livePassed") is True and "print(title[2:6])" in (r.get("liveSecond") or ""), (r.get("livePassed"), r.get("liveSecond")))
+    check("live: Check my work runs their program too", "Mohawk" in (r.get("liveOutput") or ""),
+          (r.get("liveOutput") or "")[-80:])
+    check("an exercise's directions checked by one card are said together",
+          "pear" in (r.get("groupTip") or "") and "count" in (r.get("groupTip") or ""), r.get("groupTip"))
+    check("  and once it passes, the challenge (no check) is said with no Check my work",
+          "Challenge" in (r.get("challengeTip") or "") and r.get("challengeButton") is False,
+          (r.get("challengeTip"), r.get("challengeButton")))
     server.shutdown()
 
 print()

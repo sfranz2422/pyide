@@ -650,7 +650,16 @@
   async function runChecks() {
     var got = await runner.checks();
     if (got) keepSelfCheck(got);
+    /* Then their program runs, as Run would, so the output is on screen
+       (the teacher, Nov 2026: "kids are just passing the tests but not
+       actually seeing the code run" — the checks run it out of sight). Not
+       awaited: a program that asks for input, or a game, runs on while the
+       card shows its result. */
+    if (got) runAfterCheck();
     return got;
+  }
+  function runAfterCheck() {
+    setTimeout(function () { Promise.resolve(runner.run()).catch(function () {}); }, 0);
   }
 
   function keepSelfCheck(got) {

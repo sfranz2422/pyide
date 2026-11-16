@@ -603,24 +603,31 @@ window.PyIDENotes = (function () {
       if (on) {
         var boxes = body.querySelectorAll(".pop-box.to-editor");
         var cards = body.querySelectorAll(".tests-card[data-checks]");
-        // Every step's card, not only the current one's: a later step's card
-        // must not show on the slide while an earlier step is being typed.
+        /* The steps: each box with the tests card after it. Boxes checked by
+           the same card are ONE step, said together (a coding exercise has a
+           few directions and one card): the first box would otherwise stay
+           current until the card passed, and the rest would never be seen.
+           A box with no card after it (a challenge, never checked) is a step
+           of its own, current until the slide changes. Every step's card is
+           marked .for-editor — said in the bubble, so hidden on the slide
+           (style.css), but kept in the page: the lock and the bubble's Check
+           my work both read it. A later step's card is hidden too, or it
+           would show while an earlier step is still being typed. */
+        var steps = [];
         Array.prototype.forEach.call(boxes, function (box) {
-          for (var j = 0; j < cards.length; j++) {
-            if (box.compareDocumentPosition(cards[j]) & 4) { cards[j].classList.add("for-editor"); break; }
-          }
-        });
-        for (var i = 0; i < boxes.length; i++) {
           var card = null;
           for (var j = 0; j < cards.length; j++) {
-            if (boxes[i].compareDocumentPosition(cards[j]) & 4) { card = cards[j]; break; }   // FOLLOWING
+            if (box.compareDocumentPosition(cards[j]) & 4) { card = cards[j]; break; }   // FOLLOWING
           }
-          var passed = !!card && card.hasAttribute("data-passed");
-          // Its card is said in the bubble too, so it's hidden on the slide
-          // with the step (style.css, .editor-tips-on .for-editor). It stays
-          // in the page: the lock and the bubble's Check my work both read it.
           if (card && card.classList) card.classList.add("for-editor");
-          tip = { html: boxes[i].innerHTML, passed: passed, slide: at, step: i, card: card };
+          var last = steps[steps.length - 1];
+          if (last && card && last.card === card) last.boxes.push(box);
+          else steps.push({ boxes: [box], card: card });
+        });
+        for (var i = 0; i < steps.length; i++) {
+          var passed = !!steps[i].card && steps[i].card.hasAttribute("data-passed");
+          tip = { html: steps[i].boxes.map(function (b) { return b.innerHTML; }).join(""),
+                  passed: passed, slide: at, step: i, card: steps[i].card };
           if (!passed) break;
         }
       }

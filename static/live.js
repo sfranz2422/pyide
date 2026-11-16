@@ -1519,8 +1519,9 @@
     var files = dataFiles();
     files[MAIN] = mainSource();
     setBusy(true, "console");
+    var got = null;
     try {
-      var got = await window.PyIDETests.run(pyodide, files, tests);
+      got = await window.PyIDETests.run(pyodide, files, tests);
       if (L.signedIn && L.assignment) {
         fetch("/api/tests/self", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -1538,6 +1539,11 @@
     } finally {
       pullFilesFromPython();
       setBusy(false);
+      /* Then their program runs, as Run would, so they see what it does
+         (the teacher, Nov 2026: the checks ran it out of sight and kids
+         passed without ever seeing their code run). After setBusy(false),
+         or run() would think something was still running; not awaited. */
+      if (got) setTimeout(function () { Promise.resolve(run()).catch(function () {}); }, 0);
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
