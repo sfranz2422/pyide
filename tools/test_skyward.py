@@ -196,7 +196,7 @@ def get(body, who=teacher):
 # ------------------------------------------------------------- the file
 print("\nThe file Skyward imports")
 
-status, out = get({"category": "p", "due": "2026-10-08"})
+status, out = get({"category": "Prj", "due": "2026-10-08"})
 lines = rows_of(out.get("csv", ""))
 check("everyone scored, in Skyward's seven columns, no header row",
       status == 200 and lines and all(len(r) == 7 for r in lines)
@@ -205,7 +205,7 @@ by_last = {r[0]: r for r in lines}
 check("  last name first, then first name",
       by_last.get("Baker", [None, None])[1] == "Gabriel", repr(by_last.get("Baker")))
 check("  then the title, the due date as MMDDYYYY, category and max score",
-      by_last.get("Baker", [None] * 7)[2:6] == ["Lists, practice", "10082026", "P", "10"],
+      by_last.get("Baker", [None] * 7)[2:6] == ["Lists, practice", "10082026", "Prj", "10"],
       repr(by_last.get("Baker")))
 check("  and the score including the questions' points, as Sync sends it",
       by_last.get("Baker", [None] * 7)[6] == "9.5", repr(by_last.get("Baker")))
@@ -268,15 +268,19 @@ check("a class it wasn't posted to is refused", status == 400, str(status))
 # ------------------------------------------------------------- refusals
 print("\nWhat is refused")
 
-status, out = get({"category": "prj", "due": "2026-10-08"})
-check("a longer code goes in too, its first letter a capital",
-      status == 200 and rows_of(out.get("csv", ""))[0][4] == "Prj", repr(out.get("csv", "")[:80]))
+for code in ("HW", "T", "Q", "Prj", "N", "FE", "L"):
+    status, out = get({"category": code, "due": "2026-10-08"})
+    check("the teacher's category %s goes into the file as it is" % code,
+          status == 200 and rows_of(out.get("csv", ""))[0][4] == code, repr(out.get("csv", "")[:80]))
 status, out = get({"category": "", "due": "2026-10-08"})
 check("no category", status == 400 and "category" in out.get("error", ""), str(status))
 status, out = get({"category": "Project work", "due": "2026-10-08"})
 check("  a description instead of a code", status == 400, str(status))
-status, out = get({"category": "P-1", "due": "2026-10-08"})
-check("  a code with something other than letters and digits", status == 400, str(status))
+# Only the teacher's own list (SKYWARD_CATEGORIES): a code Skyward doesn't
+# have fails every row of the import, with nothing on this side to say so.
+for code in ("P", "prj", "hw", "X"):
+    status, out = get({"category": code, "due": "2026-10-08"})
+    check("  a code not in the list: %s" % code, status == 400, str(status))
 status, out = get({"category": "N", "due": "10/08/2026"})
 check("a due date that isn't one", status == 400, str(status))
 status, out = get({"category": "N", "due": "2026-10-08"}, who=client(KID))
@@ -301,9 +305,12 @@ db.close()
 page = teacher.get("/teacher/hw1").get_data(as_text=True)
 check("a graded assignment's page has the download",
       'id="sky-get"' in page and 'id="sky-cat"' in page and 'id="sky-due"' in page)
-check("  its category box takes typing, with no list of codes to pick from",
-      'id="sky-cats"' not in page and "<datalist" not in page.split('id="sky-cat"')[1][:600]
-      and " list=" not in page.split('<input id="sky-cat"')[1].split(">")[0])
+sel = page.split('<select id="sky-cat"')[1].split("</select>")[0] if '<select id="sky-cat"' in page else ""
+check("  its category is a drop-down of the teacher's categories, named, coded as the file wants",
+      all('value="%s">%s' % (c, n) in sel for c, n in [("HW", "Homework"), ("T", "Test"), ("Q", "Quiz"),
+          ("Prj", "Project"), ("N", "Notes"), ("FE", "Final Exam"), ("L", "Lab")]), sel[:300])
+check("  starting at Choose…, so a category is picked, not carried over",
+      sel.split(">", 1)[-1].lstrip().startswith('<option value="">'), sel[:80])
 check("  and remembers it for THIS assignment only, never another one's",
       '"skyward-category:" + base' in page and 'getItem("skyward-category")' not in page)
 check("  with a class picker listing where it was posted",

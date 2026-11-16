@@ -3861,7 +3861,7 @@ def teacher_assignment(slug):
             key=lambda n: n["name"])
 
         ctx = user_context(db)
-        ctx.update(posts=_posts(db, item))
+        ctx.update(posts=_posts(db, item), skyward_categories=SKYWARD_CATEGORIES)
         # Which class it is in, for the way back, Move and Copy, and so
         # Post to Classroom can start on that class's Classroom course.
         _, in_class = _class_of(db, item)
@@ -4897,19 +4897,15 @@ def classroom_sync(slug):
 # teacher to type, named in Skyward's preview before anything is saved.
 # --------------------------------------------------------------------------
 
-#: What a category code may look like. Skyward's are short codes the
-#: district sets per class (N, Prj, Q), usually but not always one capital
-#: letter; anything longer is a typo or a description pasted in by mistake,
-#: and would make every row fail. The first letter is taken as a capital,
-#: here and as it's typed (Nov 2026, the teacher: "I want to just be able to
-#: type in a capital letter").
-#:
-#: The box used to suggest N / Prj / Q from a list and refill whatever code
-#: was last used on ANY assignment, so a file could go out with a code that
-#: class's gradebook didn't have, and Skyward refused every row at import
-#: with nothing here to say why. It is now typed, and remembered per
-#: assignment (teacher_assignment.html).
-SKYWARD_CATEGORY = re.compile(r"^[A-Za-z0-9]{1,10}$")
+#: Skyward's grade categories, as the teacher's gradebook has them: the code
+#: that goes in the file, and what the drop-down on the assignment page says
+#: (Nov 2026, the teacher's list). A code Skyward doesn't have fails every
+#: row of the import with nothing here to say why, so the file only ever
+#: carries one of these and the page only offers these. It used to be a box
+#: to type in — at first with suggestions that refilled the last code used on
+#: ANY assignment, which is how a wrong code got sent without being chosen.
+SKYWARD_CATEGORIES = [("HW", "Homework"), ("T", "Test"), ("Q", "Quiz"), ("Prj", "Project"),
+                      ("N", "Notes"), ("FE", "Final Exam"), ("L", "Lab")]
 
 
 def _split_name(full):
@@ -4947,10 +4943,8 @@ def skyward_file(slug):
                                  "a max score."), 400
         data = request.get_json(silent=True) or {}
         category = str(data.get("category") or "").strip()
-        category = category[:1].upper() + category[1:]
-        if not SKYWARD_CATEGORY.match(category):
-            return jsonify(error="Type the category code Skyward uses for this "
-                                 "class, like N, Prj or Q."), 400
+        if category not in dict(SKYWARD_CATEGORIES):
+            return jsonify(error="Choose the grade category."), 400
         try:
             due = datetime.strptime(str(data.get("due") or ""), "%Y-%m-%d")
         except ValueError:

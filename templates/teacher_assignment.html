@@ -321,12 +321,13 @@
       <div class="gc skyward">
         <div class="grade-line">
           <label for="sky-cat">Skyward category</label>
-          {#  Typed (skyward_file, SKYWARD_CATEGORY). No list of suggestions:
-              the codes are different in every class, and a suggested one the
-              class didn't have failed the import. #}
-          <input id="sky-cat" class="field" size="5" maxlength="10"
-                 placeholder="N" autocomplete="off" spellcheck="false"
-                 title="The category code Skyward uses for this class, like N, Prj or Q">
+          {#  The teacher's own categories (SKYWARD_CATEGORIES): the code goes
+              in the file, the name is what's shown. "Choose…" first, so a
+              category is picked for each assignment, never carried over. #}
+          <select id="sky-cat" class="field">
+            <option value="">Choose…</option>
+            {% for code, name in skyward_categories %}<option value="{{ code }}">{{ name }} ({{ code }})</option>{% endfor %}
+          </select>
           <label for="sky-due">Due</label>
           <input id="sky-due" class="field" type="date">
           {% if posts %}
@@ -697,21 +698,17 @@
     var due = document.getElementById("sky-due");
     var which = document.getElementById("sky-post");
     var state = document.getElementById("sky-state");
-    // This assignment's own code if a file has been made for it here; never
-    // another assignment's. Empty otherwise, so the code is typed before the
-    // first file rather than carried over from a class whose gradebook has
-    // different categories.
+    // This assignment's own category if a file has been made for it here;
+    // never another assignment's, so each starts at "Choose…" and is picked
+    // before its first file. A remembered code that isn't in the list (one
+    // typed into the old box) leaves it at "Choose…".
     var catKey = "skyward-category:" + base;
-    try { cat.value = localStorage.getItem(catKey) || ""; } catch (e) {}
-    // Clicking selects what's there, so typing replaces it. Letters and
-    // digits only, the first one a capital whatever the Caps Lock ("n" is
-    // the teacher's N); the server does the same.
-    cat.addEventListener("focus", function () { cat.select(); });
-    cat.addEventListener("input", function () {
-      var v = cat.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 10);
-      v = v.charAt(0).toUpperCase() + v.slice(1);
-      if (cat.value !== v) cat.value = v;
-    });
+    try {
+      var kept = localStorage.getItem(catKey) || "";
+      for (var i = 0; i < cat.options.length; i++) {
+        if (kept && cat.options[i].value === kept) cat.value = kept;
+      }
+    } catch (e) {}
     var d = new Date();
     due.value = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)
                 + "-" + ("0" + d.getDate()).slice(-2);
