@@ -4898,8 +4898,17 @@ def classroom_sync(slug):
 # --------------------------------------------------------------------------
 
 #: What a category code may look like. Skyward's are short codes the
-#: district sets per class (N, Prj, Q); anything longer is a typo or a
-#: description pasted in by mistake, and would make every row fail.
+#: district sets per class (N, Prj, Q), usually but not always one capital
+#: letter; anything longer is a typo or a description pasted in by mistake,
+#: and would make every row fail. The first letter is taken as a capital,
+#: here and as it's typed (Nov 2026, the teacher: "I want to just be able to
+#: type in a capital letter").
+#:
+#: The box used to suggest N / Prj / Q from a list and refill whatever code
+#: was last used on ANY assignment, so a file could go out with a code that
+#: class's gradebook didn't have, and Skyward refused every row at import
+#: with nothing here to say why. It is now typed, and remembered per
+#: assignment (teacher_assignment.html).
 SKYWARD_CATEGORY = re.compile(r"^[A-Za-z0-9]{1,10}$")
 
 
@@ -4937,7 +4946,8 @@ def skyward_file(slug):
             return jsonify(error="Set what it's out of first — Skyward needs "
                                  "a max score."), 400
         data = request.get_json(silent=True) or {}
-        category = (data.get("category") or "").strip()
+        category = str(data.get("category") or "").strip()
+        category = category[:1].upper() + category[1:]
         if not SKYWARD_CATEGORY.match(category):
             return jsonify(error="Type the category code Skyward uses for this "
                                  "class, like N, Prj or Q."), 400

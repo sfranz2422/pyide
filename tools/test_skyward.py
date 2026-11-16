@@ -196,7 +196,7 @@ def get(body, who=teacher):
 # ------------------------------------------------------------- the file
 print("\nThe file Skyward imports")
 
-status, out = get({"category": "Prj", "due": "2026-10-08"})
+status, out = get({"category": "p", "due": "2026-10-08"})
 lines = rows_of(out.get("csv", ""))
 check("everyone scored, in Skyward's seven columns, no header row",
       status == 200 and lines and all(len(r) == 7 for r in lines)
@@ -205,7 +205,7 @@ by_last = {r[0]: r for r in lines}
 check("  last name first, then first name",
       by_last.get("Baker", [None, None])[1] == "Gabriel", repr(by_last.get("Baker")))
 check("  then the title, the due date as MMDDYYYY, category and max score",
-      by_last.get("Baker", [None] * 7)[2:6] == ["Lists, practice", "10082026", "Prj", "10"],
+      by_last.get("Baker", [None] * 7)[2:6] == ["Lists, practice", "10082026", "P", "10"],
       repr(by_last.get("Baker")))
 check("  and the score including the questions' points, as Sync sends it",
       by_last.get("Baker", [None] * 7)[6] == "9.5", repr(by_last.get("Baker")))
@@ -268,10 +268,15 @@ check("a class it wasn't posted to is refused", status == 400, str(status))
 # ------------------------------------------------------------- refusals
 print("\nWhat is refused")
 
+status, out = get({"category": "prj", "due": "2026-10-08"})
+check("a longer code goes in too, its first letter a capital",
+      status == 200 and rows_of(out.get("csv", ""))[0][4] == "Prj", repr(out.get("csv", "")[:80]))
 status, out = get({"category": "", "due": "2026-10-08"})
 check("no category", status == 400 and "category" in out.get("error", ""), str(status))
 status, out = get({"category": "Project work", "due": "2026-10-08"})
 check("  a description instead of a code", status == 400, str(status))
+status, out = get({"category": "P-1", "due": "2026-10-08"})
+check("  a code with something other than letters and digits", status == 400, str(status))
 status, out = get({"category": "N", "due": "10/08/2026"})
 check("a due date that isn't one", status == 400, str(status))
 status, out = get({"category": "N", "due": "2026-10-08"}, who=client(KID))
@@ -296,6 +301,11 @@ db.close()
 page = teacher.get("/teacher/hw1").get_data(as_text=True)
 check("a graded assignment's page has the download",
       'id="sky-get"' in page and 'id="sky-cat"' in page and 'id="sky-due"' in page)
+check("  its category box takes typing, with no list of codes to pick from",
+      'id="sky-cats"' not in page and "<datalist" not in page.split('id="sky-cat"')[1][:600]
+      and " list=" not in page.split('<input id="sky-cat"')[1].split(">")[0])
+check("  and remembers it for THIS assignment only, never another one's",
+      '"skyward-category:" + base' in page and 'getItem("skyward-category")' not in page)
 check("  with a class picker listing where it was posted",
       'id="sky-post"' in page and "Programming 1 — Period 7" in page)
 check("  and says which Skyward template to use",

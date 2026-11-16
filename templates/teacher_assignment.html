@@ -321,13 +321,12 @@
       <div class="gc skyward">
         <div class="grade-line">
           <label for="sky-cat">Skyward category</label>
-          <input id="sky-cat" class="field" list="sky-cats" size="5" maxlength="10"
-                 placeholder="N" autocomplete="off">
-          <datalist id="sky-cats">
-            <option value="N">Notes</option>
-            <option value="Prj">Project</option>
-            <option value="Q">Quiz</option>
-          </datalist>
+          {#  Typed (skyward_file, SKYWARD_CATEGORY). No list of suggestions:
+              the codes are different in every class, and a suggested one the
+              class didn't have failed the import. #}
+          <input id="sky-cat" class="field" size="5" maxlength="10"
+                 placeholder="N" autocomplete="off" spellcheck="false"
+                 title="The category code Skyward uses for this class, like N, Prj or Q">
           <label for="sky-due">Due</label>
           <input id="sky-due" class="field" type="date">
           {% if posts %}
@@ -686,8 +685,11 @@
 
   /* Skyward. The file comes back as JSON so a mistake, or the students
      whose names had to be guessed, can be said here instead of being
-     buried in a download. The category is remembered per browser: it is
-     usually the same few codes, and only this teacher uses this page. */
+     buried in a download. The category is remembered per assignment in
+     this browser, and only per assignment (Nov 2026): it used to be one
+     code for every page, so a file for another class went out with the
+     last class's code without anyone choosing it, and Skyward refused the
+     whole import. */
   (function () {
     var get = document.getElementById("sky-get");
     if (!get) return;
@@ -695,7 +697,21 @@
     var due = document.getElementById("sky-due");
     var which = document.getElementById("sky-post");
     var state = document.getElementById("sky-state");
-    try { cat.value = localStorage.getItem("skyward-category") || ""; } catch (e) {}
+    // This assignment's own code if a file has been made for it here; never
+    // another assignment's. Empty otherwise, so the code is typed before the
+    // first file rather than carried over from a class whose gradebook has
+    // different categories.
+    var catKey = "skyward-category:" + base;
+    try { cat.value = localStorage.getItem(catKey) || ""; } catch (e) {}
+    // Clicking selects what's there, so typing replaces it. Letters and
+    // digits only, the first one a capital whatever the Caps Lock ("n" is
+    // the teacher's N); the server does the same.
+    cat.addEventListener("focus", function () { cat.select(); });
+    cat.addEventListener("input", function () {
+      var v = cat.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 10);
+      v = v.charAt(0).toUpperCase() + v.slice(1);
+      if (cat.value !== v) cat.value = v;
+    });
     var d = new Date();
     due.value = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)
                 + "-" + ("0" + d.getDate()).slice(-2);
@@ -713,7 +729,7 @@
         .then(function (out) {
           get.disabled = false;
           if (!out.ok) { say(out.d.error || "Couldn't make the file."); return; }
-          try { localStorage.setItem("skyward-category", cat.value.trim()); } catch (e) {}
+          try { localStorage.setItem(catKey, cat.value.trim()); } catch (e) {}
           if (!out.d.count) { say("Nobody here has a score yet, so there's nothing to import."); return; }
           var a = document.createElement("a");
           a.href = URL.createObjectURL(new Blob([out.d.csv], { type: "text/csv" }));
