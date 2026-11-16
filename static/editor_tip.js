@@ -24,6 +24,42 @@ window.PyIDEEditorTip = (function () {
       while (n > 0 && !editor.getLine(n).trim()) n -= 1;
       return n;
     }
+    /* The code to type, drawn as a little read-only editor (the teacher,
+       Nov 2026: highlight it more, "enclosed in a little editor block"):
+       the same CodeMirror, mode and theme as the student's own, so it looks
+       exactly like what they're to type. Code on a line of its own (`code`
+       alone in a paragraph) and ```python blocks; ```text (expected output)
+       stays a plain block. */
+    function codeBlocks(root) {
+      if (typeof CodeMirror !== "function") return;
+      var found = [];
+      Array.prototype.forEach.call(root.querySelectorAll("p"), function (p) {
+        var c = p.children.length === 1 && p.firstElementChild.tagName === "CODE" ? p.firstElementChild : null;
+        if (c && p.textContent.trim() === c.textContent.trim()) found.push([p, c.textContent]);
+      });
+      Array.prototype.forEach.call(root.querySelectorAll("pre"), function (pre) {
+        var c = pre.querySelector("code");
+        var cls = (c && c.className) || "";
+        if (/language-(text|output|plain)/.test(cls)) return;
+        found.push([pre, (c || pre).textContent.replace(/\n$/, "")]);
+      });
+      found.forEach(function (f) {
+        var holder = document.createElement("div");
+        holder.className = "editor-tip-code";
+        f[0].parentNode.replaceChild(holder, f[0]);
+        CodeMirror(holder, {
+          value: f[1], mode: editor.getOption("mode"), theme: editor.getOption("theme"),
+          readOnly: "nocursor", lineNumbers: false, lineWrapping: false,
+          viewportMargin: Infinity, scrollbarStyle: "null"
+        });
+      });
+    }
+    function refreshCode() {
+      if (!bubble) return;
+      Array.prototype.forEach.call(bubble.querySelectorAll(".editor-tip-code .CodeMirror"), function (el) {
+        if (el.CodeMirror) el.CodeMirror.refresh();
+      });
+    }
     function place() {
       if (!bubble) return;
       if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
@@ -32,6 +68,7 @@ window.PyIDEEditorTip = (function () {
       // 2026: it sat on the very line they had to type into).
       bubble.style.marginTop = (Math.round(editor.defaultTextHeight()) + 12) + "px";
       editor.addWidget({ line: lastLine(), ch: 0 }, bubble, false);
+      refreshCode();                 // drawn while detached, it measured nothing
     }
     function remove() {
       if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble);
@@ -51,6 +88,7 @@ window.PyIDEEditorTip = (function () {
         bubble.setAttribute("role", "status");
       }
       bubble.innerHTML = t.html;
+      codeBlocks(bubble);
       bubble.classList.toggle("is-done", !!t.passed);
       // A step with no check (a challenge) gets no button: nothing to pass.
       if (!t.passed && t.card && window.IDENotesChecks) {

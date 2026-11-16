@@ -177,8 +177,10 @@ else:
     check("  a plain :::pop stays on the slide only", r.get("plainPopInEditor") is False, r.get("first"))
     check("  and the step is said only there: hidden on the student's slide, the explanation kept",
           r.get("stepOnSlide") is False and r.get("explainOnSlide") is True, (r.get("stepOnSlide"), r.get("explainOnSlide")))
-    check("  the code on a line of its own, kept on one line",
-          r.get("codeAlone") is True and r.get("codeNowrap") == "nowrap", (r.get("codeAlone"), r.get("codeNowrap")))
+    cb = r.get("codeBlock") or {}
+    check("  the code to type is a little editor block of its own, on one line",
+          cb.get("lines") == 1 and cb.get("text") == 'title = "Mohawk"' and 15 < (cb.get("height") or 0) < 45, cb)
+    check("  coloured in the student's own editor theme", cb.get("coloured") is True and cb.get("same") is True, cb)
     check("  a whole line lower than the code, so the line to type on stays in sight",
           (r.get("gap") or 0) >= (r.get("lineHeight") or 99), (r.get("gap"), r.get("lineHeight")))
     check("  and its own Check my work button, which takes clicks",

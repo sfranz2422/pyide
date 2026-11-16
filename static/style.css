@@ -1740,10 +1740,30 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .editor-tip { font-family: var(--sans); }
 .editor-tip code, .editor-tip pre { font-family: var(--mono); }
 .editor-tip pre { margin: 4px 0 6px; padding: 6px 8px; border-radius: 6px; background: var(--bg); overflow-x: auto; }
+/* The code to type: a little read-only editor (editor_tip.js codeBlocks),
+   in the student's own editor theme, framed like the slides' code. */
+.editor-tip-code { margin: 6px 0 8px; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+                   border-radius: 6px; overflow: hidden; }
+/* It sits INSIDE the student's editor, so `.editor-wrap .CodeMirror` (fill
+   the pane: absolute, inset 0, 100% high) reaches it too, and a one-line
+   block came out 88px tall; put back to a block of its own size. */
+.editor-tip-code .CodeMirror { position: relative !important; inset: auto !important; height: auto !important;
+                               font-size: 15px; line-height: 1.5; padding: 4px 6px; }
+.editor-tip-code .CodeMirror-lines { padding: 2px 0; }
+.editor-tip-code .CodeMirror-cursors { display: none; }
+/* CodeMirror keeps room for scrollbars and a 50px scroll margin; a one-line
+   block measured 88px tall until these went (test_editor_tips_browser). */
+.editor-tip-code .CodeMirror-scroll { height: auto; min-height: 0; overflow: hidden !important;
+                                      margin: 0 !important; padding: 0 !important; }
+.editor-tip-code .CodeMirror-sizer { min-height: 0 !important; margin-bottom: 0 !important;
+                                     border-right-width: 0 !important; padding-right: 0 !important; }
+.editor-tip-code .CodeMirror-hscrollbar, .editor-tip-code .CodeMirror-vscrollbar,
+.editor-tip-code .CodeMirror-scrollbar-filler { display: none !important; }
 .editor-tip > :first-child { margin-top: 0; }
 .editor-tip > :last-child { margin-bottom: 0; }
 .editor-tip p { margin: 0 0 4px; }
-.editor-tip code { font-size: 13px; white-space: nowrap; }
+.editor-tip code { font-size: 13px; white-space: nowrap; background: var(--hover-bg); border: 1px solid var(--line);
+                   border-radius: 4px; padding: .05em .35em; }   /* code in a sentence: the slides' chip */
 /* The code to type on a line of its own (`:::pop editor` puts it in its own
    paragraph): one line, never broken across two. */
 .editor-tip p > code:only-child { display: inline-block; font-size: 14px; padding: 2px 6px; }

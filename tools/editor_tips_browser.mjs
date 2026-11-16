@@ -42,6 +42,12 @@ try {
     const ev = async (e) => (await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true }, S)).result?.value;
     for (let k = 0; k < 100; k++) { await sleep(100); if (await ev("!!document.querySelector('.tests-card')")) break; }
     await sleep(500);
+    // A picture of the page, for a person to look at (EDITOR_TIPS_SHOT=folder).
+    ev.shot = async (name) => {
+      if (!process.env.EDITOR_TIPS_SHOT) return;
+      const r = await send("Page.captureScreenshot", { format: "png" }, S);
+      fs.writeFileSync(path.join(process.env.EDITOR_TIPS_SHOT, name + ".png"), Buffer.from(r.data, "base64"));
+    };
     return ev;
   }
   const TIP = "document.querySelector('.CodeMirror .editor-tip')";
@@ -55,8 +61,13 @@ try {
   const VIS = (sel) => `[...document.querySelectorAll('${sel}')].some(e => e.offsetParent !== null)`;
   out.stepOnSlide = await ev(VIS('.pop-box.to-editor'));
   out.explainOnSlide = await ev(`[...document.querySelectorAll('p')].some(p => p.offsetParent !== null && /text in quotes/.test(p.textContent) && !p.closest('.editor-tip'))`);
-  out.codeAlone = await ev(`!!${TIP} && [...${TIP}.querySelectorAll('p')].some(p => p.children.length === 1 && p.firstElementChild.tagName === 'CODE' && p.textContent.trim() === p.firstElementChild.textContent.trim())`);
-  out.codeNowrap = await ev(`${TIP} && ${TIP}.querySelector('code') ? getComputedStyle(${TIP}.querySelector('code')).whiteSpace : ''`);
+  // The code to type is a little read-only editor, coloured like theirs, one line.
+  out.codeBlock = await ev(`(() => { const b = ${TIP} && ${TIP}.querySelector('.editor-tip-code .CodeMirror'); if (!b) return null;
+    return { lines: b.querySelectorAll('.CodeMirror-line').length, text: b.CodeMirror.getValue(),
+             coloured: !!b.querySelector('.cm-string') && !!b.querySelector('.cm-variable, .cm-def, .cm-builtin'),
+             theme: [...b.classList].filter(c => c.startsWith('cm-s-')).join(' '),
+             same: [...b.classList].some(c => c.startsWith('cm-s-') && document.querySelector('.CodeMirror:not(.editor-tip-code .CodeMirror)').classList.contains(c)),
+             height: b.getBoundingClientRect().height }; })()`);
   out.bubbleButton = await ev(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-check'))`);
   out.buttonClicks = await ev(`${TIP} && ${TIP}.querySelector('.editor-tip-check') ? getComputedStyle(${TIP}.querySelector('.editor-tip-check')).pointerEvents : ''`);
   const cm = "document.querySelector('.CodeMirror').CodeMirror";
@@ -66,6 +77,7 @@ try {
   out.underLast = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
     const line = c.charCoords({ line: 1, ch: 0 }, 'page'); const r = t.getBoundingClientRect();
     return r.top + window.scrollY >= line.bottom - 1 && r.top + window.scrollY < line.bottom + 40; })()`);
+  await ev.shot("1-first-step");
   out.lineHeight = await ev(`${cm}.defaultTextHeight()`);
   out.gap = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
     const line = c.charCoords({ line: 1, ch: 0 }, 'page'); return t.getBoundingClientRect().top + window.scrollY - line.bottom; })()`);
@@ -144,6 +156,7 @@ try {
   // ---- an exercise: directions grouped under one card, then a challenge
   const ex = await open(cfg.student, cfg.page2);
   out.groupTip = await ex(tipText);
+  await ex.shot("2-exercise");
   await ex(`${cm}.setValue('fruit = "pear"\\ncount = 3\\n')`);
   await ex(`${TIP}.querySelector('.editor-tip-check').click()`);
   for (let k = 0; k < 600; k++) { await sleep(150); if (await ex(`/Challenge/.test(${tipText})`)) break; }
