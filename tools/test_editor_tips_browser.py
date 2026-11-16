@@ -161,8 +161,12 @@ else:
     check("  clicks go through it to the code", r.get("clicksThrough") == "none", r.get("clicksThrough"))
     check("  it sits under the last line with code on it, not after blank lines",
           r.get("underLast") is True, r.get("underLast"))
-    check("a wrong step, checked from the bubble, says Not yet there",
-          "Not yet" in (r.get("nope") or ""), r.get("nope"))
+    check("a wrong step, checked from the bubble, says Not yet there, with the check's reason",
+          "Not yet" in (r.get("nope") or "") and "title" in (r.get("nope") or "") and "✗" in (r.get("nope") or ""), r.get("nope"))
+    check("the steps' check cards are hidden on the student's slide (the bubble checks)",
+          r.get("cardsOnSlide") is False and r.get("cardsInPage") == 2, (r.get("cardsOnSlide"), r.get("cardsInPage")))
+    check("  and the slide says to finish the step in the editor, not 'the check above'",
+          "editor" in (r.get("holdWhy") or ""), r.get("holdWhy"))
     check("its check, run from the bubble's button, passes in the real Pyodide", r.get("firstPassed") is True, r)
     check("  and the bubble moves on to the next step",
           "print(title[2:6])" in (r.get("second") or ""), r.get("second"))
@@ -172,7 +176,9 @@ else:
     check("the teacher writing the notes gets no bubble",
           r.get("teacherHasEditor") is True and r.get("teacherCard") is True and r.get("teacherTip") is False,
           (r.get("teacherHasEditor"), r.get("teacherCard"), r.get("teacherTip")))
-    check("  and sees the step on the slide instead", r.get("teacherStepOnSlide") is True, r.get("teacherStepOnSlide"))
+    check("  and sees the step on the slide instead, with its check card",
+          r.get("teacherStepOnSlide") is True and r.get("teacherCardOnSlide") is True,
+          (r.get("teacherStepOnSlide"), r.get("teacherCardOnSlide")))
     check("live: the student's own editor shows the step in a bubble",
           'title = "Mohawk"' in (r.get("liveFirst") or "") and r.get("liveInMine") is True, (r.get("liveFirst"), r.get("liveInMine")))
     check("  never the teacher's code above it", r.get("liveInMirror") is False, r.get("liveInMirror"))

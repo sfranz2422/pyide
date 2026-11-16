@@ -74,6 +74,9 @@ try {
   await ev(`${TIP}.querySelector('.editor-tip-check').click()`);
   for (let k = 0; k < 600; k++) { await sleep(150); if (await ev(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-nope'))`)) break; }
   out.nope = await ev(`${TIP} && ${TIP}.querySelector('.editor-tip-nope') ? ${TIP}.querySelector('.editor-tip-nope').textContent : ''`);
+  out.cardsOnSlide = await ev(VIS('.tests-card'));
+  out.cardsInPage = await ev("document.querySelectorAll('.tests-card').length");
+  out.holdWhy = await ev("[...document.querySelectorAll('.reveal-hint, .slide-btn, .reveal-play')].map(e => (e.textContent || '') + ' ' + (e.title || '')).join(' | ')");
   await ev(`${cm}.setValue('# My code\\ntitle = "Mohawk"\\n\\n')`);
   await sleep(200);
   // Check my work: the first step passes, so the bubble moves on to the second.
@@ -94,7 +97,9 @@ try {
   out.firstPassed = await ev("!!document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')");
   out.second = await ev(tipText);
   await ev(`${cm}.setValue('title = "Mohawk"\\nprint(title[2:6])\\n')`);
-  await press(1);
+  await ev(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await ev("[...document.querySelectorAll('.tests-card')].every(c => c.hasAttribute('data-passed'))")) break; }
+  await sleep(300);
   out.allPassed = await ev("[...document.querySelectorAll('.tests-card')].every(c => c.hasAttribute('data-passed'))");
   out.done = await ev(tipText);
   await sleep(2000);
@@ -110,6 +115,7 @@ try {
   out.teacherCard = await tv("!!document.querySelector('.tests-card')");
   out.teacherTip = await tv(`!!${TIP}`);
   out.teacherStepOnSlide = await tv(VIS('.pop-box.to-editor'));
+  out.teacherCardOnSlide = await tv(VIS('.tests-card'));
   out.teacherHasEditor = await tv("!!document.querySelector('.CodeMirror')");
 
   // ---- live: the student on the lesson's live page, their own editor ("mine")
@@ -120,7 +126,7 @@ try {
   out.liveInMirror = await lv("!!document.getElementById('mirror').nextElementSibling.querySelector('.editor-tip')");
   out.liveStepOnSlide = await lv(VIS('.pop-box.to-editor'));
   await lv("document.getElementById('mine').nextElementSibling.CodeMirror.setValue('title = \"Mohawk\"\\n')");
-  await lv("document.querySelector('.tests-card .tests-run').click()");
+  await lv("document.querySelector('.CodeMirror .editor-tip .editor-tip-check').click()");
   for (let k = 0; k < 600; k++) {
     await sleep(150);
     if (await lv("document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed') || /✗/.test(document.querySelectorAll('.tests-card')[0].textContent)")) break;

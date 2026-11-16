@@ -554,6 +554,12 @@ window.PyIDENotes = (function () {
         "Get the prediction above right first", "Get the prediction above right to go on"];
       if (body.querySelector(UNFLIPPED)) return ["Turn over every card first",
         "Turn over every card above first", "Turn over every card to go on"];
+      // A step's card hidden because the bubble says it (editorTip): point
+      // at the editor, not at a check the slide doesn't show.
+      var open1 = body.querySelector(HOLDS);
+      if (open1 && open1.classList.contains("for-editor") && body.classList.contains("editor-tips-on"))
+        return ["Finish the step in your editor first", "Finish the step in your editor first",
+                "Finish the step in your editor (✔ Check my work in the pop-up) to go on"];
       return ["Pass this slide's checks first", "Pass the check above first", "Pass the check above to go on"];
     }
     function lockWanted() { return !!lockOpt && (typeof lockOpt.locked === "function" ? lockOpt.locked() : !!lockOpt.locked); }
@@ -597,13 +603,24 @@ window.PyIDENotes = (function () {
       if (on) {
         var boxes = body.querySelectorAll(".pop-box.to-editor");
         var cards = body.querySelectorAll(".tests-card[data-checks]");
+        // Every step's card, not only the current one's: a later step's card
+        // must not show on the slide while an earlier step is being typed.
+        Array.prototype.forEach.call(boxes, function (box) {
+          for (var j = 0; j < cards.length; j++) {
+            if (box.compareDocumentPosition(cards[j]) & 4) { cards[j].classList.add("for-editor"); break; }
+          }
+        });
         for (var i = 0; i < boxes.length; i++) {
           var card = null;
           for (var j = 0; j < cards.length; j++) {
             if (boxes[i].compareDocumentPosition(cards[j]) & 4) { card = cards[j]; break; }   // FOLLOWING
           }
           var passed = !!card && card.hasAttribute("data-passed");
-          tip = { html: boxes[i].innerHTML, passed: passed, slide: at, step: i };
+          // Its card is said in the bubble too, so it's hidden on the slide
+          // with the step (style.css, .editor-tips-on .for-editor). It stays
+          // in the page: the lock and the bubble's Check my work both read it.
+          if (card && card.classList) card.classList.add("for-editor");
+          tip = { html: boxes[i].innerHTML, passed: passed, slide: at, step: i, card: card };
           if (!passed) break;
         }
       }

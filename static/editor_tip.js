@@ -65,13 +65,30 @@ window.PyIDEEditorTip = (function () {
           Promise.resolve(window.IDENotesChecks.check()).then(function () {
             btn.disabled = false;
             btn.textContent = "✔ Check my work";
-            // Still this step (a pass would have redrawn it as ✓): say so
-            // here, or the button just seems to do nothing.
-            if (bubble && !bubble.classList.contains("is-done") && !foot.querySelector(".editor-tip-nope")) {
-              var nope = document.createElement("span");
+            // Still this step (a pass would have redrawn it as ✓): say why
+            // here — the card on the slide is hidden while the bubble is
+            // drawn (notes.js), so its reasons are read out of it into the
+            // bubble, or the button would just seem to do nothing.
+            if (bubble && !bubble.classList.contains("is-done")) {
+              var old = bubble.querySelector(".editor-tip-nope");
+              if (old) old.remove();
+              var nope = document.createElement("div");
               nope.className = "editor-tip-nope";
-              nope.textContent = " Not yet: the check on the slide says why.";
-              foot.appendChild(nope);
+              var why = [];
+              if (t.card) {
+                Array.prototype.forEach.call(t.card.querySelectorAll(".test-line.fail"), function (li) {
+                  var w = li.querySelector(".tests-why");
+                  why.push(li.querySelector(".tests-label").textContent + (w && w.textContent ? ": " + w.textContent : ""));
+                });
+              }
+              nope.appendChild(document.createTextNode("Not yet."));
+              why.forEach(function (line) {
+                var p = document.createElement("div");
+                p.className = "editor-tip-why";
+                p.textContent = "✗ " + line;
+                nope.appendChild(p);
+              });
+              bubble.insertBefore(nope, foot);
             }
           }, function () {
             btn.disabled = false;

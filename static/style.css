@@ -1726,7 +1726,7 @@ body:not(.is-authoring) .notes-body .snippet-guess,
    student's last line, pointing up at where the line goes. Clicks go through
    it, so it never stops the typing it asks for. */
 /* Where the bubble is drawn, the step is said only there (notes.js editorTip). */
-.editor-tips-on .pop-box.to-editor { display: none; }
+.editor-tips-on .pop-box.to-editor, .editor-tips-on .tests-card.for-editor { display: none; }
 .editor-tip { position: absolute; z-index: 5; pointer-events: none; max-width: min(560px, 90%);
               margin: 16px 0 0 8px; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
               color: var(--text); background: var(--bg-panel); border: 1px solid var(--accent);
@@ -1744,7 +1744,8 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .editor-tip p > code:only-child { display: inline-block; font-size: 14px; padding: 2px 6px; }
 .editor-tip-foot { margin: 8px 0 0; }
 .editor-tip-check { pointer-events: auto; }
-.editor-tip-nope { color: var(--amber); font-size: 13px; }
+.editor-tip-nope { color: var(--amber); font-size: 13px; margin: 6px 0 0; font-weight: 600; }
+.editor-tip-why { font-weight: 400; white-space: pre-wrap; }
 .editor-tip.is-done { border-color: var(--green); }
 .editor-tip.is-done::before { border-color: var(--green); }
 .editor-tip-done { color: var(--green); font-weight: 700; }
