@@ -81,8 +81,12 @@ NOTES = """locked: yes
 Only on the slide: a plain pop.
 :::
 
+A **string** is text in quotes.
+
 :::pop editor
-✏ Type `title = "Mohawk"` into `main.py`.
+✏ **Type this** into `main.py`:
+
+`title = "Mohawk"`
 :::
 
 ```tests
@@ -92,7 +96,11 @@ title == "Mohawk"
 A **slice** takes some of the letters.
 
 :::pop editor
-✏ Now type `print(title[2:6])` under it. It should print `hawk`.
+✏ **Type this** under it:
+
+`print(title[2:6])`
+
+It should print `hawk`.
 :::
 
 ```tests
@@ -142,10 +150,20 @@ else:
     check("the student's editor shows the first step in a bubble",
           'title = "Mohawk"' in (r.get("first") or ""), r.get("first"))
     check("  a plain :::pop stays on the slide only", r.get("plainPopInEditor") is False, r.get("first"))
+    check("  and the step is said only there: hidden on the student's slide, the explanation kept",
+          r.get("stepOnSlide") is False and r.get("explainOnSlide") is True, (r.get("stepOnSlide"), r.get("explainOnSlide")))
+    check("  the code on a line of its own, kept on one line",
+          r.get("codeAlone") is True and r.get("codeNowrap") == "nowrap", (r.get("codeAlone"), r.get("codeNowrap")))
+    check("  with room above it: it doesn't touch the line it sits under",
+          (r.get("gap") or 0) >= 10, r.get("gap"))
+    check("  and its own Check my work button, which takes clicks",
+          r.get("bubbleButton") is True and r.get("buttonClicks") == "auto", (r.get("bubbleButton"), r.get("buttonClicks")))
     check("  clicks go through it to the code", r.get("clicksThrough") == "none", r.get("clicksThrough"))
     check("  it sits under the last line with code on it, not after blank lines",
           r.get("underLast") is True, r.get("underLast"))
-    check("its check passes in the real Pyodide", r.get("firstPassed") is True, r)
+    check("a wrong step, checked from the bubble, says Not yet there",
+          "Not yet" in (r.get("nope") or ""), r.get("nope"))
+    check("its check, run from the bubble's button, passes in the real Pyodide", r.get("firstPassed") is True, r)
     check("  and the bubble moves on to the next step",
           "print(title[2:6])" in (r.get("second") or ""), r.get("second"))
     check("the last step passed: the bubble says so", r.get("allPassed") is True and "✓" in (r.get("done") or ""),
@@ -154,9 +172,11 @@ else:
     check("the teacher writing the notes gets no bubble",
           r.get("teacherHasEditor") is True and r.get("teacherCard") is True and r.get("teacherTip") is False,
           (r.get("teacherHasEditor"), r.get("teacherCard"), r.get("teacherTip")))
+    check("  and sees the step on the slide instead", r.get("teacherStepOnSlide") is True, r.get("teacherStepOnSlide"))
     check("live: the student's own editor shows the step in a bubble",
           'title = "Mohawk"' in (r.get("liveFirst") or "") and r.get("liveInMine") is True, (r.get("liveFirst"), r.get("liveInMine")))
     check("  never the teacher's code above it", r.get("liveInMirror") is False, r.get("liveInMirror"))
+    check("  and the step is hidden on the live slide too", r.get("liveStepOnSlide") is False, r.get("liveStepOnSlide"))
     check("  and it moves on when that step's check passes",
           r.get("livePassed") is True and "print(title[2:6])" in (r.get("liveSecond") or ""), (r.get("livePassed"), r.get("liveSecond")))
     server.shutdown()

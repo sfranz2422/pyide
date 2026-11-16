@@ -586,7 +586,15 @@ window.PyIDENotes = (function () {
     }
     function editorTip() {
       var tip = null;
-      if (tipsWanted()) {
+      /* Where the bubble is drawn, the step is said ONLY there: the slide
+         keeps the explanations and the check card, and the `:::pop editor`
+         boxes are hidden on it (style.css, .editor-tips-on) — students were
+         looking in two places at once (the teacher, Nov 2026). Wherever
+         there's no bubble (the teacher's preview, the projector while live,
+         a page with no editor) the step shows on the slide as any pop. */
+      var on = tipsWanted();
+      if (body.classList) body.classList.toggle("editor-tips-on", on);
+      if (on) {
         var boxes = body.querySelectorAll(".pop-box.to-editor");
         var cards = body.querySelectorAll(".tests-card[data-checks]");
         for (var i = 0; i < boxes.length; i++) {

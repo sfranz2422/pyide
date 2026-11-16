@@ -1725,8 +1725,10 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 /* The same step in the editor (`:::pop editor`, app.js): a bubble under the
    student's last line, pointing up at where the line goes. Clicks go through
    it, so it never stops the typing it asks for. */
-.editor-tip { position: absolute; z-index: 5; pointer-events: none; max-width: min(420px, 80%);
-              margin: 6px 0 0 8px; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
+/* Where the bubble is drawn, the step is said only there (notes.js editorTip). */
+.editor-tips-on .pop-box.to-editor { display: none; }
+.editor-tip { position: absolute; z-index: 5; pointer-events: none; max-width: min(560px, 90%);
+              margin: 16px 0 0 8px; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;
               color: var(--text); background: var(--bg-panel); border: 1px solid var(--accent);
               border-left: 4px solid var(--accent); box-shadow: 0 6px 18px var(--shadow);
               animation: editor-tip-in .25s ease-out; }
@@ -1736,7 +1738,13 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .editor-tip > :first-child { margin-top: 0; }
 .editor-tip > :last-child { margin-bottom: 0; }
 .editor-tip p { margin: 0 0 4px; }
-.editor-tip code { font-size: 13px; }
+.editor-tip code { font-size: 13px; white-space: nowrap; }
+/* The code to type on a line of its own (`:::pop editor` puts it in its own
+   paragraph): one line, never broken across two. */
+.editor-tip p > code:only-child { display: inline-block; font-size: 14px; padding: 2px 6px; }
+.editor-tip-foot { margin: 8px 0 0; }
+.editor-tip-check { pointer-events: auto; }
+.editor-tip-nope { color: var(--amber); font-size: 13px; }
 .editor-tip.is-done { border-color: var(--green); }
 .editor-tip.is-done::before { border-color: var(--green); }
 .editor-tip-done { color: var(--green); font-weight: 700; }

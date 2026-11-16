@@ -52,6 +52,13 @@ try {
   out.first = await ev(tipText);
   out.plainPopInEditor = await ev(`${tipText}.indexOf('Only on the slide') >= 0`);
   out.clicksThrough = await ev(`${TIP} ? getComputedStyle(${TIP}).pointerEvents : ''`);
+  const VIS = (sel) => `[...document.querySelectorAll('${sel}')].some(e => e.offsetParent !== null)`;
+  out.stepOnSlide = await ev(VIS('.pop-box.to-editor'));
+  out.explainOnSlide = await ev(`[...document.querySelectorAll('p')].some(p => p.offsetParent !== null && /text in quotes/.test(p.textContent) && !p.closest('.editor-tip'))`);
+  out.codeAlone = await ev(`!!${TIP} && [...${TIP}.querySelectorAll('p')].some(p => p.children.length === 1 && p.firstElementChild.tagName === 'CODE' && p.textContent.trim() === p.firstElementChild.textContent.trim())`);
+  out.codeNowrap = await ev(`${TIP} && ${TIP}.querySelector('code') ? getComputedStyle(${TIP}.querySelector('code')).whiteSpace : ''`);
+  out.bubbleButton = await ev(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-check'))`);
+  out.buttonClicks = await ev(`${TIP} && ${TIP}.querySelector('.editor-tip-check') ? getComputedStyle(${TIP}.querySelector('.editor-tip-check')).pointerEvents : ''`);
   const cm = "document.querySelector('.CodeMirror').CodeMirror";
   // Under the last line with something on it.
   await ev(`${cm}.setValue('# My code\\ntitle = "Mohawk"\\n\\n')`);
@@ -59,6 +66,16 @@ try {
   out.underLast = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
     const line = c.charCoords({ line: 1, ch: 0 }, 'page'); const r = t.getBoundingClientRect();
     return r.top + window.scrollY >= line.bottom - 1 && r.top + window.scrollY < line.bottom + 40; })()`);
+  out.gap = await ev(`(() => { const c = ${cm}; const t = ${TIP}; if (!t) return null;
+    const line = c.charCoords({ line: 1, ch: 0 }, 'page'); return t.getBoundingClientRect().top + window.scrollY - line.bottom; })()`);
+  // A wrong first step, checked from the bubble: it says Not yet.
+  await ev(`${cm}.setValue('title = "Mohak"\\n')`);
+  await sleep(200);
+  await ev(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await ev(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-nope'))`)) break; }
+  out.nope = await ev(`${TIP} && ${TIP}.querySelector('.editor-tip-nope') ? ${TIP}.querySelector('.editor-tip-nope').textContent : ''`);
+  await ev(`${cm}.setValue('# My code\\ntitle = "Mohawk"\\n\\n')`);
+  await sleep(200);
   // Check my work: the first step passes, so the bubble moves on to the second.
   // Check my work, then wait for that card's verdict (the first run loads
   // Pyodide, which can take a while): passed, or a line marked wrong.
@@ -71,7 +88,9 @@ try {
     }
     await sleep(400);
   };
-  await press(0);
+  await ev(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await ev("document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')")) break; }
+  await sleep(400);
   out.firstPassed = await ev("!!document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')");
   out.second = await ev(tipText);
   await ev(`${cm}.setValue('title = "Mohawk"\\nprint(title[2:6])\\n')`);
@@ -90,6 +109,7 @@ try {
   await sleep(800);
   out.teacherCard = await tv("!!document.querySelector('.tests-card')");
   out.teacherTip = await tv(`!!${TIP}`);
+  out.teacherStepOnSlide = await tv(VIS('.pop-box.to-editor'));
   out.teacherHasEditor = await tv("!!document.querySelector('.CodeMirror')");
 
   // ---- live: the student on the lesson's live page, their own editor ("mine")
@@ -98,6 +118,7 @@ try {
   out.liveFirst = await lv(tipText);
   out.liveInMine = await lv("!!(document.querySelector('.CodeMirror .editor-tip') && document.getElementById('mine').nextElementSibling.contains(document.querySelector('.CodeMirror .editor-tip')))");
   out.liveInMirror = await lv("!!document.getElementById('mirror').nextElementSibling.querySelector('.editor-tip')");
+  out.liveStepOnSlide = await lv(VIS('.pop-box.to-editor'));
   await lv("document.getElementById('mine').nextElementSibling.CodeMirror.setValue('title = \"Mohawk\"\\n')");
   await lv("document.querySelector('.tests-card .tests-run').click()");
   for (let k = 0; k < 600; k++) {

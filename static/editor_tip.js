@@ -48,6 +48,39 @@ window.PyIDEEditorTip = (function () {
       }
       bubble.innerHTML = t.html;
       bubble.classList.toggle("is-done", !!t.passed);
+      if (!t.passed && window.IDENotesChecks) {
+        /* Check my work, right where they typed: the step is said only here,
+           so the way to check it is here too. It runs the same check as the
+           card on the slide (checks_in_notes.js), whose result moves the
+           bubble on. The one part of the bubble that takes clicks. */
+        var foot = document.createElement("p");
+        foot.className = "editor-tip-foot";
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-check editor-tip-check";
+        btn.textContent = "✔ Check my work";
+        btn.addEventListener("click", function () {
+          btn.disabled = true;
+          btn.textContent = "Checking…";
+          Promise.resolve(window.IDENotesChecks.check()).then(function () {
+            btn.disabled = false;
+            btn.textContent = "✔ Check my work";
+            // Still this step (a pass would have redrawn it as ✓): say so
+            // here, or the button just seems to do nothing.
+            if (bubble && !bubble.classList.contains("is-done") && !foot.querySelector(".editor-tip-nope")) {
+              var nope = document.createElement("span");
+              nope.className = "editor-tip-nope";
+              nope.textContent = " Not yet: the check on the slide says why.";
+              foot.appendChild(nope);
+            }
+          }, function () {
+            btn.disabled = false;
+            btn.textContent = "✔ Check my work";
+          });
+        });
+        foot.appendChild(btn);
+        bubble.appendChild(foot);
+      }
       if (t.passed) {
         var mark = document.createElement("p");
         mark.className = "editor-tip-done";
