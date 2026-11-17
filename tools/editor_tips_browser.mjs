@@ -163,6 +163,45 @@ try {
   await sleep(300);
   out.challengeTip = await ex(tipText);
   out.challengeButton = await ex(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-check'))`);
+
+  // ---- a web page: the bubble goes inside <body>, under the comment
+  // Another student: this one has the web lesson's live page open below, and
+  // two tabs saving the same draft rightly stops one with an alert.
+  const wb = await open(cfg.student2, cfg.web);
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await wb(`!!${TIP}`)) break; }
+  out.webFirst = await wb(tipText);
+  // Which line is it under? The comment's (line 8), not </html>'s.
+  const wcm = "document.querySelector('.CodeMirror').CodeMirror";
+  const under = (n) => `(() => { const c = ${wcm}; const t = ${TIP}; if (!t) return null;
+    const line = c.charCoords({ line: ${n}, ch: 0 }, 'page'); const top = t.getBoundingClientRect().top + window.scrollY;
+    return top >= line.bottom - 1 && top < line.bottom + 2 * c.defaultTextHeight() + 20; })()`;
+  out.webUnder = (await wb(under(8))) ? "comment" : (await wb(under(11))) ? "html" : "elsewhere";
+  await wb.shot("3-web");
+  await wb(`(() => { const c = ${wcm}; c.replaceRange('    <h2>Harvest</h2>\\n', { line: 9, ch: 0 }); })()`);
+  await sleep(300);
+  out.webKept = await wb(`/Harvest/.test(${wcm}.getValue())`);
+  out.webUnderTyped = await wb(under(9));
+  await wb("document.getElementById('preview') && document.getElementById('preview').removeAttribute('srcdoc')");
+  await wb(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 300; k++) { await sleep(150); if (await wb("document.querySelector('.tests-card').hasAttribute('data-passed') || /✗/.test(document.querySelector('.tests-card').textContent)")) break; }
+  out.webPassed = await wb("document.querySelector('.tests-card').hasAttribute('data-passed')");
+  for (let k = 0; k < 40; k++) { await sleep(150); if (await wb("/Harvest/.test(document.getElementById('preview').srcdoc || '')")) break; }
+  out.webRan = await wb("/Harvest/.test(document.getElementById('preview').srcdoc || '')");
+
+  // ---- the web lesson live: their own editor ("mine")
+  const wl = await open(cfg.student, cfg.webLive);
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await wl(`!!${TIP}`)) break; }
+  out.webLiveFirst = await wl(tipText);
+  out.webLiveInMine = await wl(`!!(${TIP} && document.getElementById('mine').nextElementSibling.contains(${TIP}))`);
+  out.webLiveInMirror = await wl("!!document.getElementById('mirror').nextElementSibling.querySelector('.editor-tip')");
+  out.webLiveStepOnSlide = await wl(VIS('.pop-box.to-editor'));
+  await wl("(() => { const c = document.getElementById('mine').nextElementSibling.CodeMirror; c.setValue(c.getValue().replace('<!-- Build your page here -->', '<h2>Harvest</h2>')); })()");
+  await sleep(300);
+  await wl(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 300; k++) { await sleep(150); if (await wl("document.querySelector('.tests-card').hasAttribute('data-passed') || /✗/.test(document.querySelector('.tests-card').textContent)")) break; }
+  out.webLivePassed = await wl("document.querySelector('.tests-card').hasAttribute('data-passed')");
+  for (let k = 0; k < 40; k++) { await sleep(150); if (await wl("/Harvest/.test(document.getElementById('preview').srcdoc || '')")) break; }
+  out.webLiveRan = await wl("/Harvest/.test(document.getElementById('preview').srcdoc || '')");
 } catch (e) {
   out.error = String(e);
 } finally {

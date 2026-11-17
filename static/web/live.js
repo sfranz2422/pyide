@@ -901,7 +901,12 @@
      replace a link — or a half-typed answer — under the student's hand. */
   var notesView = $("live-notes-view");
   var notesBody = $("live-notes");
-  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody) : null;
+  /* The editor's guide bubble (editor_tip.js) in THEIR editor, never the
+     mirror: v10 lessons say each typed step there, as on the Python live
+     page (static/live.js). Without it this page showed those steps only on
+     the slide, which is fine, but not the lesson the teacher wrote. */
+  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true }) : null;
+  if (notesSlides && window.PyIDEEditorTip && mine) window.PyIDEEditorTip.attach(mine);
   var teacherSlide = null;           // the last "3/5" the teacher sent
   var teacherAt = -1;                // and that slide, from 0
 
@@ -1352,8 +1357,9 @@
     var tests = liveTests();
     if (checking || !tests.length) return null;
     checking = true;
+    var got = null;
     try {
-      var got = await window.WebIDETests.run(allFiles(), tests);
+      got = await window.WebIDETests.run(allFiles(), tests);
       if (L.signedIn && L.assignment) {
         fetch("/api/tests/self", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -1370,6 +1376,10 @@
       return got;
     } finally {
       checking = false;
+      /* Then their page runs, as Run would, so they see it (the teacher,
+         Nov 2026: the checks ran out of sight and students passed without
+         ever seeing what they made). Not awaited. */
+      if (got) setTimeout(function () { Promise.resolve(run()).catch(function () {}); }, 0);
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);

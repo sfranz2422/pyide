@@ -28,7 +28,7 @@ PYIDE = os.path.dirname(HERE)
 TMP = tempfile.mkdtemp()
 
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(TMP, "tips.db")
-os.environ["TEACHER_EMAILS"] = "teacher@example.org"
+os.environ["TEACHER_EMAILS"] = "teacher@example.org,webteacher@example.org"
 os.environ["SECRET_KEY"] = "k" * 32
 os.environ.pop("ALLOWED_EMAIL_DOMAINS", None)
 
@@ -135,6 +135,38 @@ count == 3
 :::
 """
 
+# A web page (Web Design 1's v10 lessons, Nov 2026): the student types
+# inside <body>, under the starter's comment, so the bubble goes there and
+# not under </html> at the end of the file.
+WEB_NOTES = """locked: yes
+# Try It
+
+A **heading** shows big.
+
+:::pop editor
+✏ **Type this:**
+
+`<h2>Harvest</h2>`
+:::
+
+```tests
+h2 contains Harvest
+```
+"""
+WEB_PAGE = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Fair</title>
+</head>
+<body>
+    <h1>Fall Fair</h1>
+
+    <!-- Build your page here -->
+
+</body>
+</html>
+"""
+
 print("The editor's guide bubble, in a real browser")
 chrome = find_chrome()
 if chrome is None or shutil.which("node") is None:
@@ -144,12 +176,23 @@ else:
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     tid = add_user("t", "teacher@example.org", "Teach")
     sid = add_user("s", "kid@example.org", "Kid")
+    sid2 = add_user("s2", "kid2@example.org", "Kid Two")
     teacher = client(tid)
     made = teacher.post("/api/assignment", json={"title": "Slices", "code": "# Slices\n",
                                                  "files": {"notes.md": NOTES}})
     slug = made.get_json()["slug"]
     slug2 = teacher.post("/api/assignment", json={"title": "Exercise", "code": "# Exercise\n",
                                                   "files": {"notes.md": NOTES2}}).get_json()["slug"]
+    # Another teacher: one teacher has one lesson on the air, and going live
+    # with a web project would end the Python one above.
+    wteacher = client(add_user("w", "webteacher@example.org", "Web"))
+    wslug = wteacher.post("/api/assignment", json={"title": "Fair", "ide": "webide", "code": "",
+                                                  "files": {"index.html": WEB_PAGE, "notes.md": WEB_NOTES}}).get_json()["slug"]
+    wcode = wteacher.post("/api/live/start", json={"assignment": wslug, "body": WEB_PAGE, "ide": "webide",
+                                                    "filename": "index.html"}).get_json()["code"]
+    wpushed = wteacher.post("/api/live/%s/push" % wcode, json={"body": WEB_PAGE, "filename": "index.html",
+                                                           "notes": WEB_NOTES, "slide": "1/1", "seq": 50})
+    check("a web lesson goes live too", wpushed.status_code == 200, wpushed.get_json())
     # And live (the teacher's request: "I've been using live mode a lot"):
     # the teacher goes live on it, on the slide with the steps.
     code = teacher.post("/api/live/start", json={"assignment": slug, "body": "# Slices\n",
@@ -163,8 +206,8 @@ else:
     sign = P.app.session_interface.get_signing_serializer(P.app)
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2,
-                   "student": sign.dumps({"uid": sid}), "teacher": sign.dumps({"uid": tid})}, f)
+        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "web": "/a/" + wslug, "webLive": "/live/" + wcode,
+                   "student": sign.dumps({"uid": sid}), "student2": sign.dumps({"uid": sid2}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "editor_tips_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
     try:
@@ -221,6 +264,19 @@ else:
     check("  and once it passes, the challenge (no check) is said with no Check my work",
           "Challenge" in (r.get("challengeTip") or "") and r.get("challengeButton") is False,
           (r.get("challengeTip"), r.get("challengeButton")))
+    check("web: the bubble says the step in the student's editor", "<h2>Harvest</h2>" in (r.get("webFirst") or ""), r.get("webFirst"))
+    check("  inside <body>, under the starter's comment, not under </html>",
+          r.get("webUnder") == "comment", r.get("webUnder"))
+    check("  and under the line they typed there, once they have",
+          r.get("webKept") is True and r.get("webUnderTyped") is True, (r.get("webKept"), r.get("webUnderTyped")))
+    check("  its check passes from the bubble, and their page is run", r.get("webPassed") is True and r.get("webRan") is True,
+          (r.get("webPassed"), r.get("webRan")))
+    check("web live: the bubble is in the student's own editor, never the teacher's",
+          "<h2>Harvest</h2>" in (r.get("webLiveFirst") or "") and r.get("webLiveInMine") is True and r.get("webLiveInMirror") is False,
+          (r.get("webLiveFirst"), r.get("webLiveInMine"), r.get("webLiveInMirror")))
+    check("  and the step is hidden on the live slide", r.get("webLiveStepOnSlide") is False, r.get("webLiveStepOnSlide"))
+    check("web live: its check passes from the bubble, and their page is run",
+          r.get("webLivePassed") is True and r.get("webLiveRan") is True, (r.get("webLivePassed"), r.get("webLiveRan")))
     server.shutdown()
 
 print()

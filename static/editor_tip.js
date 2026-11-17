@@ -18,9 +18,18 @@ window.PyIDEEditorTip = (function () {
   function attach(editor) {
     var bubble = null, tip = null, gone = null;
 
-    // Under the last line with something on it, not below trailing blank lines.
+    /* Under the last line with something on it, not below trailing blank
+       lines. In a web page (Web Design 1's v10 lessons, Nov 2026) that's
+       the last line INSIDE <body>: under the whole file was below
+       </html>, where nothing a student types belongs — the starter's
+       "<!-- Build your form here -->" and what they've typed under it are
+       just above </body>. script.js and style.css have no </body>, so
+       they get the last line, as main.py does. */
     function lastLine() {
       var n = editor.lastLine();
+      for (var b = n; b > 0; b -= 1) {
+        if (/^\s*<\/body\s*>/i.test(editor.getLine(b))) { n = b - 1; break; }
+      }
       while (n > 0 && !editor.getLine(n).trim()) n -= 1;
       return n;
     }
