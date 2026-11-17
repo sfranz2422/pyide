@@ -866,7 +866,7 @@
         case "present": return DE.present();
         case "themes": return D.themes({ theme: function () { return window.PMDeckFile.themeOf(DE._state().d); }, use: DE.useTheme });
         case "question": case "tests": case "part": case "pause": case "pop": case "editor-pop": case "cards": case "checklist":
-        case "level-choice": case "level-exercise": case "level-challenge":
+        case "level-exercise": case "level-challenge":
         case "run-code": case "predict-code": case "export": case "export-pdf": case "follow":
           return say("That's for markdown lessons. In teacher slides, use + Slide, click the words, or the HTML panel.");
       }
@@ -905,7 +905,7 @@
       case "pop": return insertPop();
       case "editor-pop": return insertEditorPop();
       case "cards": case "checklist": case "run-code": case "predict-code": return putBlock(SNIPPETS[name]);
-      case "level-choice": case "level-exercise": case "level-challenge": return putBlock(C.LEVEL_SNIPPETS[name]);
+      case "level-exercise": case "level-challenge": return putBlock(C.LEVEL_SNIPPETS[name]);
     }
   }
 

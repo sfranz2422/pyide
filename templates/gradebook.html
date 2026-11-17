@@ -25,7 +25,7 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">{{ course.name }} · Gradebook</span></div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}" title="Each student's recent levels, with hints">Level details</a>
+    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}" title="Each student's last exercises, with a hint for their level">Level details</a>
     <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
   </div>
 </header>
@@ -58,8 +58,6 @@
       <button class="btn btn-primary" id="sky-all" type="button">Export all to Skyward</button>
       <label class="small"><input type="checkbox" id="sky-zero" checked> Missing work as 0</label>
       <span class="small" id="sky-said"></span>
-      <label class="small level-name-row">Your name on a suggestion:
-        <input id="teacher-name" class="field" type="text" maxlength="80" placeholder="Your teacher" value="{{ teacher_name }}"></label>
     </div>
     <p class="small dim">Skyward: Assignment Import, template <strong>Import Scores and Create Assignments</strong>, this class,
       <em>Import File Has Header Row</em> unticked. An assignment needs a category and a due date to go in the file.</p>
@@ -74,7 +72,7 @@
         <tr>
           <th class="gb-name">Student</th>
           <th class="gb-avg">Average</th>
-          <th class="gb-level" title="The level suggested for v11 lessons: points count only at this level">Level ⭐</th>
+          <th class="gb-level" title="Each student's level in v11 lessons (Easy until you set it). Students only ever see their own level's exercise and challenge, and never which level it is. Easy counts the exercise 80%, Medium 88%, Master 100%.">Level</th>
           {% for a in book.assignments %}
             <th class="gb-col {{ 'gb-nocat' if not a.category }}" data-slug="{{ a.slug }}">
               <a href="{{ url_for('teacher_assignment', slug=a.slug) }}" title="{{ a.title }}">{{ a.title }}</a>
@@ -97,9 +95,9 @@
               <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
             <td class="gb-level">
               {% if p.enr %}
-                {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if p.level == lv }}" data-level="{{ lv }}"
-                  aria-pressed="{{ 'true' if p.level == lv else 'false' }}" title="{{ lv|capitalize }}">{{ lv[:1]|upper }}</button>{% endfor %}
-                <label class="small" title="Lock: this is their level, no choosing"><input type="checkbox" class="js-lock" {{ 'checked' if p.locked }} {{ '' if p.level else 'disabled' }}>🔒</label>
+                {% set mine = p.level or 'easy' %}
+                {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if mine == lv }}" data-level="{{ lv }}"
+                  aria-pressed="{{ 'true' if mine == lv else 'false' }}" title="{{ lv|capitalize }}">{{ lv|capitalize }}</button>{% endfor %}
               {% else %}<span class="dim small">not on roster</span>{% endif %}
             </td>
             {% for c in p.cells %}
@@ -137,34 +135,24 @@
       post("/api/class/" + CLASS + "/gradebook", { assignment: slug, due: e.target.value });
     });
   });
-  var name = document.getElementById("teacher-name");
-  name.addEventListener("change", function () {
-    post("/api/class/" + CLASS + "/levels", { teacher_name: name.value });
-  });
+  // A student's level (v11): pressed, it's theirs, and their scores in
+  // levelled lessons are worked out again at it (app.py class_levels_save).
   Array.prototype.forEach.call(document.querySelectorAll(".gradebook tr[data-enr]"), function (tr) {
     var enr = tr.getAttribute("data-enr");
     if (!enr) return;
-    var lock = tr.querySelector(".js-lock");
-    function save(level, locked) {
-      post("/api/class/" + CLASS + "/levels", { enrollment: Number(enr), level: level, locked: locked }).then(function (d) {
-        if (!d.ok) return;
-        tr.setAttribute("data-level", d.level);
-        Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
-          var on = !!d.level && b.getAttribute("data-level") === d.level;
-          b.classList.toggle("is-on", on);
-          b.setAttribute("aria-pressed", on ? "true" : "false");
-        });
-        lock.checked = d.locked;
-        lock.disabled = !d.level;
-      });
-    }
     Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
       b.addEventListener("click", function () {
-        var lv = b.getAttribute("data-level");
-        save(tr.getAttribute("data-level") === lv ? "" : lv, lock.checked);
+        post("/api/class/" + CLASS + "/levels", { enrollment: Number(enr), level: b.getAttribute("data-level") }).then(function (d) {
+          if (!d.ok) return;
+          tr.setAttribute("data-level", d.level);
+          Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (x) {
+            var on = x.getAttribute("data-level") === (d.level || "easy");
+            x.classList.toggle("is-on", on);
+            x.setAttribute("aria-pressed", on ? "true" : "false");
+          });
+        });
       });
     });
-    lock.addEventListener("change", function () { save(tr.getAttribute("data-level"), lock.checked); });
   });
   document.getElementById("sky-all").addEventListener("click", function () {
     var said = document.getElementById("sky-said");

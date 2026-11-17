@@ -258,31 +258,19 @@ What does range(3) give?
 - [ ] 1, 2, 3
 ```</pre>
 
-  <h2 id="levels">Choose your level (Easy, Medium, Master)</h2>
-  <p>A <code>```level</code> block is a slide where each student picks how much help they get on the
-    coding exercise: <strong>Easy</strong> (fill in the blanks), <strong>Medium</strong> (fewer hints)
-    or <strong>Master</strong> (write it yourself). Wrap what each level sees in
-    <code>:::level easy</code> … <code>:::end</code>, its tests included: a student sees only their own
-    level's part, and nothing of the exercise until they choose. Give each level its own variables and
-    values, so a neighbor's answer is no help, and its own tests: <code>```tests exercise easy</code>,
-    <code>```tests exercise medium</code>, <code>```tests exercise master</code>. Check my work runs only
-    the tests of the level they're on.</p>
-  <p>On the class page, <strong>Levels</strong> lets you suggest a level for each student (⭐) or lock one
-    (🔒), and set the name they see on your suggestion. A student earns the exercise's points
-    <strong>only at the level you suggested, and only if they never change level</strong>; at another
-    level, or after changing, it earns nothing (they're told before they press). With no suggestion, the
-    level they choose counts if they keep it. Easy counts the exercise 80%, Medium 88%, Master 100%;
-    nothing else in the lesson changes, and you see each student's level on the assignment's page.</p>
-  <p>The ★ Challenge gets its own choice (<code>for: challenge</code> in the block, and
-    <code>:::level challenge easy</code> boxes with <code>```tests bonus easy</code> …). Its points are a
-    bonus, by the same rule, on top of the grade and never part of what it's out of, so skipping it costs
-    nothing; passing it pays XP, more for a harder level.</p>
-  <pre class="help-src">```level
-```
-
----
-
-## ✏ Coding Exercise — The Name Badge
+  <h2 id="levels">Levels (Easy, Medium, Master)</h2>
+  <p>Write the coding exercise three times, for three levels: <strong>Easy</strong> (fill in the blanks),
+    <strong>Medium</strong> (fewer hints) and <strong>Master</strong> (write it yourself). Wrap each in
+    <code>:::level easy</code> … <code>:::end</code>, its tests included, and give each level its own variables
+    and values, so a neighbor's answer is no help: <code>```tests exercise easy</code>,
+    <code>```tests exercise medium</code>, <code>```tests exercise master</code>. Write the ★ Challenge the same
+    way (<code>:::level challenge easy</code>, <code>```tests bonus easy</code>), with nothing from the exercise in it.</p>
+  <p>You choose each student's level in the class's <strong>Gradebook</strong> (Easy until you do). Students only
+    ever see their own level's exercise and challenge, and never which level it is. The exercise counts 80% of its
+    points at Easy, 88% at Medium and 100% at Master; the challenge's points are a bonus, on top of the grade and
+    never part of what it's out of, so skipping it costs nothing, and passing it pays XP, more for a harder level.
+    Change a level and that student's scores are worked out again.</p>
+  <pre class="help-src">## ✏ Coding Exercise — The Name Badge
 
 :::level easy
 ```python

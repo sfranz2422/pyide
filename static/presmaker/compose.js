@@ -212,13 +212,13 @@
     return withHeader(md, h.themeLine, h.animateLine, h.lockedLine, on ? "quiz: yes" : "");
   }
 
-  /* v11 levels (PyIDE, Nov 2026): a Choose Your Level slide, the exercise in
-     three level boxes, and the challenge the same way. Each level has its own
-     values and its own tests ("or they will just copy from a neighbor"); a
-     student sees only theirs, and earns the points only at the level their
-     teacher suggests. The examples are real, so the tests can pass. */
+  /* v11 levels (PyIDE, Nov 2026): the exercise and the challenge written
+     three times, in :::level boxes, each level with its own values and its
+     own tests ("or they will just copy from a neighbor"). The teacher sets
+     each student's level in the IDE's gradebook; students never choose or
+     see it, so there's no choice slide. The examples are real, so the tests
+     can pass. */
   var LEVEL_SNIPPETS = {
-    "level-choice": "## 🎚 Choose Your Level\n\nPick how much help you want on the coding exercise. Stick with the level you pick.\n\n```level\n```",
     "level-exercise": [
       ":::level easy", ":::pop", "✏ **Your turn:** type this into `main.py` and fill in every `_____`.", ":::", "",
       "```python", "name = input(\"Name? \")", "print(f\"Hello, _____!\")", "```", "",
@@ -233,9 +233,8 @@
       "**Expected output** (type `Erie`):", "", "```text", "City? Erie", "Welcome to Erie!", "```", "",
       "```tests exercise master", "input Erie -> prints Welcome to Erie!", "```", ":::end"].join("\n"),
     "level-challenge": [
-      "## 🎚 Choose Your Challenge Level", "",
-      "The challenge is a bonus: a bonus point and XP if it passes, and nothing lost if you skip it.", "",
-      "```level", "for: challenge", "```", "", "---", "", "## ★ Challenge", "",
+      "## ★ Challenge", "",
+      "A bonus: pass it for a bonus point and XP. Nothing is lost if you skip it.", "",
       ":::level challenge easy", "```python", "print(\"Go _____!\")", "```", "",
       "```tests bonus easy", "prints Go team!", "```", ":::end",
       ":::level challenge medium", "```python", "print(_____)", "```", "",

@@ -1,2 +1,2 @@
 Copied from ~/presMaker/web by tools/sync_presmaker.py. Edit PresMaker, then sync.
-0702ef2 2026-11-17 Quiz (hide results) toggle and v11 level blocks
+dc8e4a6 2026-11-17 Levels: no choice slide (the teacher sets each student's level); synced from PyIDE

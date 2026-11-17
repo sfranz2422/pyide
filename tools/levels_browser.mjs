@@ -40,7 +40,7 @@ try {
     await send("Page.enable", {}, S);
     await send("Page.navigate", { url: cfg.base + page }, S);
     const ev = async (e) => (await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true }, S)).result?.value;
-    for (let k = 0; k < 100; k++) { await sleep(100); if (await ev(`!!document.querySelector('${ready || ".level-choose"}')`)) break; }
+    for (let k = 0; k < 100; k++) { await sleep(100); if (await ev(`!!document.querySelector('${ready || ".level-part"}')`)) break; }
     await sleep(800);
     ev.shot = async (name) => {
       if (!process.env.LEVELS_SHOT) return;
@@ -49,29 +49,17 @@ try {
     };
     return ev;
   }
-  // What's on screen: the level boxes showing, by their words.
+  // What's on screen: the level boxes showing, by their first line.
   const SHOWN = `[...document.querySelectorAll('.level-part')].filter(b => b.offsetParent !== null).map(b => b.textContent.trim().split('\\n')[0])`;
-  const BTN = (key, lv) => `document.querySelector('.level-choose[data-for="${key}"] .level-${lv}')`;
-  const NOTES = `[...document.querySelectorAll('.level-choose[data-for="exercise"] .level-note')].map(n => n.textContent).join(' | ')`;
 
-  // ---- a student, choosing (no suggestion)
-  const s = await open(cfg.student, cfg.page);
-  out.before = { shown: await s(SHOWN), wait: await s("[...document.querySelectorAll('.level-wait')].map(w => w.textContent).join(' | ')"),
-                 needs: await s("!!document.querySelector('.level-choose[data-for=\"exercise\"][data-needs]')"),
-                 notes: await s(NOTES) };
-  await s.shot("1-before");
-  await s(`${BTN("exercise", "medium")}.click()`);
-  await sleep(1200);
-  out.medium = { shown: await s(SHOWN), wait: await s("[...document.querySelectorAll('.level-wait')].map(w => w.textContent).join(' | ')"),
-                 masterDisabled: await s(`${BTN("exercise", "master")}.disabled`),
-                 easyDisabled: await s(`${BTN("exercise", "easy")}.disabled`),
-                 needs: await s("!!document.querySelector('.level-choose[data-for=\"exercise\"][data-needs]')"),
-                 notes: await s(NOTES) };
-  await s.shot("2-medium");
-  await s(`${BTN("challenge", "master")}.click()`);
-  await sleep(1200);
-  // A check that passes the exercise, not the challenge.
-  await s("document.querySelector('.CodeMirror').CodeMirror.setValue('print(\"Howdy\")\\n')");
+  // ---- a student whose level was never set: Easy
+  const s = await open(cfg.student, cfg.page, ".level-part:not([hidden])");
+  out.easy = { shown: await s(SHOWN),
+               chooser: await s("!!document.querySelector('.level-choose, .level-view')"),
+               levelWords: await s("/Choose your level|suggest|Your level/i.test(document.querySelector('#notes-body, .notes-body, body').innerText)"),
+               marker: await s("document.body.innerText.indexOf('%%LEVEL') >= 0") };
+  await s.shot("1-easy");
+  await s("document.querySelector('.CodeMirror').CodeMirror.setValue('print(\"Hello\")\\n')");
   await s("[...document.querySelectorAll('.tests-card')].find(c => c.offsetParent !== null).querySelector('.tests-run').click()");
   for (let k = 0; k < 150; k++) { await sleep(200); if (await s("!!document.querySelector('.test-line.pass')")) break; }
   await sleep(500);
@@ -81,69 +69,41 @@ try {
                        sum: await s(`${BON}.querySelector('.tests-sum').textContent`),
                        head: await s(`${BON}.querySelector('.tests-head').textContent`),
                        exercisePassed: await s("[...document.querySelectorAll('.tests-card:not(.tests-bonus)')].find(c => c.offsetParent !== null).hasAttribute('data-passed')") };
-  await s("document.querySelector('.CodeMirror').CodeMirror.setValue('print(\"Howdy\")\\nprint(\"Wow 3\")\\n')");
+  await s("document.querySelector('.CodeMirror').CodeMirror.setValue('print(\"Hello\")\\nprint(\"Wow 1\")\\n')");
   await s(`${BON}.querySelector('.tests-run').click()`);
   for (let k = 0; k < 150; k++) { await sleep(200); if (await s(`!!${BON}.querySelector('.test-line.pass')`)) break; }
   await sleep(500);
   out.bonusDone = { marks: await s(`[...${BON}.querySelectorAll('.tests-mark')].map(m => m.textContent).join('')`),
                     passed: await s(`${BON}.hasAttribute('data-passed')`) };
-  // A reload: the pick is the server's.
-  const s2 = await open(cfg.student, cfg.page);
-  out.reloaded = { shown: await s2(SHOWN) };
-  // Changing level asks again and says the points go.
-  await s2(`${BTN("exercise", "easy")}.click()`);
-  await sleep(300);
-  out.change = { button: await s2(`${BTN("exercise", "easy")}.textContent`), notes: await s2(NOTES) };
-  await s2(`${BTN("exercise", "easy")}.click()`);
-  await sleep(1200);
-  out.dropped = { shown: await s2(SHOWN), notes: await s2(NOTES) };
 
-  // ---- a student with a suggestion (not locked)
-  const g = await open(cfg.sugg, cfg.page);
-  out.sugg = { buttons: await g("[...document.querySelectorAll('.level-choose[data-for=\"exercise\"] .level-name')].map(b => b.textContent).join(' | ')"),
-               notes: await g(NOTES) };
-  await g(`${BTN("exercise", "easy")}.click()`);
-  await sleep(300);
-  out.sugg.confirm = await g(`${BTN("exercise", "easy")}.textContent`);
-  out.sugg.confirmNotes = await g(NOTES);
+  // ---- a student set to Master
+  const m = await open(cfg.master, cfg.page, ".level-part:not([hidden])");
+  out.master = { shown: await m(SHOWN) };
 
-  // ---- a locked student: only their level, no choosing
-  const l = await open(cfg.locked, cfg.page);
-  out.locked = { buttons: await l("[...document.querySelectorAll('.level-choose[data-for=\"exercise\"] .level-btn')].map(b => b.textContent)"),
-                 shown: await l(SHOWN), notes: await l(NOTES),
-                 needs: await l("!!document.querySelector('.level-choose[data-for=\"exercise\"][data-needs]')") };
-  await l.shot("3-locked");
-
-  // ---- the teacher: a switcher, every level, nothing saved
+  // ---- the teacher: a switcher over the boxes, nothing saved
   const t = await open(cfg.teacher, cfg.teacherPage, ".CodeMirror");
   await t("[...document.querySelectorAll('#file-tabs *')].find(x => /notes\\.md/.test(x.textContent) && x.children.length === 0)?.click()");
-  for (let k = 0; k < 50; k++) { await sleep(100); if (await t("!!document.querySelector('.level-choose')")) break; }
+  for (let k = 0; k < 50; k++) { await sleep(100); if (await t("!!document.querySelector('.level-view')")) break; }
   await sleep(500);
-  out.teacher = { shown: await t(SHOWN), notes: await t(NOTES) };
-  await t(`${BTN("exercise", "master")}.click()`);
+  out.teacher = { shown: await t(SHOWN), bars: await t("document.querySelectorAll('.level-view').length") };
+  await t("document.querySelector('.level-view .level-view-btn[data-level=\"master\"]').click()");
   await sleep(400);
   out.teacherMaster = await t(SHOWN);
 
-  // ---- slides with `locked: yes`: the level slide holds the way on
-  const h = await open(cfg.student2, cfg.slides);
-  out.held = { next: await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').disabled"),
-               why: await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').title") };
-  await h(`${BTN("exercise", "master")}.click()`);
-  await sleep(1200);
-  out.unheld = await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').disabled");
-  await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').click()");
-  await sleep(800);
-  out.nextSlide = await h(SHOWN);
-  out.exerciseOpenBefore = await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').disabled");
-  // Pass the exercise, then the challenge slide (only a bonus card) must not hold.
+  // ---- slides with `locked: yes`, as Master's student
+  const h = await open(cfg.master, cfg.slides, ".slide-btn");
+  const NEXT = "[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶')";
+  await h(`${NEXT}.click()`);
+  await sleep(1500);
+  out.held = { shown: await h(SHOWN), next: await h(`${NEXT}.disabled`) };
   await h("document.querySelector('.CodeMirror').CodeMirror.setValue('print(\"Hey there\")\\n')");
   await h("[...document.querySelectorAll('.tests-card')].find(c => c.offsetParent !== null).querySelector('.tests-run').click()");
   for (let k = 0; k < 150; k++) { await sleep(200); if (await h("!!document.querySelector('.tests-card[data-passed]')")) break; }
   await sleep(500);
-  out.exerciseOpen = await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').disabled");
-  await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').click()");
+  out.exerciseOpen = await h(`${NEXT}.disabled`);
+  await h(`${NEXT}.click()`);
   await sleep(800);
-  out.bonusHolds = await h("[...document.querySelectorAll('.slide-btn')].find(b => b.textContent === '▶').disabled");
+  out.bonusHolds = await h(`${NEXT}.disabled`);
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

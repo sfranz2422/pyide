@@ -1729,6 +1729,9 @@ body:not(.is-authoring) .notes-body .snippet-guess,
    level-part of the level they chose; [hidden] wins over anything a played
    part's reveal does. */
 .level-part[hidden] { display: none !important; }
+.prose .level-view { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0;
+                     padding: 6px 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.prose .level-view-btn.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .prose .level-wait { padding: 10px 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
 .prose .level-choose { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
                        background: var(--bg-panel); }

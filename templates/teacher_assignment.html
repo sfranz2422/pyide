@@ -430,7 +430,7 @@
                     <span class="fb-tests small {{ 'is-stale' if s.tests_stale }}"
                           title="{{ 'Turned in again since you checked — press Check all' if s.tests_stale else 'From your Check all' }}">Tests {{ s.tests or "not checked" }}{% if s.tests_stale %} ⟳{% endif %}{% if assignment.out_of and s.tests %} +{% endif %}</span>
                     {% if s.tests_self %}<span class="dim small" title="Their own Check my work — doesn't count">(their check {{ s.tests_self }})</span>{% endif %}
-                    {% if s.levels %}<span class="level-tag small" title="The level they chose (v11). It earns its points only at the level you suggested, and only if they never changed it (Easy counts 80%, Medium 88%, Master 100%). The challenge is bonus.">{% if s.levels.exercise %}Exercise: {{ s.levels.exercise|capitalize }}{% if s.credit.exercise == false %} (no credit){% endif %}{% endif %}{% if s.levels.challenge %}{% if s.levels.exercise %} · {% endif %}Challenge: {{ s.levels.challenge|capitalize }}{% if s.credit.challenge == false %} (no credit){% endif %}{% endif %}</span>{% endif %}
+                    {% if s.level %}<span class="level-tag small" title="Their level in this lesson (set in the gradebook): Easy counts the exercise 80%, Medium 88%, Master 100%. The challenge is bonus.">Level: {{ s.level|capitalize }}</span>{% endif %}
                   {% endif %}
                   {% if assignment.out_of %}
                     <input class="field fb-score" type="number" step="any" min="0"

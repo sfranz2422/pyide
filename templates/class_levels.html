@@ -29,45 +29,33 @@
   </div>
 </header>
 
-{#  v11 lessons let each student choose Easy, Medium or Master before the
-    coding exercise and the challenge (app.py, "Levels"). Here the teacher
-    suggests a level for each student (⭐ on their level slide) or locks one
-    (🔒: that's their level, no choosing). By roster row, so it works before
-    a student has signed in. The hint is the page's own reading of their
-    last exercises; nothing changes unless the teacher presses a button. #}
+{#  Each student's level in v11 lessons (app.py, "Levels"), set by the
+    teacher behind the scenes; by roster row, so it works before a student
+    has signed in. The hint is the page's own reading of their last
+    exercises; nothing changes unless the teacher presses a button. #}
 
 <main class="page class-levels">
   <section class="card">
-    <h2>Suggested levels</h2>
-    <p class="small dim">Each student sees your suggestion with a ⭐ on the level slide before a coding exercise and a challenge.
-      They earn the exercise's points (and the challenge's bonus point) <strong>only at your suggested level</strong>, and not at
-      all if they change level. They can still pick another level unless you lock it 🔒. With no suggestion, the level they choose
-      counts if they keep it. Easy counts the exercise's points 80% (B-), Medium 88% (B+), Master 100%.</p>
-    <p class="level-name-row">
-      <label>Your name on the suggestion:
-        <input id="teacher-name" type="text" maxlength="80" placeholder="Your teacher" value="{{ teacher_name }}"></label>
-      <button class="btn" id="save-name" type="button">Save</button>
-      <span class="small dim" id="name-said"></span>
-    </p>
-    <p class="small dim">Students see: “⭐ <span id="name-preview">{{ teacher_name or "Your teacher" }}</span> suggests Medium for you.”</p>
+    <h2>Levels</h2>
+    <p class="small dim">Each student's level in v11 lessons: the exercise and the challenge they see. Easy until you set it.
+      Students never see a choice or which level they're on. Easy counts the exercise's points 80% (B-), Medium 88% (B+),
+      Master 100%; the challenge is always a bonus. Set levels here or in the gradebook.</p>
     {% if not rows %}
       <p class="dim">No students on this class's roster yet. Link it to a Classroom class on the class page.</p>
     {% else %}
     <table class="levels-table">
-      <thead><tr><th>Student</th><th>Suggested level</th><th>Lock</th><th>Lately</th></tr></thead>
+      <thead><tr><th>Student</th><th>Level</th><th>Last exercises</th></tr></thead>
       <tbody>
       {% for r in rows %}
         <tr data-id="{{ r.id }}" data-level="{{ r.level }}">
           <td>{{ r.name }}</td>
           <td class="level-pick">
-            {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if r.level == lv }}" data-level="{{ lv }}"
-              aria-pressed="{{ 'true' if r.level == lv else 'false' }}">{{ lv|capitalize }}</button>{% endfor %}
-            <button type="button" class="linkbtn small js-level" data-level="">none</button>
+            {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if (r.level or 'easy') == lv }}" data-level="{{ lv }}"
+              aria-pressed="{{ 'true' if (r.level or 'easy') == lv else 'false' }}">{{ lv|capitalize }}</button>{% endfor %}
           </td>
-          <td><label class="small"><input type="checkbox" class="js-lock" {{ 'checked' if r.locked }} {{ '' if r.level else 'disabled' }}> 🔒</label></td>
           <td class="small">
-            {% for p in r.recent %}<span class="level-recent level-{{ p.level }}" title="{{ p.title }}">{{ p.level|capitalize }}{% if p.full %} ✓{% elif p.full == false %} ✗{% endif %}</span>{% if not loop.last %} · {% endif %}{% endfor %}
-            {% if not r.recent %}<span class="dim">no levels chosen yet</span>{% endif %}
+            {% for p in r.recent %}<span class="level-recent" title="{{ p.title }}">{{ '✓' if p.full else '✗' }}</span>{% endfor %}
+            {% if not r.recent %}<span class="dim">no exercises checked yet</span>{% endif %}
             {% if r.hint %}<div class="level-hint">💡 {{ r.hint }}</div>{% endif %}
           </td>
         </tr>
@@ -81,38 +69,22 @@
 <script>
 (function () {
   var CLASS = {{ course.id }};
-  function post(body) {
-    return fetch("/api/class/" + CLASS + "/levels", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body) }).then(function (r) { return r.json(); });
-  }
-  var name = document.getElementById("teacher-name");
-  name.addEventListener("input", function () {
-    document.getElementById("name-preview").textContent = name.value.trim() || "Your teacher";
-  });
-  document.getElementById("save-name").addEventListener("click", function () {
-    post({ teacher_name: name.value }).then(function (d) {
-      document.getElementById("name-said").textContent = d.ok ? "Saved." : (d.error || "Couldn't save.");
-    });
-  });
   Array.prototype.forEach.call(document.querySelectorAll(".levels-table tr[data-id]"), function (tr) {
-    var lock = tr.querySelector(".js-lock");
-    function save(level, locked) {
-      post({ enrollment: Number(tr.getAttribute("data-id")), level: level, locked: locked }).then(function (d) {
-        if (!d.ok) return;
-        tr.setAttribute("data-level", d.level);
-        Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
-          var on = !!d.level && b.getAttribute("data-level") === d.level;
-          b.classList.toggle("is-on", on);
-          b.setAttribute("aria-pressed", on ? "true" : "false");
-        });
-        lock.checked = d.locked;
-        lock.disabled = !d.level;
-      });
-    }
     Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
-      b.addEventListener("click", function () { save(b.getAttribute("data-level"), lock.checked); });
+      b.addEventListener("click", function () {
+        fetch("/api/class/" + CLASS + "/levels", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enrollment: Number(tr.getAttribute("data-id")), level: b.getAttribute("data-level") }) })
+          .then(function (r) { return r.json(); }).then(function (d) {
+            if (!d.ok) return;
+            tr.setAttribute("data-level", d.level);
+            Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (x) {
+              var on = x.getAttribute("data-level") === (d.level || "easy");
+              x.classList.toggle("is-on", on);
+              x.setAttribute("aria-pressed", on ? "true" : "false");
+            });
+          });
+      });
     });
-    lock.addEventListener("change", function () { save(tr.getAttribute("data-level"), lock.checked); });
   });
 })();
 </script>
