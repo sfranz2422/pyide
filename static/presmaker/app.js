@@ -446,6 +446,7 @@
     speedSel.value = shown.speed || "normal";
     speedSel.hidden = !shown.animate;
     lockedBox.checked = C.lockedOf(shown.md);
+    quizBox.checked = C.quizOf(shown.md);
   }
   /* Puts new notes in place of the old as one edit (⌘Z takes it back),
      touching only the part that changed — the header lines at the top. */
@@ -466,6 +467,17 @@
   lockedBox.addEventListener("change", function () {
     if (replaceText(C.setLocked(text(), lockedBox.checked), "+locked") && lockedBox.checked) {
       say("In the IDEs, each slide with tests now waits until they all pass. Add tests with + Tests.");
+    }
+  });
+
+  /* Quiz (hide results): the `quiz: yes` line (compose.js setQuiz). In the
+     IDEs students are never told whether an answer or a check was right; the
+     teacher sees everything. PresMaker's own preview is the teacher's, so it
+     shows results as always. */
+  var quizBox = $("quiz");
+  quizBox.addEventListener("change", function () {
+    if (replaceText(C.setQuiz(text(), quizBox.checked), "+quiz") && quizBox.checked) {
+      say("A quiz: in the IDEs, students see only that their answers and checks were saved.");
     }
   });
 
@@ -854,6 +866,7 @@
         case "present": return DE.present();
         case "themes": return D.themes({ theme: function () { return window.PMDeckFile.themeOf(DE._state().d); }, use: DE.useTheme });
         case "question": case "tests": case "part": case "pause": case "pop": case "editor-pop": case "cards": case "checklist":
+        case "level-choice": case "level-exercise": case "level-challenge":
         case "run-code": case "predict-code": case "export": case "export-pdf": case "follow":
           return say("That's for markdown lessons. In teacher slides, use + Slide, click the words, or the HTML panel.");
       }
@@ -872,7 +885,13 @@
       case "tests": {
         // An IDE whose tests are another fence (GameIDE's ```check) says so (bridge.js PM_SERVER).
         var t = blockHere((B.server && B.server.testsFence) || "tests");
-        return D.tests(t, shown.theme, function (md) { putBlock(md, t); });
+        // A block's words after `tests` (```tests exercise easy, ```tests bonus:
+        // v11 levels) are kept: the form writes a plain ```tests line.
+        var opener = t ? cm.getLine(t.start) : "";
+        return D.tests(t, shown.theme, function (md) {
+          if (t && /^\s*(`{3,}|~{3,})\s*tests\s+\S/i.test(opener)) md = md.replace(/^[^\n]*/, opener.trim());
+          putBlock(md, t);
+        });
       }
       case "themes":
         return D.themes({ theme: function () { return C.themeOf(text()); }, use: useTheme });
@@ -886,6 +905,7 @@
       case "pop": return insertPop();
       case "editor-pop": return insertEditorPop();
       case "cards": case "checklist": case "run-code": case "predict-code": return putBlock(SNIPPETS[name]);
+      case "level-choice": case "level-exercise": case "level-challenge": return putBlock(C.LEVEL_SNIPPETS[name]);
     }
   }
 

@@ -19,6 +19,8 @@
   var SPEED_NAMES = { slow: 1, normal: 1, fast: 1 };
   // notes.js's `locked:` line: hold a slide with tests until they pass (in the IDEs).
   var LOCKED_LINE = /^[ \t]*locked[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$/i;
+  // notes.js's `quiz:` line: students are never told how a check or an answer went.
+  var QUIZ_LINE = /^[ \t]*quiz[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$/i;
   function readAnimate(line) {
     var a = line.match(ANIMATE_LINE);
     if (!a) return null;
@@ -122,8 +124,8 @@
   }
 
   // ------------------------------------------------------------- header
-  /* The notes' header lines as notes.js's takeHeader reads them: `theme:`
-     and `animate:`, the first one or two lines with anything on them, in
+  /* The notes' header lines as notes.js's takeHeader reads them: `theme:`,
+     `animate:`, `locked:` and `quiz:`, the first lines with anything on them, in
      either order. {theme, animate, themeLine, animateLine, lines, end}: the
      names written, the lines themselves as written, their numbers, and the
      line the rest starts on.
@@ -134,12 +136,12 @@
      from "a theme the IDEs don't have". */
   function header(md, known) {
     var ls = lines(md), i = 0;
-    var out = { theme: "", animate: "", speed: "", locked: false,
-                themeLine: "", animateLine: "", lockedLine: "", lines: [], end: 0 };
-    for (var k = 0; k < 3; k++) {
+    var out = { theme: "", animate: "", speed: "", locked: false, quiz: false,
+                themeLine: "", animateLine: "", lockedLine: "", quizLine: "", lines: [], end: 0 };
+    for (var k = 0; k < 4; k++) {
       while (i < ls.length && !ls[i].trim()) i++;
       if (i >= ls.length) break;
-      var t = ls[i].match(THEME_LINE), a = readAnimate(ls[i]), l = ls[i].match(LOCKED_LINE);
+      var t = ls[i].match(THEME_LINE), a = readAnimate(ls[i]), l = ls[i].match(LOCKED_LINE), z = ls[i].match(QUIZ_LINE);
       if (t && !out.themeLine && (!known || known.indexOf(t[1].toLowerCase()) >= 0)) {
         out.theme = t[1].toLowerCase();
         out.themeLine = ls[i].trim();
@@ -150,6 +152,9 @@
       } else if (l && !out.lockedLine) {
         out.locked = /^(yes|on|true)$/i.test(l[1]);
         out.lockedLine = ls[i].trim();
+      } else if (z && !out.quizLine) {
+        out.quiz = /^(yes|on|true)$/i.test(z[1]);
+        out.quizLine = ls[i].trim();
       } else break;
       out.lines.push(i);
       out.end = ++i;
@@ -160,10 +165,11 @@
   /* The notes with the header made of these lines, theme first; the rest
      untouched. Blank lines before the header go with it, as takeHeader
      takes them. */
-  function withHeader(md, themeLine, animateLine, lockedLine) {
+  function withHeader(md, themeLine, animateLine, lockedLine, quizLine) {
     var h = header(md);
     var body = h.lines.length ? lines(md).slice(h.end).join("\n") : String(md || "");
-    var top = [themeLine, animateLine, lockedLine === undefined ? h.lockedLine : lockedLine].filter(function (l) { return l; });
+    var top = [themeLine, animateLine, lockedLine === undefined ? h.lockedLine : lockedLine,
+               quizLine === undefined ? h.quizLine : quizLine].filter(function (l) { return l; });
     return top.length ? top.join("\n") + "\n" + body : body;
   }
 
@@ -195,6 +201,48 @@
     return withHeader(md, h.themeLine, h.animateLine, on ? "locked: yes" : "");
   }
 
+  /* Whether the notes are a quiz (`quiz: yes`): in the IDEs students are
+     never told if a question or a check was right; their teacher sees it all. */
+  function quizOf(md) { return header(md).quiz; }
+
+  /* The notes with `quiz: yes`, or without the line (on false). The other
+     header lines stay, in front of it. */
+  function setQuiz(md, on) {
+    var h = header(md);
+    return withHeader(md, h.themeLine, h.animateLine, h.lockedLine, on ? "quiz: yes" : "");
+  }
+
+  /* v11 levels (PyIDE, Nov 2026): a Choose Your Level slide, the exercise in
+     three level boxes, and the challenge the same way. Each level has its own
+     values and its own tests ("or they will just copy from a neighbor"); a
+     student sees only theirs, and earns the points only at the level their
+     teacher suggests. The examples are real, so the tests can pass. */
+  var LEVEL_SNIPPETS = {
+    "level-choice": "## 🎚 Choose Your Level\n\nPick how much help you want on the coding exercise. Stick with the level you pick.\n\n```level\n```",
+    "level-exercise": [
+      ":::level easy", ":::pop", "✏ **Your turn:** type this into `main.py` and fill in every `_____`.", ":::", "",
+      "```python", "name = input(\"Name? \")", "print(f\"Hello, _____!\")", "```", "",
+      "**Expected output** (type `Ava`):", "", "```text", "Name? Ava", "Hello, Ava!", "```", "",
+      "```tests exercise easy", "input Ava -> prints Hello, Ava!", "```", ":::end",
+      ":::level medium", ":::pop", "✏ **Your turn:** type this into `main.py` and fill in every `_____`.", ":::", "",
+      "```python", "pet = _____", "print(_____)", "```", "",
+      "**Expected output** (type `Rex`):", "", "```text", "Pet? Rex", "Good dog, Rex!", "```", "",
+      "```tests exercise medium", "input Rex -> prints Good dog, Rex!", "```", ":::end",
+      ":::level master", ":::pop", "✏ **Your turn:** write this program yourself in `main.py`.", ":::", "",
+      "Ask `City? ` and print `Welcome to` the city, with a `!`.", "",
+      "**Expected output** (type `Erie`):", "", "```text", "City? Erie", "Welcome to Erie!", "```", "",
+      "```tests exercise master", "input Erie -> prints Welcome to Erie!", "```", ":::end"].join("\n"),
+    "level-challenge": [
+      "## 🎚 Choose Your Challenge Level", "",
+      "The challenge is a bonus: a bonus point and XP if it passes, and nothing lost if you skip it.", "",
+      "```level", "for: challenge", "```", "", "---", "", "## ★ Challenge", "",
+      ":::level challenge easy", "```python", "print(\"Go _____!\")", "```", "",
+      "```tests bonus easy", "prints Go team!", "```", ":::end",
+      ":::level challenge medium", "```python", "print(_____)", "```", "",
+      "Print `Go Mohawk!`", "", "```tests bonus medium", "prints Go Mohawk!", "```", ":::end",
+      ":::level challenge master", "Print `Go Warriors!` three times, on one line, with spaces between.", "",
+      "```tests bonus master", "prints Go Warriors! Go Warriors! Go Warriors!", "```", ":::end"].join("\n")
+  };
   // ------------------------------------------------------------- slides
   /* Which slide line `at` (from 0) is on, counted exactly as notes.js's
      slides() counts: the header lines come off the top, each `---` outside
@@ -607,7 +655,7 @@
   var api = {
     fences: fences, blockAt: blockAt, strip: strip,
     themeOf: themeOf, setTheme: setTheme, header: header, animateOf: animateOf, setAnimate: setAnimate,
-    lockedOf: lockedOf, setLocked: setLocked,
+    lockedOf: lockedOf, setLocked: setLocked, quizOf: quizOf, setQuiz: setQuiz, LEVEL_SNIPPETS: LEVEL_SNIPPETS,
     bugLines: bugLines,
     slideAt: slideAt, slideStart: slideStart,
     quizBlock: quizBlock, quizForm: quizForm,

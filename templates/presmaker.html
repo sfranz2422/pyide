@@ -72,6 +72,9 @@
       <label class="pm-label" title="In the IDEs, a slide with tests waits until every test on it passes (locked: yes). You and a live lesson are never held.">
         <input type="checkbox" id="locked"> Lock slides
       </label>
+      <label class="pm-label" title="Make it a quiz (quiz: yes): in the IDEs students are never told whether a question or a check was right. Everything is still kept and marked for you.">
+        <input type="checkbox" id="quiz"> Quiz (hide results)
+      </label>
     </div>
     <div class="pm-group md-only">
       <button class="btn" data-cmd="question" title="Insert a question, or change the one at the cursor (⇧⌘K)">+ Question</button>
@@ -87,6 +90,9 @@
           <button data-cmd="checklist" title="- [ ] items students tick">Checklist</button>
           <button data-cmd="run-code" title="```python run — code students can change and run">Code that runs</button>
           <button data-cmd="predict-code" title="```python predict — they must predict what it prints; # hint: lines help after a wrong guess">Predict the output</button>
+          <button data-cmd="level-choice" title="A Choose Your Level slide (```level): each student picks Easy, Medium or Master for the coding exercise">Choose level (exercise)</button>
+          <button data-cmd="level-exercise" title="The exercise in three :::level boxes — Easy, Medium, Master — each with its own values and its own ```tests exercise easy|medium|master">Exercise levels</button>
+          <button data-cmd="level-challenge" title="A Choose Your Challenge Level slide and the challenge in three :::level challenge boxes, each with its own ```tests bonus (bonus points, nothing lost for skipping)">Challenge levels</button>
         </div>
       </div>
     </div>

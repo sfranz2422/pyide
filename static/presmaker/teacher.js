@@ -62,6 +62,17 @@
         stack.push(pop.items);
         continue;
       }
+      // v11 levels: `:::level [challenge] easy|medium|master` … `:::end`. The
+      // teacher's deck shows one version (Easy's); parts() drops the others.
+      var lv = ln.match(/^ {0,3}:::\s*level(?:\s+(?:exercise|challenge))?\s+(easy|medium|master)\s*$/i);
+      if (lv) {
+        flush();
+        var box = { type: "level", level: lv[1].toLowerCase(), items: [] };
+        top().push(box);
+        stack.push(box.items);
+        continue;
+      }
+      if (/^ {0,3}:::\s*end\s*$/i.test(ln)) { flush(); if (stack.length > 1) stack.pop(); continue; }
       if (/^ {0,3}:::\s*$/.test(ln) && stack.length > 1) { flush(); stack.pop(); continue; }
       if (/^ {0,3}\.\.\.\s*$/.test(ln)) { flush(); stack.length = 1; continue; }
       if (/^\s*\^+\s*$/.test(ln)) continue;
@@ -121,6 +132,8 @@
       if (it.type === "md") {
         var t = cleanText(it.text);
         if (t.trim()) out.push({ t: "md", text: t });
+      } else if (it.type === "level") {
+        if (it.level === "easy") parts(it.items, ctx).forEach(function (p) { out.push(p); });
       } else if (it.type === "pop") {
         if (!keepPop(it)) return;
         var inner = parts(it.items, ctx);
@@ -189,6 +202,8 @@
         slide = { kind: "title", title: out.title, parts: parts(rest, ctx) };
       } else if (heading && /^✏/.test(heading.text) && /exercise|continued|check it/i.test(heading.text)) {
         return;                                  // the coding exercise is the students' work
+      } else if (its.some(function (it) { return it.type === "fence" && it.info === "level"; })) {
+        return;                                  // Choose Your Level (v11): each student's, not the class's
       } else if (cards) {
         slide = { kind: "words", heading: heading ? heading.text : "Words to Know", cards: Notes.parseCards(cards.body) };
       } else {

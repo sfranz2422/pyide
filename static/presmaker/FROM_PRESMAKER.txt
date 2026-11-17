@@ -1,2 +1,2 @@
 Copied from ~/presMaker/web by tools/sync_presmaker.py. Edit PresMaker, then sync.
-2e34f93 2026-11-16 Teacher view: :::pop editor is a pop box too
+0702ef2 2026-11-17 Quiz (hide results) toggle and v11 level blocks
