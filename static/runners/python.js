@@ -746,7 +746,10 @@
     }
 
     function testsHere() {
-      return window.PyIDETests ? window.PyIDETests.fromFiles(projectFiles()).tests : [];
+      // v11: a level's own tests only for the level the student is on (forLevels).
+      if (!window.PyIDETests) return [];
+      var all = window.PyIDETests.fromFiles(projectFiles()).tests;
+      return window.PyIDETests.forLevels ? window.PyIDETests.forLevels(all) : all;
     }
 
     /* The run itself: every test in the notes, on what is in the editor

@@ -1515,7 +1515,10 @@
      what counts. Only from the ✔ on the notes' tests cards: the button
      above their editor is gone, so they check beside the step. */
   function liveTests() {
-    return window.PyIDETests && liveNotes ? window.PyIDETests.parse(liveNotes).tests : [];
+    if (!window.PyIDETests || !liveNotes) return [];
+    var all = window.PyIDETests.parse(liveNotes).tests;
+    // v11: a level's own tests only for the level the student is on.
+    return window.PyIDETests.forLevels ? window.PyIDETests.forLevels(all) : all;
   }
 
   /* The run itself, on THEIR code. The notes' tests cards

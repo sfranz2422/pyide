@@ -608,6 +608,51 @@ class LabState(Base):
     __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
 
 
+class LevelPick(Base):
+    """The level a student chose for an assignment's coding exercise or its
+    challenge (v11, "Levels" below): easy, medium or master. One row per
+    (assignment, student, key). PyIDE's own table,
+    like lab_states, no foreign keys for the same reason."""
+    __tablename__ = "level_picks"
+    __table_args__ = (UniqueConstraint("assignment_id", "student_id", "key"),)
+
+    id = Column(Integer, primary_key=True)
+    assignment_id = Column(Integer, index=True, nullable=False)
+    student_id = Column(Integer, index=True, nullable=False)
+    key = Column(String(16), nullable=False)
+    level = Column(String(8), nullable=False)
+    #: 1 once the student has changed level for this part: it earns no
+    #: points from then on (the teacher's rule), even if they change back —
+    #: or anyone could look at the easy blanks and return.
+    changed = Column(Integer, nullable=False, default=0)
+    picked_at = Column(DateTime, nullable=False,
+                       default=lambda: datetime.now(timezone.utc))
+
+
+class LevelSuggestion(Base):
+    """The teacher's suggested level for one student on a class's roster
+    (the class's Levels page), and whether it's locked. By roster row
+    (Enrollment), so it can be set before the student has ever signed in,
+    as the name picker's names are."""
+    __tablename__ = "level_suggestions"
+    __table_args__ = (UniqueConstraint("class_id", "enrollment_id"),)
+
+    id = Column(Integer, primary_key=True)
+    class_id = Column(Integer, index=True, nullable=False)
+    enrollment_id = Column(Integer, nullable=False)
+    level = Column(String(8), nullable=False, default="")
+    locked = Column(Integer, nullable=False, default=0)
+
+
+class LevelSetting(Base):
+    """A class's Levels page settings: how its students see the teacher's
+    name on a suggestion ("Mr. Franz suggests Medium")."""
+    __tablename__ = "level_settings"
+
+    class_id = Column(Integer, primary_key=True, autoincrement=False)
+    teacher_name = Column(String(80), nullable=False, default="")
+
+
 class OnceDone(Base):
     """A change to existing rows that must happen exactly once (`_once`).
     Run on every boot instead, it would undo what teachers chose after it:
@@ -2647,8 +2692,7 @@ def _clean_results(raw):
 
 def _keep_result(db, item, student_id, kind, data):
     results = _clean_results(data.get("results"))
-    possible = round(sum(r["points"] for r in results), 2)
-    earned = round(sum(r["points"] for r in results if r["ok"]), 2)
+    earned, possible = _scored(db, item, student_id, results)
     row = db.query(accounts.TestResult).filter_by(
         assignment_id=item.id, student_id=student_id, kind=kind).first()
     if row is None:
@@ -2706,7 +2750,7 @@ def _self_tests_xp(db, item, student_id, row):
             got += xp.award(db, student_id, "selftest:%d:%s" % (item.id, key),
                             xp.SELF_TEST_XP,
                             ("Passed a test in %s: %s" % (item.title, r["label"]))[:200], APP_NAME)
-    return got
+    return got + _challenge_xp(db, item, student_id, row)
 
 
 @app.post("/api/predict/xp")
@@ -2830,8 +2874,466 @@ def tests_verify(slug):
         gained = _tests_xp(db, item, student_id, row)
         gained += _full_marks_xp(db, item, student_id)
         total = _total(sub.score, _earned(db, item.id).get(student_id))
+        level = _picks(db, item, student_id).get("exercise", "") if "exercise" in _level_keys(item) else ""
         return jsonify(ok=True, earned=row.earned, possible=row.possible, xp=gained,
-                       total=_score_text(total), synced=_is_synced(sub, total))
+                       total=_score_text(total), synced=_is_synced(sub, total), level=level)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Levels (v11 lessons, Nov 2026, the teacher's request)
+#
+# A ```level slide before the coding exercise (and another before the ★
+# Challenge) lets each student pick Easy (the v10wb blanks), Medium (fewer
+# hints) or Master (write it yourself); notes.js shows them only that one.
+# Each level has its own variables, values and tests (```tests exercise easy
+# …), or "they will just copy from a neighbor".
+#
+# WHO EARNS WHAT (the teacher: "the student only earns the points on the
+# coding exercise and bonus if they are completed at the level i suggest. if
+# they change it no credit is given"): the teacher suggests a level per
+# student on the class's Levels page (⭐, or locks it 🔒). The exercise's
+# tests (```tests exercise …) and the challenge's (```tests bonus …) are
+# counted only at THAT level, and only for a student who never changed level
+# for that part; anything else earns them nothing. With no suggestion, the
+# level the student first chose counts — again only if they kept it. The
+# level counted also scales the exercise (LEVEL_FACTOR: easy 0.8, medium
+# 0.88, master 1.0: "i couldn't in good conscience give the same amount of
+# points to a student who always chose the easy"). Bonus points are never
+# part of what the work is out of; passing a challenge pays CHALLENGE_XP once,
+# more for a harder level, whatever the credit.
+#
+# The pick is kept HERE because it decides a grade: a page could claim
+# anything. A result already kept is scored again when the pick changes, so
+# the grade always follows the rule as it stands. Which test belongs to which
+# part and level comes from the notes, never the page. The page also offers
+# its own suggestion (🤖) from how the lesson's gone so far, where the
+# teacher hasn't made one — never in a quiz, where it would say what was right.
+# --------------------------------------------------------------------------
+
+LEVELS = ("easy", "medium", "master")
+LEVEL_KEYS = ("exercise", "challenge")
+LEVEL_FACTOR = {"easy": 0.8, "medium": 0.88, "master": 1.0}
+CHALLENGE_XP = {"easy": 25, "medium": 40, "master": 60}
+LEVEL_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*level[ \t]*$", re.M | re.I)
+LEVEL_FOR = re.compile(r"^\s*for\s*:\s*(exercise|challenge)\s*$", re.M | re.I)
+
+
+def _notes_md(item):
+    return "\n".join(t for n, t in sorted(item.file_map().items())
+                     if n.lower().endswith(".md") and isinstance(t, str))
+
+
+def _level_keys(item):
+    """The levels the notes ask students to choose: "exercise", "challenge"."""
+    md, keys = _notes_md(item), set()
+    for m in LEVEL_FENCE.finditer(md):
+        body = md[m.end():].split("\n" + m.group(1), 1)[0]
+        f = LEVEL_FOR.search(body)
+        keys.add(f.group(1).lower() if f else "exercise")
+    return keys
+
+
+def _test_parts(item):
+    """{label: part} for the notes' tests: "", "exercise" or "bonus"."""
+    return {t["label"]: t.get("part", "") for t in _grader(item).file_tests(item.file_map())[0]}
+
+
+def _picks(db, item, student_id):
+    return {p.key: p.level for p in db.query(LevelPick).filter_by(
+        assignment_id=item.id, student_id=student_id)}
+
+
+def _enrollment_for(db, item, user):
+    """(class id, the student's roster row) for the class the assignment is
+    in, or (None, None)."""
+    row = db.query(accounts.ClassItem).filter_by(assignment_id=item.id).first()
+    if row is None or user is None or not user.email:
+        return None, None
+    enr = (db.query(accounts.Enrollment)
+             .filter(accounts.Enrollment.class_id == row.class_id,
+                     func.lower(accounts.Enrollment.email) == user.email.lower()).first())
+    return row.class_id, enr
+
+
+def _suggestion(db, item, user):
+    """(level the teacher suggests or "", locked?, the teacher's name for it)."""
+    class_id, enr = _enrollment_for(db, item, user)
+    if enr is None:
+        return "", False, ""
+    sug = db.query(LevelSuggestion).filter_by(class_id=class_id, enrollment_id=enr.id).first()
+    setting = db.query(LevelSetting).filter_by(class_id=class_id).first()
+    name = (setting.teacher_name if setting else "") or ""
+    if sug is None or sug.level not in LEVELS:
+        return "", False, name
+    return sug.level, bool(sug.locked), name
+
+
+def _pick_row(db, item, student_id, key):
+    return db.query(LevelPick).filter_by(assignment_id=item.id, student_id=student_id, key=key).first()
+
+
+def _credit(db, item, student_id, key, user=None):
+    """(level that counts, or "" when this part earns nothing; the level the
+    student is on). The teacher's rule: only at the suggested level (a lock
+    is a suggestion they can't change), and only if they never changed level
+    (even back). No suggestion: the level they chose, if they kept it. Nothing
+    chosen and nothing suggested: Easy, for an exercise whose tests aren't
+    split by level (a page that never asked)."""
+    if user is None:
+        user = db.query(accounts.User).filter_by(id=student_id).first()
+    sug, locked, _ = _suggestion(db, item, user)
+    row = _pick_row(db, item, student_id, key)
+    on = row.level if row is not None else (sug if locked else "")
+    kept = row is None or not row.changed
+    if locked:
+        return sug, sug
+    if sug:
+        return (sug if row is not None and row.level == sug and kept else ""), on
+    if row is None:
+        return "easy", ""
+    return (row.level if kept else ""), on
+
+
+def _split_tests(item):
+    """The notes' tests sorted out: {label: points} for plain ones, and for
+    each part ("exercise", "bonus") {level ("" for one written once): {label: points}}."""
+    plain, parts = {}, {"exercise": {}, "bonus": {}}
+    for t in _grader(item).file_tests(item.file_map())[0]:
+        part, level = t.get("part", ""), t.get("level", "")
+        if part in parts:
+            parts[part].setdefault(level, {})[t["label"]] = t["points"]
+        else:
+            plain[t["label"]] = t["points"]
+    return plain, parts
+
+
+def _scored(db, item, student_id, results):
+    """(earned, possible) for a check's lines. Plain tests as always. The
+    exercise's: only those of the level that counts (_credit), scaled by it;
+    nothing if no level counts — but always out of one level's worth. The
+    bonus's: only at the level that counts, never part of what it's out of.
+    Notes with no ```level slide count every line whole, as before."""
+    keys = _level_keys(item)
+    if not keys:
+        parts = _test_parts(item)
+        earned = possible = 0.0
+        for r in results:
+            if parts.get(r["label"], "") != "bonus":
+                possible += r["points"]
+            if r["ok"]:
+                earned += r["points"]
+        return round(earned, 2), round(possible, 2)
+    plain, parts = _split_tests(item)
+    ok = {}
+    for r in results:
+        ok[r["label"]] = ok.get(r["label"], False) or bool(r["ok"])
+    earned = sum(p for lab, p in plain.items() if ok.get(lab))
+    possible = sum(plain.values())
+    # The exercise: written once ("" level) or per level.
+    ex = parts["exercise"]
+    if ex:
+        counted, on = _credit(db, item, student_id, "exercise") if "exercise" in keys else ("easy", "")
+        lines = ex.get("", {}).copy()
+        lines.update(ex.get(counted or on or "easy", {}) if any(ex.get(lv) for lv in LEVELS) else {})
+        worth = sum(ex.get("", {}).values()) + max([sum(ex.get(lv, {}).values()) for lv in LEVELS] or [0])
+        possible += worth
+        if counted:
+            earned += LEVEL_FACTOR.get(counted, 1.0) * sum(p for lab, p in lines.items() if ok.get(lab))
+    bonus = parts["bonus"]
+    if bonus:
+        counted, _ = _credit(db, item, student_id, "challenge") if "challenge" in keys else ("easy", "")
+        if counted:
+            lines = dict(bonus.get("", {}))
+            lines.update(bonus.get(counted, {}))
+            if all(ok.get(lab) for lab in lines):
+                earned += sum(lines.values())
+    return round(earned, 2), round(possible, 2)
+
+
+def _rescore(db, item, student_id):
+    """Every result kept for this student, scored again (their level moved)."""
+    for row in db.query(accounts.TestResult).filter_by(assignment_id=item.id, student_id=student_id):
+        row.earned, row.possible = _scored(db, item, student_id, json.loads(row.details or "[]"))
+    db.commit()
+
+
+def _challenge_xp(db, item, student_id, row):
+    """CHALLENGE_XP once, when a check finds the challenge done: every bonus
+    test of the level the student is on passing — more for a harder level,
+    whether or not it earns the bonus point. A student's own check pays it,
+    as it pays each test's little XP: faked, it takes this once."""
+    _, parts = _split_tests(item)
+    bonus = parts["bonus"]
+    if not bonus:
+        return 0
+    pick = _pick_row(db, item, student_id, "challenge")
+    level = pick.level if pick is not None else "easy"
+    lines = set(bonus.get("", {})) | set(bonus.get(level, {}))
+    if any(bonus.get(lv) for lv in LEVELS) and not bonus.get(level):
+        return 0                                # their level has no challenge tests
+    ok = {r.get("label") for r in json.loads(row.details or "[]") if r.get("ok")}
+    if not lines or not all(lab in ok for lab in lines):
+        return 0
+    return xp.award(db, student_id, "challenge:%d" % item.id, CHALLENGE_XP.get(level, CHALLENGE_XP["easy"]),
+                    ("Challenge passed in %s (%s)" % (item.title, level.capitalize()))[:200], APP_NAME)
+
+
+def _exercise_full(db, item, student_id):
+    """Did this student's latest check (the teacher's, else their own) pass
+    every exercise test of the level they're on? None when there's no result."""
+    rows = {r.kind: r for r in db.query(accounts.TestResult).filter_by(
+        assignment_id=item.id, student_id=student_id)}
+    row = rows.get("verified") or rows.get("self")
+    if row is None:
+        return None
+    _, parts = _split_tests(item)
+    pick = _pick_row(db, item, student_id, "exercise")
+    ex = parts["exercise"]
+    labels = set(ex.get("", {})) | set(ex.get(pick.level if pick is not None else "easy", {}))
+    lines = [r for r in json.loads(row.details or "[]") if r.get("label") in labels]
+    if not lines:
+        return None
+    return all(r.get("ok") for r in lines)
+
+
+def _recent_levels(db, class_id, student_id, but=None, many=5):
+    """[{title, level, full}] for this student's latest exercise picks in the
+    class's assignments, newest first."""
+    ids = [r.assignment_id for r in db.query(accounts.ClassItem).filter(
+        accounts.ClassItem.class_id == class_id, accounts.ClassItem.assignment_id.isnot(None))]
+    if but is not None:
+        ids = [i for i in ids if i != but]
+    if not ids:
+        return []
+    picks = (db.query(LevelPick).filter(LevelPick.student_id == student_id, LevelPick.key == "exercise",
+                                        LevelPick.assignment_id.in_(ids))
+               .order_by(LevelPick.picked_at.desc()).limit(many).all())
+    items = {a.id: a for a in db.query(accounts.Assignment).filter(
+        accounts.Assignment.id.in_([p.assignment_id for p in picks] or [0]))}
+    out = []
+    for p in picks:
+        a = items.get(p.assignment_id)
+        if a is not None:
+            out.append({"title": a.title, "level": p.level, "full": _exercise_full(db, a, student_id)})
+    return out
+
+
+def _step_level(level, by):
+    i = max(0, min(len(LEVELS) - 1, LEVELS.index(level) + by))
+    return LEVELS[i]
+
+
+def _history_hint(recent):
+    """(+1, -1 or 0, why) from a student's last exercises: the last two done
+    with every check passing at one level say try harder; the last one not
+    passing says easier."""
+    if len(recent) >= 2 and recent[0]["level"] == recent[1]["level"] \
+            and recent[0]["full"] and recent[1]["full"] and recent[0]["level"] != "master":
+        return 1, "you passed your last 2 exercises at %s" % recent[0]["level"].capitalize()
+    if recent and recent[0]["full"] is False and recent[0]["level"] != "easy":
+        return -1, "your last exercise at %s didn't pass every check" % recent[0]["level"].capitalize()
+    return 0, ""
+
+
+def _system_level(db, item, user):
+    """The page's own suggestion: {level, why}, or None with nothing to go
+    on. From this lesson so far — its questions answered and its checks
+    before the exercise (Try It, warm-up) — nudged one level by the last
+    exercises in the class. Never in a quiz: it would say what was right."""
+    if _is_quiz(item):
+        return None
+    keys = {k.qid: k for k in db.query(accounts.QuizQuestion).filter_by(assignment_id=item.id)}
+    got = out = 0.0
+    for a in db.query(accounts.QuizAnswer).filter_by(assignment_id=item.id, student_id=user.id):
+        k = keys.get(a.qid)
+        if k is None or k.kind == "long":
+            continue
+        got += _earned_one(k, a)
+        out += k.points
+    row = db.query(accounts.TestResult).filter_by(assignment_id=item.id, student_id=user.id,
+                                                  kind="self").first()
+    if row is not None:
+        parts = _test_parts(item)
+        for r in json.loads(row.details or "[]"):
+            if parts.get(r.get("label"), "") == "":
+                out += r.get("points") or 0
+                got += (r.get("points") or 0) if r.get("ok") else 0
+    class_id, _ = _enrollment_for(db, item, user)
+    recent = _recent_levels(db, class_id, user.id, but=item.id) if class_id else []
+    nudge, history_why = _history_hint(recent)
+    if out > 0:
+        ratio = got / out
+        level = "master" if ratio >= 0.9 else "medium" if ratio >= 0.7 else "easy"
+        why = "You've got %s of %s points right so far in this lesson" % (_score_text(got), _score_text(out))
+    elif recent:
+        level = recent[0]["level"]
+        why = "You chose %s on your last exercise" % level.capitalize()
+    else:
+        return None
+    if nudge:
+        level = _step_level(level, nudge)
+        why += ", and " + history_why
+    return {"level": level, "why": why + "."}
+
+
+def _level_state(db, item, user):
+    level, locked, name = _suggestion(db, item, user)
+    picks = _picks(db, item, user.id)
+    # Whether each part chosen so far still earns its points (the chooser
+    # says so when it doesn't).
+    credit = {k: bool(_credit(db, item, user.id, k, user)[0]) for k in picks}
+    return {"picks": picks, "suggestion": level, "credit": credit,
+            "locked": level if locked else "", "teacher": name,
+            "system": _system_level(db, item, user)}
+
+
+@app.get("/api/level/<slug>")
+def level_state(slug):
+    """The student's level picks for an assignment, and the suggestions."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in to keep your level."), 401
+        item = _quiz_assignment(db, slug)
+        if item is None:
+            return jsonify(error="No such assignment."), 404
+        if user.id == item.teacher_id or accounts.is_teacher(user.email):
+            return jsonify(picks={}, suggestion="", locked="", teacher="", system=None, practice=True)
+        return jsonify(_level_state(db, item, user))
+    finally:
+        db.close()
+
+
+@app.post("/api/level")
+def level_pick():
+    """{assignment, key, level}: a student choosing (or changing) a level."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return jsonify(error="Sign in to keep your level."), 401
+        data = request.get_json(silent=True) or {}
+        item = _quiz_assignment(db, data.get("assignment"))
+        if item is None:
+            return jsonify(error="No such assignment."), 404
+        key, level = str(data.get("key") or ""), str(data.get("level") or "")
+        if key not in LEVEL_KEYS or level not in LEVELS:
+            return jsonify(error="Not a level."), 400
+        if user.id == item.teacher_id or accounts.is_teacher(user.email):
+            return jsonify(ok=True, practice=True, picks={key: level})
+        sug, locked, _ = _suggestion(db, item, user)
+        if locked and level != sug:
+            return jsonify(dict(_level_state(db, item, user), error="Your teacher set your level.")), 403
+        row = _pick_row(db, item, user.id, key)
+        if row is None:
+            row = LevelPick(assignment_id=item.id, student_id=user.id, key=key, level=level)
+            db.add(row)
+        elif row.level != level:
+            # Changing is allowed; it just earns that part nothing (_credit).
+            row.changed = 1
+            row.level = level
+            row.picked_at = datetime.now(timezone.utc)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()          # two clicks at once: the other one's row stands
+        _rescore(db, item, user.id)
+        return jsonify(dict(_level_state(db, item, user), ok=True))
+    finally:
+        db.close()
+
+
+@app.get("/teacher/class/<int:class_id>/levels")
+def class_levels(class_id):
+    """The class's Levels page: a suggested level for each student, a lock,
+    and what they've picked lately."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            abort(404)
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id,
+                                                  accounts.Course.app.in_(EDITOR_IDES)).first()
+        if course is None or course.teacher_id != user.id:
+            abort(404)
+        sugs = {r.enrollment_id: r for r in db.query(LevelSuggestion).filter_by(class_id=course.id)}
+        enr = {e.id: e for e in db.query(accounts.Enrollment).filter_by(class_id=course.id)}
+        users = {}
+        emails = [e.email.lower() for e in enr.values()]
+        if emails:
+            for u in db.query(accounts.User).filter(func.lower(accounts.User.email).in_(emails)):
+                users[(u.email or "").lower()] = u
+        rows = []
+        for p in _picker_names(db, course):
+            e = enr[p["id"]]
+            u = users.get(e.email.lower())
+            recent = _recent_levels(db, course.id, u.id) if u is not None else []
+            nudge, why = _history_hint(recent)
+            s = sugs.get(p["id"])
+            current = s.level if s is not None and s.level in LEVELS else ""
+            hint = ""
+            if nudge and recent:
+                hint = "Try %s? (%s)" % (_step_level(recent[0]["level"], nudge).capitalize(), why)
+            rows.append({"id": p["id"], "name": p["name"], "level": current,
+                         "locked": bool(s.locked) if s is not None else False,
+                         "recent": recent, "hint": hint})
+        setting = db.query(LevelSetting).filter_by(class_id=course.id).first()
+        ctx = user_context(db)
+        ctx.update(course=course, rows=rows, levels=LEVELS,
+                   teacher_name=(setting.teacher_name if setting else ""))
+        return render_template("class_levels.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/levels")
+def class_levels_save(class_id):
+    """{enrollment, level, locked} for one student, or {teacher_name}."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        if "teacher_name" in data:
+            row = db.query(LevelSetting).filter_by(class_id=course.id).first()
+            if row is None:
+                row = LevelSetting(class_id=course.id)
+                db.add(row)
+            row.teacher_name = clean(data.get("teacher_name"), 80) or ""
+            db.commit()
+            return jsonify(ok=True, teacher_name=row.teacher_name)
+        try:
+            eid = int(data.get("enrollment"))
+        except (TypeError, ValueError):
+            return jsonify(error="No such student."), 404
+        if db.query(accounts.Enrollment).filter_by(id=eid, class_id=course.id).first() is None:
+            return jsonify(error="No such student."), 404
+        level = str(data.get("level") or "")
+        if level and level not in LEVELS:
+            return jsonify(error="Not a level."), 400
+        row = db.query(LevelSuggestion).filter_by(class_id=course.id, enrollment_id=eid).first()
+        if row is None:
+            row = LevelSuggestion(class_id=course.id, enrollment_id=eid)
+            db.add(row)
+        row.level = level
+        row.locked = 1 if (data.get("locked") and level) else 0
+        db.commit()
+        # Their credit follows the suggestion: results already kept in this
+        # class's v11 lessons are scored again.
+        enr = db.query(accounts.Enrollment).filter_by(id=eid).first()
+        student = (db.query(accounts.User).filter(func.lower(accounts.User.email) == enr.email.lower()).first()
+                   if enr is not None else None)
+        if student is not None:
+            for ci in db.query(accounts.ClassItem).filter(accounts.ClassItem.class_id == course.id,
+                                                          accounts.ClassItem.assignment_id.isnot(None)):
+                a = db.query(accounts.Assignment).filter_by(id=ci.assignment_id).first()
+                if a is not None and _level_keys(a):
+                    _rescore(db, a, student.id)
+        return jsonify(ok=True, level=row.level, locked=bool(row.locked))
     finally:
         db.close()
 
@@ -3874,6 +4376,10 @@ def teacher_assignment(slug):
         results = {}
         for r in db.query(accounts.TestResult).filter_by(assignment_id=item.id):
             results.setdefault(r.student_id, {})[r.kind] = r
+        level_keys = _level_keys(item)
+        picks_by = {}
+        for p in db.query(LevelPick).filter_by(assignment_id=item.id):
+            picks_by.setdefault(p.student_id, {})[p.key] = p.level
         handed_in = [{
             "name": student.display_name(),
             "email": student.email,
@@ -3906,6 +4412,11 @@ def teacher_assignment(slug):
                                 and _when_naive(results[student.id]["verified"].checked_at)
                                 < _when_naive(sub.submitted_at)),
             "tests_self": _result_text(results.get(student.id, {}).get("self")),
+            # v11: the level they chose for the exercise (it scales those
+            # tests' points) and the challenge, so a score is never a mystery.
+            "levels": picks_by.get(student.id, {}) if level_keys else {},
+            "credit": ({k: bool(_credit(db, item, student.id, k, student)[0]) for k in picks_by.get(student.id, {})}
+                       if level_keys else {}),
             "test_lines": json.loads(results.get(student.id, {}).get("verified").details)
                           if results.get(student.id, {}).get("verified") is not None else [],
         } for sub, student in rows]
@@ -3952,13 +4463,15 @@ def teacher_assignment(slug):
                    quiz_points=_score_text(sum(q["points"] for q in possible)))
         ctx.update(waiting=_ungraded(db, [item.id]).get(item.id, 0))
         ctx.update(tests=tests, test_errors=test_errors,
-                   tests_points=_score_text(sum(t["points"] for t in tests)))
+                   tests_points=_score_text(sum(t["points"] for t in tests if t.get("part") != "bonus")),
+                   bonus_points=_score_text(sum(t["points"] for t in tests if t.get("part") == "bonus")))
         # What the questions and tests are worth together: Out of is filled
         # with it while it is empty, because both are added to the score the
         # teacher gives, so Out of has to count them — and adding them up by
         # hand was a step teachers missed. Rounded up: Out of is whole.
         ctx.update(points_auto=math.ceil(sum(q["points"] for q in possible)
-                                         + sum(t["points"] for t in tests) + lab_points))
+                                         + sum(t["points"] for t in tests if t.get("part") != "bonus")
+                                         + lab_points))
         ctx.update(assignment=item, handed_in=handed_in, not_yet=not_yet,
                    share_url=url_for("open_assignment", slug=item.slug,
                                      _external=True, _scheme=_scheme()))

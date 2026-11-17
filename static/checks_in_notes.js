@@ -60,9 +60,14 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
 
   /* The card for one block's tests: [{label, points}], under `heading`
      (each app says what is checked: your code, your page). */
-  function card(tests, heading) {
-    var box = el("div", "tests-card");
+  function card(tests, heading, part) {
+    var box = el("div", "tests-card" + (part === "bonus" ? " tests-bonus" : ""));
     box.setAttribute("data-checks", "");
+    // A challenge's bonus check (```tests bonus, v11): optional, so it never
+    // holds a slide (notes.js's HOLDS skips it) and never shows a ✗ to a
+    // student who hasn't tried it — Check my work runs every test at once,
+    // so without that everyone who skipped it would see a row of crosses.
+    if (part === "bonus") box.setAttribute("data-bonus", "");
     var head = el("div", "tests-head", heading || "✔ Tests your code will be checked against");
     box.appendChild(head);
     var list = el("ul", "tests-lines");
@@ -94,12 +99,18 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   /* One card, from the latest results: its lines, its button, its total. */
   function paint(box) {
     var lines = box.querySelectorAll(".test-line"), passing = 0, checked = 0;
-    var hide = hiding();
+    var hide = hiding(), bonus = box.hasAttribute("data-bonus");
+    // Not tried yet: nothing on a bonus card passes. Its ✗s would only say
+    // "you didn't do the optional part".
+    var untried = bonus && !Array.prototype.some.call(lines, function (li) {
+      var r = latest && latest[li.getAttribute("data-label")];
+      return r && r.ok;
+    });
     Array.prototype.forEach.call(lines, function (li) {
       var r = latest && latest[li.getAttribute("data-label")];
       if (r) checked++;
       if (r && r.ok) passing++;
-      if (hide) r = null;
+      if (hide || untried) r = null;
       li.classList.toggle("pass", !!(r && r.ok));
       li.classList.toggle("fail", !!(r && !r.ok));
       li.querySelector(".tests-mark").textContent = busy ? "…" : r ? (r.ok ? "✓" : "✗") : "○";
@@ -111,6 +122,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     btn.textContent = busy ? "Checking…" : "✔ Check my work";
     box.querySelector(".tests-sum").textContent = !runner ? "" : busy ? "" :
       hide ? (box.hasAttribute("data-checked") ? "Checked — your teacher will see how it went." : "")
+      : untried ? "Optional: a bonus point if it all passes, nothing lost if you skip it."
       : checked ? passing + " of " + lines.length + " passing" : lines.length + " to pass";
     if (!hide && lines.length && passing === lines.length) box.setAttribute("data-passed", "");
     else box.removeAttribute("data-passed");

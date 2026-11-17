@@ -199,7 +199,7 @@
       <p class="small dim" id="points-from">
         {%- if quiz_count %}{{ quiz_count }} question{{ "" if quiz_count == 1 else "s" }}: {{ quiz_points }} pt{{ "" if quiz_points == "1" else "s" }}{% endif -%}
         {%- if quiz_count and (tests or lab) %} · {% endif -%}
-        {%- if tests %}{{ tests|length }} test{{ "" if tests|length == 1 else "s" }}: {{ tests_points }} pt{{ "" if tests_points == "1" else "s" }}{% endif -%}
+        {%- if tests %}{{ tests|length }} test{{ "" if tests|length == 1 else "s" }}: {{ tests_points }} pt{{ "" if tests_points == "1" else "s" }}{% if bonus_points and bonus_points != "0" %} + {{ bonus_points }} bonus{% endif %}{% endif -%}
         {%- if lab %}{{ lab.tasks|length }} lab task{{ "" if lab.tasks|length == 1 else "s" }}: {{ lab_points }} pt{{ "" if lab_points == 1 else "s" }}{% endif -%}
         , added to the score you give.
         {%- if assignment.out_of and assignment.out_of < points_auto %} <strong>That's more than Out of.</strong>{% endif %}</p>
@@ -430,6 +430,7 @@
                     <span class="fb-tests small {{ 'is-stale' if s.tests_stale }}"
                           title="{{ 'Turned in again since you checked — press Check all' if s.tests_stale else 'From your Check all' }}">Tests {{ s.tests or "not checked" }}{% if s.tests_stale %} ⟳{% endif %}{% if assignment.out_of and s.tests %} +{% endif %}</span>
                     {% if s.tests_self %}<span class="dim small" title="Their own Check my work — doesn't count">(their check {{ s.tests_self }})</span>{% endif %}
+                    {% if s.levels %}<span class="level-tag small" title="The level they chose (v11). It earns its points only at the level you suggested, and only if they never changed it (Easy counts 80%, Medium 88%, Master 100%). The challenge is bonus.">{% if s.levels.exercise %}Exercise: {{ s.levels.exercise|capitalize }}{% if s.credit.exercise == false %} (no credit){% endif %}{% endif %}{% if s.levels.challenge %}{% if s.levels.exercise %} · {% endif %}Challenge: {{ s.levels.challenge|capitalize }}{% if s.credit.challenge == false %} (no credit){% endif %}{% endif %}</span>{% endif %}
                   {% endif %}
                   {% if assignment.out_of %}
                     <input class="field fb-score" type="number" step="any" min="0"

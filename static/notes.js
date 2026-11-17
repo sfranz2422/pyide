@@ -221,7 +221,7 @@ window.PyIDENotes = (function () {
     }
     // A section divider (`...`) is never shown: where notes aren't played
     // a section at a time — live, the projector — it's just a seam.
-    source = pauseLines(popMarks(sections(source || "").join("\n\n")));
+    source = pauseLines(popMarks(levelMarks(sections(source || "").join("\n\n"))));
     return ensureRenderer().then(function () {
       setTheme(target, theme);
       var dirty = window.marked.parse(runFences(source || ""), { breaks: true });
@@ -235,11 +235,23 @@ window.PyIDENotes = (function () {
       var clean = window.DOMPurify.sanitize(dirty, rules);
       target.innerHTML = clean;
       wrapPops(target);
+      wrapLevels(target);
       markPauses(target);
       hardenLinks(target);
       enhanceQuizzes(target);
       enhanceTasks(target);
       enhanceCards(target);
+      enhanceLevels(target);
+      applyLevels(target);
+      if (target.querySelector(".level-part, .level-choose")) {
+        // The level slide itself: asked afresh, so the 🤖 suggestion counts
+        // the questions and checks done since the page opened.
+        if (target.querySelector(".level-choose") && levelMode() === "student") levelLoad = null;
+        loadLevels().then(function () {
+          applyLevels(target);
+          levelEvent(target);
+        });
+      }
       return true;
     }).catch(function (e) {
       target.textContent =
@@ -544,18 +556,33 @@ window.PyIDENotes = (function () {
        the output, so there's nothing to copy). Before predict boxes held
        anything, a student skipped straight past them to the typing, and
        predicting was the point of the step. */
-    var TESTS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*tests[ \t]*$/im;
+    // A bonus check (```tests bonus, v11) never holds anyone: it's optional.
+    var TESTS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*tests([ \t]+exercise([ \t]+(easy|medium|master))?)?[ \t]*$/im;
+    // A level choice (```level, v11) holds until a level is picked.
+    var LEVEL_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*level[ \t]*$/im;
     // An ```html predict holds only with choices (a pick), but taking any as holding errs safe.
     var PREDICT_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(py(thon)?|html|sql|php)[ \t]+predict[ \t]*$/im;
     var CARDS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*cards[ \t]*$/im;
     var HOLDS = ".tests-card[data-checks]:not([data-passed])";
+    // ...but never a bonus check (```tests bonus, v11): it's optional.
+    function heldCard() {
+      return Array.prototype.filter.call(body.querySelectorAll(HOLDS), function (c) {
+        if (c.hasAttribute("data-bonus")) return false;
+        // Another level's card (inside a level box not shown) is not theirs to pass.
+        for (var n = c.parentNode; n && n !== body; n = n.parentNode)
+          if (n.classList && n.classList.contains("level-part") && n.hidden) return false;
+        return true;
+      })[0] || null;
+    }
+    var UNCHOSEN = ".level-choose[data-needs]";
     var UNPREDICTED = ".snippet[data-predict]:not([data-predicted])";
     /* And a ```cards block, until every card has been turned over once
        (data-seen, set by enhanceCards). Students skipped Words to Know
        without reading a card; the teacher wanted them turned first. */
     var UNFLIPPED = ".flip-card:not([data-seen])";
     function waiting() {
-      return !!(body.querySelector(HOLDS) || body.querySelector(UNPREDICTED) || body.querySelector(UNFLIPPED));
+      return !!(heldCard() || body.querySelector(UNPREDICTED) || body.querySelector(UNFLIPPED)
+                || body.querySelector(UNCHOSEN));
     }
     /* Why the way on is held, in the three places it's said: the arrow's
        title, Play's title, and the line beside Play. */
@@ -564,9 +591,11 @@ window.PyIDENotes = (function () {
         "Get the prediction above right first", "Get the prediction above right to go on"];
       if (body.querySelector(UNFLIPPED)) return ["Turn over every card first",
         "Turn over every card above first", "Turn over every card to go on"];
+      if (body.querySelector(UNCHOSEN)) return ["Choose your level first",
+        "Choose your level above first", "Choose your level to go on"];
       // A step's card hidden because the bubble says it (editorTip): point
       // at the editor, not at a check the slide doesn't show.
-      var open1 = body.querySelector(HOLDS);
+      var open1 = heldCard();
       if (open1 && open1.classList.contains("for-editor") && body.classList.contains("editor-tips-on"))
         return ["Finish the step in your editor first", "Finish the step in your editor first",
                 "Finish the step in your editor (✔ Check my work in the pop-up) to go on"];
@@ -968,7 +997,8 @@ window.PyIDENotes = (function () {
         // Held only by a slide on the way that has checks, a prediction or cards
         // and isn't passed: one with neither holds nothing, as its own arrow doesn't.
         for (var j = Math.max(at, unlocked); lockOn && j < i; j++)
-          if (TESTS_FENCE.test(cut[j]) || PREDICT_FENCE.test(cut[j]) || CARDS_FENCE.test(cut[j])) return false;
+          if (TESTS_FENCE.test(cut[j]) || PREDICT_FENCE.test(cut[j]) || CARDS_FENCE.test(cut[j])
+              || LEVEL_FENCE.test(cut[j])) return false;
         go(i);
         if (moved) moved(at);
         return true;
@@ -1288,6 +1318,308 @@ window.PyIDENotes = (function () {
                 viewOnly: !!(ctx && ctx.viewOnly) };
     mine = null;
     answered = {};
+    levelLoad = null;
+    levels = { picks: {}, suggestion: "", locked: "" };
+  }
+
+  // ---------------------------------------------------------------- levels
+  /* CHOOSE YOUR LEVEL (v11 lessons, Nov 2026, the teacher's request: "have
+     the kids select the level of difficulty for the coding exercise and the
+     challenge"). A ```level block is a slide's three buttons — Easy (the
+     v10wb blanks), Medium (fewer hints), Master (write it yourself) — and
+
+         :::level easy            (or :::level challenge easy)
+         …what an easy student sees…
+         :::end
+
+     wraps what each level sees. A student sees ONLY the level they chose —
+     never "if you picked medium, do this" (the teacher: too confusing) — and
+     nothing at all of the exercise until they choose. The key (`exercise`,
+     or `challenge` for the ★ Challenge) is written on every box, because the
+     choice is on the slide before and isn't in the page when this one is.
+
+     The pick is the SERVER's (/api/level), because it decides the grade
+     (app.py, "Levels"): the teacher suggests a level for each student (⭐,
+     or locks one 🔒) on the class's Levels page, and the exercise's points
+     and the challenge's bonus are earned ONLY at that level, and not at all
+     once the student changes level (the teacher's rule). With no suggestion,
+     the level they chose counts, if never changed (easy 80%, medium 88%, master 100%).
+     Each level has its own variables, values and tests (```tests exercise
+     easy …: "or they will just copy from a neighbor"); autograde.js runs
+     only the shown level's (shownLevels). A press that would cost the
+     points asks once more and says so. Signed out, the pick is kept in this
+     browser and counts for nothing. Where the teacher is looking (writing the notes,
+     teaching live, the library) the buttons just switch the view: they see
+     every level, and nothing is saved. */
+  var LEVELS = ["easy", "medium", "master"];
+  var LEVEL_NAMES = { easy: "Easy", medium: "Medium", master: "Master" };
+  var LEVEL_WORDS = {
+    exercise: { easy: "Fill in the blanks. Counts up to 80% (B-).",
+                medium: "Fewer hints, bigger blanks. Counts up to 88% (B+).",
+                master: "Write it yourself. Counts up to 100% (A)." },
+    challenge: { easy: "Fill in the blanks. +25 XP when you pass it.",
+                 medium: "Fewer hints, bigger blanks. +40 XP when you pass it.",
+                 master: "Write it yourself. +60 XP when you pass it." }
+  };
+  var LEVEL_OPEN = /^ {0,3}:::\s*level(?:\s+(exercise|challenge))?\s+(easy|medium|master)\s*$/i;
+  var LEVEL_CLOSE = /^ {0,3}:::\s*end\s*$/i;
+  var LEVEL_START = "%%LEVELSTART%%", LEVEL_END = "%%LEVELEND%%";
+  var levels = { picks: {}, suggestion: "", locked: "" };
+  var levelLoad = null;          // promise of the server's {picks, suggestion, locked}
+  var levelTeacher = null;       // the page's: () => true where the teacher is looking
+  var preview = { exercise: "easy", challenge: "easy" };   // what a teacher is looking at
+  var confirming = {};           // key -> the level a student pressed once, to confirm
+
+  function levelMarks(md) {
+    var fence = null;
+    return String(md).split("\n").map(function (ln) {
+      var f = ln.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (f) {
+        if (fence === null) fence = f[1];
+        else if (f[1].charAt(0) === fence.charAt(0) && f[1].length >= fence.length) fence = null;
+        return ln;
+      }
+      if (fence !== null) return ln;
+      var m = ln.match(LEVEL_OPEN);
+      if (m) return "\n" + LEVEL_START + ":" + (m[1] || "exercise").toLowerCase() + ":" + m[2].toLowerCase() + "\n";
+      if (LEVEL_CLOSE.test(ln)) return "\n" + LEVEL_END + "\n";
+      return ln;
+    }).join("\n");
+  }
+
+  function wrapLevels(root) {
+    var marks = Array.prototype.filter.call(root.querySelectorAll("p"), function (p) {
+      var t = p.textContent.trim();
+      return t.indexOf(LEVEL_START + ":") === 0 || t === LEVEL_END;
+    });
+    marks.forEach(function (mark) {
+      var t = mark.textContent.trim();
+      if (!mark.parentNode || t === LEVEL_END) return;
+      var bits = t.split(":");
+      var box = el("div", "level-part");
+      box.setAttribute("data-for", bits[1]);
+      box.setAttribute("data-level", bits[2]);
+      box.hidden = true;                       // until we know whose it is
+      mark.parentNode.insertBefore(box, mark);
+      var node = mark.nextSibling;
+      while (node && !(node.nodeType === 1 && node.tagName === "P" &&
+                       (node.textContent.trim() === LEVEL_END || node.textContent.trim().indexOf(LEVEL_START + ":") === 0))) {
+        var after = node.nextSibling;
+        box.appendChild(node);
+        node = after;
+      }
+      if (node && node.textContent.trim() === LEVEL_END) node.remove();
+      mark.remove();
+    });
+    Array.prototype.forEach.call(root.querySelectorAll("p"), function (p) {
+      if (p.textContent.trim() === LEVEL_END) p.remove();
+    });
+  }
+
+  /* What the server says: the picks, the teacher's suggestion (⭐, under
+     the name they chose on the Levels page), a lock, and the page's own
+     suggestion (🤖 {level, why}, from how the lesson's gone so far). */
+  function keepLevels(d) {
+    return { picks: d.picks || {}, suggestion: d.suggestion || "", locked: d.locked || "",
+             teacher: d.teacher || "", credit: d.credit || {},
+             system: d.system && LEVELS.indexOf(d.system.level) >= 0 ? d.system : null };
+  }
+
+  function levelMode() {
+    if (levelTeacher && levelTeacher()) return "teacher";
+    if (!quizCtx.assignment || quizCtx.viewOnly) return "teacher";   // the library, PresMaker, a view-only link
+    return quizCtx.signedIn ? "student" : "local";
+  }
+  function localKey(key) { return "pyide-level:" + quizCtx.assignment + ":" + key; }
+
+  function loadLevels() {
+    var mode = levelMode();
+    if (mode === "teacher") return Promise.resolve(levels);
+    if (mode === "local") {
+      var picks = {};
+      ["exercise", "challenge"].forEach(function (k) {
+        try { var v = localStorage.getItem(localKey(k)); if (LEVELS.indexOf(v) >= 0) picks[k] = v; } catch (e) {}
+      });
+      levels = { picks: picks, suggestion: "", locked: "" };
+      return Promise.resolve(levels);
+    }
+    if (!levelLoad) {
+      levelLoad = fetch("/api/level/" + encodeURIComponent(quizCtx.assignment))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d) levels = keepLevels(d);
+          return levels;
+        })
+        .catch(function () { levelLoad = null; return levels; });
+    }
+    return levelLoad;
+  }
+
+  /* The level whose boxes show for `key`: the teacher's view, or the student's pick ("" for none yet). */
+  function shownLevel(key) {
+    if (levelMode() === "teacher") return preview[key] || "easy";
+    return levels.picks[key] || levels.locked || "";
+  }
+
+  function levelEvent(node) {
+    var ev;
+    try { ev = new CustomEvent("ide-checks", { bubbles: true }); }
+    catch (e) { ev = document.createEvent("Event"); ev.initEvent("ide-checks", true, false); }
+    (node || document).dispatchEvent(ev);
+  }
+
+  function applyLevels(root) {
+    root = root || document;
+    var seenWait = {};
+    Array.prototype.forEach.call(root.querySelectorAll(".level-part"), function (box) {
+      var key = box.getAttribute("data-for"), lv = shownLevel(key);
+      box.hidden = lv !== box.getAttribute("data-level");
+      // Nothing chosen yet: say where to choose, once, where the first box is.
+      var wait = box.previousElementSibling && box.previousElementSibling.classList.contains("level-wait")
+        ? box.previousElementSibling : null;
+      if (!lv && !seenWait[key]) {
+        seenWait[key] = true;
+        if (!wait) {
+          wait = el("p", "level-wait", key === "challenge"
+            ? "⬅ Choose your challenge level on the slide before this one, and it shows up here."
+            : "⬅ Choose your level on the slide before this one, and your exercise shows up here.");
+          box.parentNode.insertBefore(wait, box);
+        }
+      } else if (wait) {
+        wait.remove();
+      }
+    });
+    Array.prototype.forEach.call(root.querySelectorAll(".level-choose"), paintChooser);
+  }
+  function applyEverywhere() {
+    applyLevels(document);
+    // Told from inside each viewer (the event bubbles up to it), or the
+    // slide viewer listening on its own body never hears it and the way on
+    // stays held after a level is chosen.
+    Array.prototype.forEach.call(document.querySelectorAll(".level-choose, .level-part"), function (n) { levelEvent(n); });
+  }
+
+  function choose(key, lv) {
+    var mode = levelMode();
+    if (mode === "teacher") {
+      preview[key] = lv;
+      applyEverywhere();
+      return;
+    }
+    if (mode === "local") {
+      levels.picks[key] = lv;
+      try { localStorage.setItem(localKey(key), lv); } catch (e) {}
+      applyEverywhere();
+      return;
+    }
+    fetch("/api/level", { method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ assignment: quizCtx.assignment, key: key, level: lv }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d && d.picks) levels = keepLevels(d);
+        applyEverywhere();
+      })
+      .catch(function () { applyEverywhere(); });
+  }
+
+  function enhanceLevels(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("pre > code.language-level"), function (code) {
+      var m = /for\s*:\s*(exercise|challenge)/i.exec(code.textContent || "");
+      var box = el("div", "level-choose");
+      box.setAttribute("data-for", m ? m[1].toLowerCase() : "exercise");
+      code.parentNode.replaceWith(box);
+      paintChooser(box);
+    });
+  }
+
+  /* Would pressing `lv` cost this student the points? (The teacher: they
+     earn the exercise's and the bonus's points only at the level suggested
+     for them, and not at all once they change it.) */
+  function costsPoints(key, lv) {
+    var sug = levels.suggestion, had = levels.picks[key];
+    return (!!sug && lv !== sug) || (!!had && had !== lv);
+  }
+
+  function paintChooser(box) {
+    var key = box.getAttribute("data-for") || "exercise";
+    var mode = levelMode(), mineNow = levels.picks[key] || "", lock = mode === "student" ? levels.locked : "";
+    var sug = mode === "student" ? levels.suggestion : "";
+    // The page's own suggestion only where the teacher hasn't made one:
+    // theirs is the one that earns points.
+    var bot = mode === "student" && !lock && !sug && levels.system ? levels.system : null;
+    var who = levels.teacher || "Your teacher";
+    var credit = levels.credit ? levels.credit[key] : null;
+    var what = key === "challenge" ? "the challenge's bonus point" : "this exercise's points";
+    box.textContent = "";
+    box.appendChild(el("div", "level-title", key === "challenge" ? "★ Choose your challenge level" : "Choose your level"));
+    var row = el("div", "level-buttons");
+    LEVELS.forEach(function (lv) {
+      if (lock && lv !== lock) return;
+      var b = el("button", "level-btn level-" + lv);
+      b.type = "button";
+      var on = mode === "teacher" ? (preview[key] || "easy") === lv : mineNow === lv;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) b.classList.add("is-on");
+      var name = el("span", "level-name", (sug === lv ? "⭐ " : "") + (bot && bot.level === lv ? "🤖 " : "") + LEVEL_NAMES[lv]);
+      b.appendChild(name);
+      b.appendChild(el("span", "level-words", LEVEL_WORDS[key][lv]));
+      b.disabled = !!lock;
+      if (confirming[key] === lv && !on) {
+        b.classList.add("is-confirm");
+        name.textContent = (mineNow ? "Change to " : "Choose ") + LEVEL_NAMES[lv] + "?";
+      }
+      b.addEventListener("click", function () {
+        if (mode === "teacher") { choose(key, lv); return; }
+        if (on) return;
+        // A press that would cost the points asks once more, saying so.
+        if (costsPoints(key, lv) && confirming[key] !== lv) {
+          confirming[key] = lv;
+          applyLevels(document);
+          return;
+        }
+        delete confirming[key];
+        choose(key, lv);
+      });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+    var notes = [];
+    if (mode === "teacher") notes.push("Teacher view: you can look at every level. Students see only the one they choose.");
+    else if (lock) notes.push("🔒 " + who + " set your level: " + LEVEL_NAMES[lock] + ".");
+    else {
+      if (sug) notes.push("⭐ " + who + " suggests " + LEVEL_NAMES[sug] + " for you. Only " + LEVEL_NAMES[sug] +
+                          " earns " + what + ", and only if you don't change it.");
+      else notes.push("Choose carefully: if you change your level after you choose, " + what + (key === "challenge" ? " is" : " are") + " lost.");
+      if (bot) notes.push("🤖 Suggested from your work: " + LEVEL_NAMES[bot.level] + ". " + bot.why);
+      var c = confirming[key];
+      if (c) {
+        var why = mineNow ? "Changing your level means " + what + (key === "challenge" ? " is" : " are") + " lost."
+                          : who + " suggested " + LEVEL_NAMES[sug] + ", so " + LEVEL_NAMES[c] + " earns no points.";
+        notes.push("Press it again to " + (mineNow ? "change to " : "choose ") + LEVEL_NAMES[c] + ". " + why);
+      } else if (mineNow) {
+        notes.push("You chose " + LEVEL_NAMES[mineNow] + "." + (credit === false
+          ? " ⚠ " + (key === "challenge" ? "The challenge" : "This exercise") + " won't earn points now" +
+            (sug && mineNow !== sug ? " (" + who + " suggested " + LEVEL_NAMES[sug] + ")." : " (you changed your level).")
+          : ""));
+      }
+    }
+    if (key === "challenge" && mode !== "teacher")
+      notes.push("The challenge is a bonus: nothing is lost for skipping it.");
+    notes.forEach(function (t) { box.appendChild(el("p", "level-note small", t)); });
+    // `locked: yes` holds the slide until a level is chosen (slideView's UNCHOSEN).
+    if (mode !== "teacher" && !mineNow && !lock) box.setAttribute("data-needs", "");
+    else box.removeAttribute("data-needs");
+  }
+
+  /* {exercise, challenge}: the level each part is showing now ("" for none
+     chosen yet). autograde.js runs only the tests of these levels. */
+  function shownLevels() {
+    return { exercise: shownLevel("exercise"), challenge: shownLevel("challenge") };
+  }
+
+  function setLevelTeacher(fn) {
+    levelTeacher = typeof fn === "function" ? fn : null;
+    applyLevels(document);
   }
 
   function loadMine() {
@@ -1333,8 +1665,11 @@ window.PyIDENotes = (function () {
       if (fence === null) {
         fence = f[1];
         var w = f[2].trim().split(/\s+/);
+        if (w.length === 3 && /^tests$/i.test(w[0]) && /^(exercise|bonus)$/i.test(w[1]) && /^(easy|medium|master)$/i.test(w[2]))
+          return ln.slice(0, ln.indexOf(f[1]) + f[1].length) + w.join("-").toLowerCase();
         if (w.length === 2 && (/^(python|py|html)$/i.test(w[0]) && /^(run|predict)$/i.test(w[1]) ||
-                              /^(sql|php)$/i.test(w[0]) && /^predict$/i.test(w[1])))
+                              /^(sql|php)$/i.test(w[0]) && /^predict$/i.test(w[1]) ||
+                              /^tests$/i.test(w[0]) && /^(exercise|bonus)$/i.test(w[1])))
           return ln.slice(0, ln.indexOf(f[1]) + f[1].length) + w[0].toLowerCase() + "-" + w[1].toLowerCase();
         return ln;
       }
@@ -2275,6 +2610,10 @@ window.PyIDENotes = (function () {
     ensureRenderer: ensureRenderer,
     parseQuiz: parseQuiz,
     setQuizContext: setQuizContext,
+    setLevelTeacher: setLevelTeacher,
+    shownLevels: shownLevels,
+    levelMarks: levelMarks,
+    _levels: function () { return { levels: levels, preview: preview }; },
     slideView: slideView
   };
 })();

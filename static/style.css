@@ -1725,6 +1725,32 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .prose .pop-box { border-left: 4px solid var(--accent); padding: 8px 12px; margin: 0 0 1em; border-radius: 8px;
                   background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .prose .pop-box > :last-child { margin-bottom: 0; }
+/* v11: Choose your level (notes.js, "levels"). A student sees only the
+   level-part of the level they chose; [hidden] wins over anything a played
+   part's reveal does. */
+.level-part[hidden] { display: none !important; }
+.prose .level-wait { padding: 10px 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.prose .level-choose { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+                       background: var(--bg-panel); }
+.level-choose[data-needs] { border-color: var(--accent); }
+.level-title { font-weight: 600; margin-bottom: 10px; }
+.level-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.level-btn { flex: 1 1 160px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+             padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg);
+             color: var(--text); cursor: pointer; font: inherit; }
+.level-btn:hover:not(:disabled) { border-color: var(--accent); }
+.level-btn.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.level-btn.is-confirm { border-style: dashed; border-color: var(--accent); }
+.level-btn:disabled { opacity: .45; cursor: not-allowed; }
+.level-name { font-weight: 700; }
+.level-words { font-size: 13px; color: var(--muted); }
+.level-note { margin: 10px 0 0; }
+.tests-card.tests-bonus { border-style: dashed; }
+.level-tag { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.levels-table { width: 100%; border-collapse: collapse; }
+.levels-table th, .levels-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.levels-table .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.level-hint { margin-top: 4px; color: var(--accent); }
 /* The same step in the editor (`:::pop editor`, app.js): a bubble under the
    student's last line, pointing up at where the line goes. Clicks go through
    it, so it never stops the typing it asks for. */

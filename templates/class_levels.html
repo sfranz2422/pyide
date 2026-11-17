@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levels · {{ course.name }} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<script>
+  try {
+    var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) {}
+</script>
+</head>
+<body class="class-page class-teacher">
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
+  <div class="meta"><span class="pagetitle">{{ course.name }} · Levels</span></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
+  </div>
+</header>
+
+{#  v11 lessons let each student choose Easy, Medium or Master before the
+    coding exercise and the challenge (app.py, "Levels"). Here the teacher
+    suggests a level for each student (⭐ on their level slide) or locks one
+    (🔒: that's their level, no choosing). By roster row, so it works before
+    a student has signed in. The hint is the page's own reading of their
+    last exercises; nothing changes unless the teacher presses a button. #}
+
+<main class="page class-levels">
+  <section class="card">
+    <h2>Suggested levels</h2>
+    <p class="small dim">Each student sees your suggestion with a ⭐ on the level slide before a coding exercise and a challenge.
+      They earn the exercise's points (and the challenge's bonus point) <strong>only at your suggested level</strong>, and not at
+      all if they change level. They can still pick another level unless you lock it 🔒. With no suggestion, the level they choose
+      counts if they keep it. Easy counts the exercise's points 80% (B-), Medium 88% (B+), Master 100%.</p>
+    <p class="level-name-row">
+      <label>Your name on the suggestion:
+        <input id="teacher-name" type="text" maxlength="80" placeholder="Your teacher" value="{{ teacher_name }}"></label>
+      <button class="btn" id="save-name" type="button">Save</button>
+      <span class="small dim" id="name-said"></span>
+    </p>
+    <p class="small dim">Students see: “⭐ <span id="name-preview">{{ teacher_name or "Your teacher" }}</span> suggests Medium for you.”</p>
+    {% if not rows %}
+      <p class="dim">No students on this class's roster yet. Link it to a Classroom class on the class page.</p>
+    {% else %}
+    <table class="levels-table">
+      <thead><tr><th>Student</th><th>Suggested level</th><th>Lock</th><th>Lately</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr data-id="{{ r.id }}" data-level="{{ r.level }}">
+          <td>{{ r.name }}</td>
+          <td class="level-pick">
+            {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if r.level == lv }}" data-level="{{ lv }}"
+              aria-pressed="{{ 'true' if r.level == lv else 'false' }}">{{ lv|capitalize }}</button>{% endfor %}
+            <button type="button" class="linkbtn small js-level" data-level="">none</button>
+          </td>
+          <td><label class="small"><input type="checkbox" class="js-lock" {{ 'checked' if r.locked }} {{ '' if r.level else 'disabled' }}> 🔒</label></td>
+          <td class="small">
+            {% for p in r.recent %}<span class="level-recent level-{{ p.level }}" title="{{ p.title }}">{{ p.level|capitalize }}{% if p.full %} ✓{% elif p.full == false %} ✗{% endif %}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+            {% if not r.recent %}<span class="dim">no levels chosen yet</span>{% endif %}
+            {% if r.hint %}<div class="level-hint">💡 {{ r.hint }}</div>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+</main>
+
+<script>
+(function () {
+  var CLASS = {{ course.id }};
+  function post(body) {
+    return fetch("/api/class/" + CLASS + "/levels", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+  }
+  var name = document.getElementById("teacher-name");
+  name.addEventListener("input", function () {
+    document.getElementById("name-preview").textContent = name.value.trim() || "Your teacher";
+  });
+  document.getElementById("save-name").addEventListener("click", function () {
+    post({ teacher_name: name.value }).then(function (d) {
+      document.getElementById("name-said").textContent = d.ok ? "Saved." : (d.error || "Couldn't save.");
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".levels-table tr[data-id]"), function (tr) {
+    var lock = tr.querySelector(".js-lock");
+    function save(level, locked) {
+      post({ enrollment: Number(tr.getAttribute("data-id")), level: level, locked: locked }).then(function (d) {
+        if (!d.ok) return;
+        tr.setAttribute("data-level", d.level);
+        Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
+          var on = !!d.level && b.getAttribute("data-level") === d.level;
+          b.classList.toggle("is-on", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        lock.checked = d.locked;
+        lock.disabled = !d.level;
+      });
+    }
+    Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
+      b.addEventListener("click", function () { save(b.getAttribute("data-level"), lock.checked); });
+    });
+    lock.addEventListener("change", function () { save(tr.getAttribute("data-level"), lock.checked); });
+  });
+})();
+</script>
+</body>
+</html>
