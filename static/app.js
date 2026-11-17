@@ -1587,7 +1587,7 @@
       } else {
         // This kind of project's assignments only: a web lesson can be
         // turned in to a web assignment, and nothing else.
-        fetch("/api/live/assignments?ide=" + encodeURIComponent(window.PYIDE.ide || "pyide"))
+        fetch("/api/live/assignments?ide=" + encodeURIComponent((window.PYIDE && window.PYIDE.ide) || "pyide"))
           .then(function (res) { return res.json(); })
           .catch(function () { return {}; })
           .then(function (data) {
@@ -1655,6 +1655,8 @@
       var cut = currentSlides();
       var live = !!(liveCode && cut);
       return { type: "state", notes: liveNotes(), live: !!liveCode,
+               cls: liveCode && typeof liveClass !== "undefined" && liveClass ? liveClass.data() : null,
+               timer: liveCode && typeof liveClass !== "undefined" && liveClass ? liveClass.timer() : null,
                slide: live ? Math.min(slideAt, cut.length - 1)
                            : (popNotes() ? popNotes().at() : 0),
                title: ($("title") && $("title").value) || document.title };
@@ -1702,7 +1704,8 @@
       }
       // The same name each time, so pressing it again brings that tab
       // forward instead of opening another.
-      window.open("/notes/present?ch=" + popId, "pyide-notes-" + popId);
+      window.open("/notes/present?ch=" + popId + "&ide=" + encodeURIComponent((window.PYIDE && window.PYIDE.ide) || "pyide"),
+                  "pyide-notes-" + popId);
     }
 
     // No BroadcastChannel (Safari before 15.4): no button, rather than a
@@ -1809,6 +1812,18 @@
     }
     watchCards();
     setInterval(askCounts, ANSWERS_MS);
+
+    // ---------------------------------------------------- the class, live
+    /* Steps finished, the class's first guesses, stuck / done, the
+       countdown and the celebration (static/live_class.js; app.py, "The
+       class, live"). It asks for the class's side itself while live, and
+       paints it on the same notes as the answer counts above. */
+    var liveClass = window.PyIDELiveClass ? window.PyIDELiveClass.teacher({
+      code: function () { return liveCode; },
+      roots: countRoots,
+      seq: nextSeq,
+      after: $("live-sent") || $("live-code")
+    }) : null;
   } else {
     /* No Go live button: signed out, or not a teacher. Whatever lesson this
        browser remembers is not one this person can resume, so forget it

@@ -656,6 +656,7 @@
 <script src="{{ url_for('static', filename='xp.js') }}"></script>
 {# the runner for this project's IDE, before the shell that attaches it #}
 <script src="{{ url_for('static', filename='runners/web.js' if web else 'runners/flask.js' if flask else 'runners/python.js') }}"></script>
+<script src="{{ url_for('static', filename='live_class.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% include "_idle.html" %}
 </body>

@@ -4630,3 +4630,62 @@ body.lab-page .lab-wrap { flex: 1; height: auto; }
 .pi-loose-ring { fill: none; stroke: #ea580c; stroke-width: 1.6; stroke-dasharray: 2 1.5; pointer-events: none; }
 .pi-tag { fill: #111827; opacity: 0.85; pointer-events: none; }
 .pi-tag-text { fill: #f9fafb; font-size: 8px; pointer-events: none; }
+
+/* ---------------------------------------------------------------- the class, live
+   (static/live_class.js; Nov 2026). Counts on the teacher's cards, the class's
+   guesses under a prediction, I'm stuck / I'm done, the countdown and the
+   celebration. Colours from the theme's own tokens, so a bought theme still
+   wins; the confetti alone is fixed colours, for half a second of fun. */
+.tests-head .live-count { margin-left: auto; float: right; font-variant-numeric: tabular-nums;
+                          white-space: nowrap; padding: 0 8px; border: 1px solid var(--line);
+                          border-radius: 999px; color: var(--muted); font-weight: 600; font-size: 0.85em; }
+.tests-head .live-count.all-in { border-color: var(--green); color: var(--green); }
+
+.live-guesses { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--line);
+                border-radius: 8px; font-size: 0.9em; }
+.live-guesses-head { color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.live-guess { position: relative; display: flex; align-items: center; gap: 10px;
+              padding: 3px 8px; margin: 3px 0; border-radius: 6px; overflow: hidden; }
+.live-guess-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--line);
+                  opacity: 0.55; border-radius: 6px; z-index: 0; transition: width 0.4s; }
+.live-guess.is-right .live-guess-bar { background: var(--green); opacity: 0.35; }
+.live-guess-text, .live-guess-n { position: relative; z-index: 1; }
+.live-guess-text { font-family: var(--mono, monospace); white-space: pre; overflow: hidden;
+                   text-overflow: ellipsis; flex: 1; }
+.live-guess.is-other .live-guess-text { font-family: inherit; font-style: italic; color: var(--muted); }
+.live-guess-n { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.live-hands { position: fixed; right: 16px; bottom: 16px; z-index: 900; display: flex; gap: 8px; }
+.live-hands .live-hand { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+.live-hands .live-hand.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.live-hands-count.has-stuck { border-color: var(--accent); color: var(--accent); }
+
+.live-timer { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 950;
+              padding: 6px 16px; border-radius: 999px; background: var(--bg-head); color: inherit;
+              border: 2px solid var(--line); font-size: 1.25rem; font-weight: 700;
+              font-variant-numeric: tabular-nums; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); }
+.live-timer.is-low, .live-timer-btn.is-low { border-color: var(--accent); color: var(--accent); }
+.live-timer.is-up { border-color: var(--accent); background: var(--accent); color: #fff;
+                    animation: live-flash 0.8s ease-in-out infinite alternate; }
+.live-timer-btn.is-running { font-variant-numeric: tabular-nums; }
+.live-timer-menu { position: absolute; z-index: 960; display: flex; gap: 6px; padding: 6px;
+                   margin-top: 34px; background: var(--bg-panel); border: 1px solid var(--line);
+                   border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); }
+.live-timer-menu[hidden] { display: none; }
+@keyframes live-flash { from { opacity: 1; } to { opacity: 0.55; } }
+
+.live-party { position: fixed; inset: 0; pointer-events: none; z-index: 2000; overflow: hidden; }
+.live-party-bit { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px;
+                  animation-name: live-fall; animation-timing-function: ease-in; animation-fill-mode: forwards; }
+@keyframes live-fall { to { top: 105%; transform: rotate(720deg); } }
+.live-party-note { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 2001;
+                   padding: 14px 26px; border-radius: 14px; background: var(--bg-head);
+                   border: 2px solid var(--green); font-size: 1.5rem; font-weight: 700;
+                   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); pointer-events: none; }
+.live-toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 1500;
+              padding: 8px 16px; border-radius: 10px; background: var(--bg-head);
+              border: 1px solid var(--green); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .live-timer.is-up { animation: none; }
+  .live-guess-bar { transition: none; }
+}

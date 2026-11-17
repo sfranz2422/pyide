@@ -347,6 +347,9 @@ window.IDESnippets = (function () {
     var shown = setup.code;
     var st = loadState(original);
     var box = el("div", "snippet snippet-" + (lang || "python") + " snippet-predict");
+    // Which prediction this is, for the class's chart under it (live_class.js
+    // matches the teacher's copy and the class's by it).
+    box.predictCode = original;
     box.setAttribute("data-predict", "");
 
     var area = el("textarea", "snippet-code");
@@ -509,6 +512,8 @@ window.IDESnippets = (function () {
         var right = want.length === got.length && want.every(function (l, i) { return l === got[i]; });
         var first = st.tries === 0;
         st.tries += 1;
+        // A live lesson charts the class's first guesses (live_class.js).
+        if (first && page.onGuess) { try { page.onGuess(original, guess.value, right); } catch (e) { /* a bonus */ } }
         if (right) {
           st.right = true;
           saveState(original, st);
@@ -603,6 +608,7 @@ window.IDESnippets = (function () {
     if (!st.no) st.no = [];               // the wrong picks so far, by their words
     var asPage = !!parts.page;
     var box = el("div", "snippet snippet-html snippet-predict snippet-pick" + (asPage ? " is-page" : ""));
+    box.predictCode = original;
     box.setAttribute("data-predict", "");
 
     var area = el("textarea", "snippet-code");
@@ -702,6 +708,9 @@ window.IDESnippets = (function () {
       if (check.disabled || st.right || picked < 0) return;
       var first = st.tries === 0;
       st.tries += 1;
+      if (first && page.onGuess) {
+        try { page.onGuess(original, choices[picked], choices[picked] === parts.answer); } catch (e) { /* a bonus */ }
+      }
       if (choices[picked] === parts.answer) {
         st.right = true;
         saveState(original, st);
@@ -845,6 +854,8 @@ window.IDESnippets = (function () {
   function configure(o) {
     o = o || {};
     if ("claim" in o) page.claim = o.claim;
+    // A live lesson's: told each first guess, right or not (live_class.js).
+    if ("onGuess" in o) page.onGuess = o.onGuess;
     if ("teacher" in o) page.teacher = !!o.teacher;
     // An assignment's page: a first-try prediction is posted for its XP.
     if ("assignment" in o) {

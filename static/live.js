@@ -90,6 +90,12 @@
   window.PyIDENotes.setQuizContext({ assignment: L.assignment,
                                      signedIn: L.signedIn });
   if (window.IDESnippets) window.IDESnippets.configure({ assignment: L.assignment, signedIn: L.signedIn });
+  /* The class, live (live_class.js): this student's step passed, first
+     guesses and hand up go to the teacher's screen, as counts; the
+     teacher's countdown and the whole-class celebration come back on the
+     poll (fromPoll, below). */
+  var liveClass = window.PyIDELiveClass && L.code
+    ? window.PyIDELiveClass.student({ code: L.code, signedIn: !!L.signedIn }) : null;
 
   // ------------------------------------------------------------ the editors
 
@@ -857,6 +863,7 @@
     seen = data.version;
     showSnippet(data);
     showNotes(data);
+    if (liveClass) liveClass.fromPoll(data);
     showTeacherOutput(data);
     noteTeacherGame(data);
   }

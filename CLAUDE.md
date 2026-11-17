@@ -49,12 +49,12 @@ loop above keeps the last line of a passing run and shows the tail of a
 failing one, so a red suite cannot scroll past unnoticed — a bare
 `for ... do python3 "$t"; done` will let it.
 
-**`node` is required**, by thirty-six of these: `test_deck_show.py`, `test_ide_web.py`, `test_quiz_browser.py` (Chrome too), `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
+**`node` is required**, by thirty-seven of these: `test_deck_show.py`, `test_ide_web.py`, `test_quiz_browser.py` (Chrome too), `test_turtle.py`, `test_pi_circuit.py`, `test_pi_python.py`, `test_pi_editor.py`, `test_attendance.py`, `test_calendar.py`, `test_lab_machine.py`, `test_lab_cmd.py`, `test_lab_checks.py`, `test_lab.py`, `test_charts.py`, `test_dungeon.py`,
 `test_world_model.py`, `test_world_python.py`,
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py`, `test_autograde.py`, `test_picker.py` (Chrome too), `test_editor_tips_browser.py` (Chrome too) and `test_presmaker_insert.py` (Chrome too). They run
+`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py`, `test_autograde.py`, `test_picker.py` (Chrome too), `test_editor_tips_browser.py` (Chrome too), `test_presmaker_insert.py` (Chrome too) and `test_live_class_browser.py` (Chrome too). They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -215,6 +215,8 @@ calls `setValue` on the mirror only, and there is deliberately **no** button
 that copies the teacher's code down. Typing it is the exercise, and the
 teacher's pane is `user-select: none` for the same reason. That is a speed
 bump, not a lock: the page is sent the file in order to show it.
+
+**The class, live** (`static/live_class.js`; "The class, live" in `app.py`; Nov 2026, the teacher's request: make live mode "more interesting for the kids"). On the class's live page (Python and web) a student's page says when they pass a step's tests card ("🥇 You were the first…" / "#5"), their FIRST prediction (snippets.js `configure({onGuess})`), and 🙋 I'm stuck / ✅ I'm done — rows in `live_signals` (PyIDE's own table, unique per lesson, student, kind and key, so nobody counts twice). The teacher's editor asks `/api/live/<code>/class` every 3 s and paints it on its notes and its pop-out: "17 / 22 finished" on each card, a chart of the class's first guesses under each prediction (automatically, anonymous), "🙋 2 stuck · ✅ 12 done" on the top bar. **Counts only, never names** (the teacher's choice), and only of the students HERE (`_live_here`: the class's attendance, so signed-in students in a lesson that's in a class; a lesson in no class has no "here" and no celebration). "Done" is for the slide it was said on. A card and a prediction are matched between the teacher's copy and the class's by a key of their content (a card's check labels, a prediction's code), never their place. ⏱ Timer (1/3/5/10 min) and the celebration go through `/api/live/<code>/extra` with the teacher's `seq`, moving the lesson's version so the class hears on the poll they already make (`live_extras`, PyIDE's own table); the party is checked on the server (every student here has passed, at least two) and pays `LIVE_PARTY_XP` (5) once each. A student page asks where the parties stood when it loads: its first full poll answer can BE the party (the editor pushes only on a change), and taking that as the start once meant nobody saw the confetti. The pop-out loads the editor's checker (`?ide=`), or its tests blocks aren't cards and can't carry a count. `test_live_class.py` (server), `test_live_class_browser.py` (two students and the teacher in Chrome).
 
 **Play it here** (`playTeacherGame` in `live.js`) is the teacher's game on
 the student's own canvas. A game can't come down a once-a-second poll, but

@@ -65,7 +65,49 @@
       notes = text;
       view.show(text, d.slide);
     }
+    showClass(d);
   };
+
+  /* The class, live (live_class.js), on the projector: "17 / 22 finished"
+     on each step's card and the class's first guesses under each
+     prediction, as they come in, and the countdown and how many are stuck
+     or done. All of it sent by the editor in its state; counts only. */
+  var LC = window.PyIDELiveClass;
+  var clockChip = document.createElement("div");
+  clockChip.className = "live-timer";
+  clockChip.hidden = true;
+  if (document.body) document.body.appendChild(clockChip);
+  var handsChip = document.createElement("div");
+  handsChip.className = "live-hands live-hands-count chip";
+  handsChip.hidden = true;
+  if (document.body) document.body.appendChild(handsChip);
+  var timer = null;
+  function showClass(d) {
+    if (!LC) return;
+    var cls = d.live ? d.cls : null;
+    LC.paint(body, cls);
+    handsChip.hidden = !cls;
+    if (cls) {
+      handsChip.textContent = "🙋 " + cls.stuck + " stuck · ✅ " + cls.done + " done";
+      handsChip.classList.toggle("has-stuck", cls.stuck > 0);
+    }
+    timer = d.live ? d.timer : null;
+  }
+  setInterval(function () {
+    var left = timer && timer.end ? timer.end - Date.now() : 0;
+    if (timer && timer.end && left > 0) {
+      clockChip.hidden = false;
+      clockChip.classList.remove("is-up");
+      clockChip.classList.toggle("is-low", left <= 30000);
+      clockChip.textContent = "⏱ " + LC.clock(left);
+    } else if (timer && timer.end && left > -6000) {
+      clockChip.hidden = false;
+      clockChip.classList.add("is-up");
+      clockChip.textContent = "⏰ Time's up!";
+    } else {
+      clockChip.hidden = true;
+    }
+  }, 250);
 
   function go(i) {
     asked = i;

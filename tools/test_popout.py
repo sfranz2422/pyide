@@ -252,11 +252,13 @@ except (ValueError, IndexError):
     sys.exit(1)
 
 _url, _name = (o["opened"] or [["", ""]])[0]
-_ch = _url.split("ch=")[-1]
+# ?ch=<channel>&ide=<the editor's IDE>: the pop-out loads that IDE's checker,
+# so a tests block is a card there and the class's count can go on it.
+_ch = _url.split("ch=")[-1].split("&")[0]
 check("Pop out opens one named tab, and again brings the same one forward",
       len(o["opened"]) == 2 and o["opened"][0] == o["opened"][1]
       and _url.startswith("/notes/present?ch=") and _name == CHANNEL + _ch
-      and re.fullmatch(r"[a-z0-9]{6,}", _ch), o["opened"])
+      and re.fullmatch(r"[a-z0-9]{6,}", _ch) and _url.endswith("&ide=pyide"), o["opened"])
 if "first" not in o:
     print()
     print("%d/%d ok" % (sum(results), len(results)))

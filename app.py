@@ -516,6 +516,48 @@ class DeckShow(Base):
     frame = Column(Text, nullable=False, default="")
 
 
+class LiveSignal(Base):
+    """What one student did in a live lesson that the class's screen counts
+    ("The class, live" below): a step passed, a first prediction, a hand up.
+    One row per (lesson, student, kind, key), so a double click, a reload or
+    two workers can't count anyone twice — the unique key is the guard.
+
+    kind "step": key is the tests card (PyIDELiveClass.cardKey), value "1";
+    the row's id order is the order the class finished it in.
+    kind "guess": key is the predict block (its code's key), value is "1|"
+    or "0|" (right or not) and the first guess as typed — only the first is
+    kept, as only a first guess says what the class thought.
+    kind "hand": key "stuck", or "done:<slide>" so a done counts only on
+    the slide it was said on (the teacher moving on clears it by itself).
+
+    Students' user ids only: "here" is the class's attendance, which only a
+    signed-in student is in. PyIDE's own table, like deck_shows."""
+    __tablename__ = "live_signals"
+    __table_args__ = (UniqueConstraint("live_id", "user_id", "kind", "key"),)
+
+    id = Column(Integer, primary_key=True)
+    live_id = Column(Integer, index=True, nullable=False)
+    user_id = Column(Integer, nullable=False)
+    kind = Column(String(8), nullable=False)
+    key = Column(String(40), nullable=False)
+    value = Column(String(320), nullable=False, default="")
+
+
+class LiveExtra(Base):
+    """A live lesson's countdown and its last whole-class celebration: what
+    the teacher's editor sets and every student's page shows. Its own row,
+    not columns on LiveSession, because that row is accounts.py's (shared
+    with GameIDE) and polled every second; this one is read only when the
+    lesson's version moves. Times in plain milliseconds, as DeckShow's."""
+    __tablename__ = "live_extras"
+
+    live_id = Column(Integer, primary_key=True, autoincrement=False)
+    timer_end = Column(BigInteger, nullable=False, default=0)
+    timer_total = Column(Integer, nullable=False, default=0)
+    party_key = Column(String(40), nullable=False, default="")
+    party_seq = Column(Integer, nullable=False, default=0)
+
+
 class ClassPicker(Base):
     """The name picker for one class (class_picker; "Name picker" on the
     teacher's class page): one row per class, rewritten in place.
@@ -8393,6 +8435,7 @@ def live_poll(code):
             page_id=_page_id(live.page),
             **({"page": live.page or ""}
                if request.args.get("pg", "") != _page_id(live.page) else {}),
+            **_live_extras_for_class(db, live),
         )
     finally:
         db.close()
@@ -8580,18 +8623,9 @@ def live_answers(code):
         live = _find_live(db, code)
         if live is None or user is None or user.id != live.host_id:
             abort(404)
-        item = (db.query(accounts.Assignment).filter_by(id=live.assignment_id).first()
-                if live.assignment_id else None)
+        item, here = _live_here(db, live)
         if item is None:
             return jsonify(questions=[], here=None)
-        _, course = _class_of(db, item)
-        here = None
-        if course is not None:
-            cutoff = accounts.now() - timedelta(minutes=accounts.VISIT_GAP_MINUTES)
-            here = {uid for (uid,) in
-                    db.query(accounts.Visit.user_id)
-                      .filter(accounts.Visit.class_id == course.id,
-                              accounts.Visit.last_at >= cutoff).distinct()}
         out = []
         for piece in quiz._blocks(live.notes or ""):
             if piece[0] != "quiz":
@@ -8609,6 +8643,245 @@ def live_answers(code):
             out.append({"prompt": q["prompt"].strip(),
                         "answered": len(who & here) if here is not None else len(who)})
         return jsonify(questions=out, here=len(here) if here is not None else None)
+    finally:
+        db.close()
+
+
+def _live_here(db, live):
+    """(the lesson's assignment, the ids of its class's students here now).
+
+    "Here" is the class's attendance sittings active in the last
+    VISIT_GAP_MINUTES (accounts.Visit): signed-in students with a page of
+    the class open, the live page included. None for a lesson in no class,
+    which has no "here" to count against. The host isn't a student."""
+    item = (db.query(accounts.Assignment).filter_by(id=live.assignment_id).first()
+            if live.assignment_id else None)
+    if item is None:
+        return None, None
+    _, course = _class_of(db, item)
+    if course is None:
+        return item, None
+    cutoff = accounts.now() - timedelta(minutes=accounts.VISIT_GAP_MINUTES)
+    here = {uid for (uid,) in
+            db.query(accounts.Visit.user_id)
+              .filter(accounts.Visit.class_id == course.id,
+                      accounts.Visit.last_at >= cutoff).distinct()}
+    here.discard(live.host_id)
+    return item, here
+
+
+# --------------------------------------------------------------------------
+# The class, live (Nov 2026, the teacher's request: make live mode "more
+# interesting for the kids"). Students' pages say what they did — a step's
+# card passed, a first prediction, "I'm stuck" / "I'm done" — and the
+# teacher's editor asks every few seconds for the class's side of it:
+# "17 / 22 done" on each card, a chart of the class's guesses under each
+# prediction (anonymous, on the projector as they come in), and how many
+# are stuck or done (counts only, never names — the teacher's choice). The
+# teacher's editor also starts a countdown, and calls the celebration when
+# the whole class has passed a step; both reach the class on the lesson's
+# own poll, as the version moves (live_extra).
+# --------------------------------------------------------------------------
+
+LIVE_GUESS_SHOWN = 5          # the most common guesses charted; the rest are "other"
+LIVE_PARTY_XP = 5             # each, for a step the whole class finished
+LIVE_TIMER_MAX = 60 * 60      # seconds: a countdown longer than a lesson is a typo
+SIGNAL_KEY = re.compile(r"^[a-z0-9]{1,24}$")
+
+
+def _live_extras_for_class(db, live):
+    """The countdown and the last celebration, for the class's poll: what's
+    left on the clock in ms (the page counts down from it by its own clock,
+    so a wrong clock there doesn't matter), and the party's seq and step."""
+    row = db.query(LiveExtra).filter_by(live_id=live.id).first()
+    if row is None or live.ended:
+        return {"timer_left": 0, "timer_total": 0, "party_seq": 0, "party_key": ""}
+    left = max(0, row.timer_end - int(time.time() * 1000)) if row.timer_end else 0
+    return {"timer_left": left, "timer_total": row.timer_total if row.timer_end else 0,
+            "party_seq": row.party_seq, "party_key": row.party_key}
+
+
+@app.post("/api/live/<code>/signal")
+def live_signal(code):
+    """A student says what they did: {kind: step|guess|hand, key, value}.
+
+    Signed-in students only (see LiveSignal); anyone else is told nothing
+    happened, which is what a signed-out page should hear. A step answers
+    which one to finish it they were ("You were #5!")."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None or live.ended:
+            return jsonify(ok=False), 404
+        if user is None or user.id == live.host_id:
+            return jsonify(ok=False)
+        data = request.get_json(silent=True) or {}
+        kind = data.get("kind")
+        key = str(data.get("key") or "")
+        if kind == "step":
+            if not SIGNAL_KEY.match(key):
+                return jsonify(error="Bad step."), 400
+            mine = _signal_once(db, live, user, "step", key, "1")
+            rank = (db.query(func.count(LiveSignal.id))
+                      .filter(LiveSignal.live_id == live.id, LiveSignal.kind == "step",
+                              LiveSignal.key == key, LiveSignal.id <= mine.id).scalar())
+            return jsonify(ok=True, rank=rank)
+        if kind == "guess":
+            if not SIGNAL_KEY.match(key):
+                return jsonify(error="Bad prediction."), 400
+            guess = str(data.get("value") or "").replace("\r", "")
+            guess = "\n".join(l.strip() for l in guess.split("\n")).strip()[:300]
+            _signal_once(db, live, user, "guess", key, ("1|" if data.get("right") else "0|") + guess)
+            return jsonify(ok=True)
+        if kind == "hand":
+            value = data.get("value")
+            if value not in ("stuck", "done", ""):
+                return jsonify(error="Bad hand."), 400
+            # One hand at a time: saying done takes stuck down, and the other way.
+            (db.query(LiveSignal)
+               .filter(LiveSignal.live_id == live.id, LiveSignal.user_id == user.id,
+                       LiveSignal.kind == "hand")
+               .delete(synchronize_session=False))
+            if value:
+                db.add(LiveSignal(live_id=live.id, user_id=user.id, kind="hand",
+                                  key="stuck" if value == "stuck" else ("done:" + (live.slide or ""))[:40]))
+            db.commit()
+            return jsonify(ok=True)
+        return jsonify(error="Bad signal."), 400
+    finally:
+        db.close()
+
+
+def _signal_once(db, live, user, kind, key, value):
+    """The student's row for this, made if it isn't there. The first stays."""
+    row = (db.query(LiveSignal)
+             .filter_by(live_id=live.id, user_id=user.id, kind=kind, key=key).first())
+    if row is not None:
+        return row
+    row = LiveSignal(live_id=live.id, user_id=user.id, kind=kind, key=key, value=value)
+    db.add(row)
+    try:
+        db.commit()
+        return row
+    except IntegrityError:                 # the other worker made it first
+        db.rollback()
+        return (db.query(LiveSignal)
+                  .filter_by(live_id=live.id, user_id=user.id, kind=kind, key=key).first())
+
+
+@app.get("/api/live/<code>/class")
+def live_class(code):
+    """The class's side of the lesson, for the teacher's editor (and its
+    pop-out on the projector): {here, steps: {key: n}, guesses: {key:
+    {n, top: [{text, n, right}], other}}, stuck, done}. Counts only — no
+    names anywhere — and only of students here now, when the lesson has a
+    class. Only the lesson's teacher."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None or user is None or user.id != live.host_id:
+            abort(404)
+        _, here = _live_here(db, live)
+        rows = db.query(LiveSignal.user_id, LiveSignal.kind, LiveSignal.key, LiveSignal.value) \
+                 .filter(LiveSignal.live_id == live.id).all()
+        if here is not None:
+            rows = [r for r in rows if r[0] in here]
+        steps, guesses, stuck, done = {}, {}, 0, 0
+        done_key = ("done:" + (live.slide or ""))[:40]
+        for uid, kind, key, value in rows:
+            if kind == "step":
+                steps[key] = steps.get(key, 0) + 1
+            elif kind == "guess":
+                right, _, text = value.partition("|")
+                g = guesses.setdefault(key, {})
+                hit = g.setdefault(text, [0, right == "1"])
+                hit[0] += 1
+            elif kind == "hand":
+                if key == "stuck":
+                    stuck += 1
+                elif key == done_key:
+                    done += 1
+        charts = {}
+        for key, g in guesses.items():
+            ranked = sorted(g.items(), key=lambda kv: (-kv[1][0], kv[0]))
+            top = [{"text": t, "n": v[0], "right": v[1]} for t, v in ranked[:LIVE_GUESS_SHOWN]]
+            charts[key] = {"n": sum(v[0] for v in g.values()), "top": top,
+                           "other": sum(v[0] for _, v in ranked[LIVE_GUESS_SHOWN:])}
+        return jsonify(here=len(here) if here is not None else None, steps=steps,
+                       guesses=charts, stuck=stuck, done=done)
+    finally:
+        db.close()
+
+
+@app.post("/api/live/<code>/extra")
+def live_extra(code):
+    """The teacher's editor starts or stops the countdown ({timer: seconds},
+    0 stops it), or calls the celebration for a step the whole class has
+    passed ({party: key}). With the teacher's `seq`, as a push: the class
+    hears of it when the version moves, on the poll they already make.
+
+    The party is checked here, not taken on the page's word: every student
+    here has passed that step, and there is more than one of them. Each
+    who passed it gets LIVE_PARTY_XP, once (the source names the lesson and
+    the step)."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None or user is None or user.id != live.host_id:
+            return jsonify(error="This is not your live lesson."), 403
+        if live.ended:
+            return jsonify(error="That live lesson has ended.", ended=True), 409
+        data = request.get_json(silent=True) or {}
+        try:
+            seq = int(data.get("seq", 0))
+        except (TypeError, ValueError):
+            return jsonify(error="Bad sequence number."), 400
+        row = db.query(LiveExtra).filter_by(live_id=live.id).first()
+        if row is None:
+            row = LiveExtra(live_id=live.id)
+            db.add(row)
+        paid = []
+        if "timer" in data:
+            try:
+                secs = int(data.get("timer") or 0)
+            except (TypeError, ValueError):
+                return jsonify(error="Bad timer."), 400
+            secs = max(0, min(LIVE_TIMER_MAX, secs))
+            row.timer_end = int(time.time() * 1000) + secs * 1000 if secs else 0
+            row.timer_total = secs
+        elif "party" in data:
+            key = str(data.get("party") or "")
+            if not SIGNAL_KEY.match(key):
+                return jsonify(error="Bad step."), 400
+            _, here = _live_here(db, live)
+            passed = {uid for (uid,) in db.query(LiveSignal.user_id).filter_by(
+                live_id=live.id, kind="step", key=key)}
+            if not here or len(here) < 2 or not here <= passed:
+                db.rollback()
+                return jsonify(error="Not everyone here has finished that step.", party=False), 409
+            if row.party_key == key:
+                db.rollback()
+                return jsonify(ok=True, party=False)        # already celebrated
+            row.party_key = key
+            row.party_seq = (row.party_seq or 0) + 1
+            paid = sorted(passed & here)
+        else:
+            return jsonify(error="Nothing to do."), 400
+        db.commit()
+        # The class hears of it at the next poll; a push already past this
+        # stamp has moved the version anyway.
+        db.query(accounts.LiveSession).filter(
+            accounts.LiveSession.id == live.id,
+            accounts.LiveSession.version < seq).update(
+            {"version": seq, "updated_at": _live_now()}, synchronize_session=False)
+        db.commit()
+        for uid in paid:
+            xp.award(db, uid, "liveparty:%d:%s" % (live.id, key), LIVE_PARTY_XP,
+                     "The whole class finished a step", _ide_of(live))
+        return jsonify(ok=True, party=bool(paid), paid=len(paid))
     finally:
         db.close()
 
@@ -8940,7 +9213,12 @@ def notes_present():
         _, bounce = _require_teacher(db)
         if bounce:
             return bounce
-        return render_template("notes_present.html", **user_context(db))
+        # Which checker draws a tests block as a card, as the editor's page
+        # chooses it: the class's step counts are matched by the card's
+        # lines (live_class.js), which only a card has.
+        ide = request.args.get("ide") if request.args.get("ide") in IDES else "pyide"
+        return render_template("notes_present.html", web=ide == "webide", flask=ide == "flaskide",
+                               **user_context(db))
     finally:
         db.close()
 
