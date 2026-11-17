@@ -35,8 +35,8 @@
        title="Pick a student's name at random: it cycles on your screen and flashes on theirs">Name picker</a>
     <a class="btn" href="{{ url_for('class_attendance', class_id=course.id) }}"
        title="Who came into this class, day by day">Attendance</a>
-    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}"
-       title="Suggest (or lock) each student's Easy / Medium / Master level for v11 lessons">Levels</a>
+    <a class="btn" href="{{ url_for('class_gradebook', class_id=course.id) }}"
+       title="Every student's scores and average, categories and weights, Export all to Skyward, and the v11 level suggester">Gradebook</a>
     <a class="btn" href="{{ url_for('class_xp', class_id=course.id) }}"
        title="Each student's XP and tokens: give XP, approve pictures and shop requests">XP &amp; tokens{% if photos_waiting %} <span class="count-pill">{{ photos_waiting }} to approve</span>{% endif %}</a>
     <a class="btn" href="{{ url_for('teacher_home') }}">All classes</a>

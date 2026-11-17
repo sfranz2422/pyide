@@ -306,6 +306,9 @@ page = teacher.get("/teacher/hw1").get_data(as_text=True)
 check("a graded assignment's page has the download",
       'id="sky-get"' in page and 'id="sky-cat"' in page and 'id="sky-due"' in page)
 sel = page.split('<select id="sky-cat"')[1].split("</select>")[0] if '<select id="sky-cat"' in page else ""
+# The category a file was last made with is kept for the gradebook and comes
+# back selected (test_gradebook.py); read the list without it.
+sel = sel.replace('" selected>', '">')
 check("  its category is a drop-down of the teacher's categories, named, coded as the file wants",
       all('value="%s">%s' % (c, n) in sel for c, n in [("HW", "Homework"), ("T", "Test"), ("Q", "Quiz"),
           ("Prj", "Project"), ("N", "Notes"), ("FE", "Final Exam"), ("L", "Lab")]), sel[:300])

@@ -33,6 +33,7 @@
       {% for c in my_classes if c.id != course.id %}
         <a class="btn" href="{{ c.url }}">{{ c.name }}</a>
       {% endfor %}
+      <a class="btn" href="{{ url_for('student_grades', class_id=course.id) }}">My grades</a>
       <a class="btn" href="{{ url_for('my_work') }}">My work</a>
     {% endif %}
     {% if not visitor %}<a class="btn" href="{{ url_for('logout') }}">Sign out</a>{% endif %}

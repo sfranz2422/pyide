@@ -32,7 +32,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, func
+from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, Text, UniqueConstraint, create_engine, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, defer, sessionmaker
 
@@ -651,6 +651,31 @@ class LevelSetting(Base):
 
     class_id = Column(Integer, primary_key=True, autoincrement=False)
     teacher_name = Column(String(80), nullable=False, default="")
+
+
+class AssignmentGrade(Base):
+    """An assignment's place in the class's gradebook ("Gradebook" below):
+    its Skyward category (a code from SKYWARD_CATEGORIES) and its due date
+    ("YYYY-MM-DD"), which the Skyward file needs. Set in the gradebook's
+    column headers or by the assignment page's Download for Skyward.
+    PyIDE's own table, like lab_states."""
+    __tablename__ = "assignment_grades"
+
+    assignment_id = Column(Integer, primary_key=True, autoincrement=False)
+    category = Column(String(8), nullable=False, default="")
+    due = Column(String(10), nullable=False, default="")
+
+
+class CategoryWeight(Base):
+    """How much one Skyward category counts in a class's average (the
+    gradebook's weights, Skyward's weighted categories), in percent."""
+    __tablename__ = "category_weights"
+    __table_args__ = (UniqueConstraint("class_id", "category"),)
+
+    id = Column(Integer, primary_key=True)
+    class_id = Column(Integer, index=True, nullable=False)
+    category = Column(String(8), nullable=False)
+    weight = Column(Float, nullable=False, default=0.0)
 
 
 class OnceDone(Base):
@@ -4441,7 +4466,9 @@ def teacher_assignment(slug):
             key=lambda n: n["name"])
 
         ctx = user_context(db)
-        ctx.update(posts=_posts(db, item), skyward_categories=SKYWARD_CATEGORIES)
+        grade = db.query(AssignmentGrade).filter_by(assignment_id=item.id).first()
+        ctx.update(posts=_posts(db, item), skyward_categories=SKYWARD_CATEGORIES,
+                   grade_category=grade.category if grade else "", grade_due=grade.due if grade else "")
         # Which class it is in, for the way back, Move and Copy, and so
         # Post to Classroom can start on that class's Classroom course.
         _, in_class = _class_of(db, item)
@@ -5531,6 +5558,12 @@ def skyward_file(slug):
             due = datetime.strptime(str(data.get("due") or ""), "%Y-%m-%d")
         except ValueError:
             return jsonify(error="Pick a due date."), 400
+        # Kept for the gradebook, which uses the same category and due date.
+        grade = db.query(AssignmentGrade).filter_by(assignment_id=item.id).first()
+        if grade is None:
+            grade = AssignmentGrade(assignment_id=item.id)
+            db.add(grade)
+        grade.category, grade.due = category, due.strftime("%Y-%m-%d")
 
         roster = None              # {email: (first, last)} for one class
         wanted = data.get("post")
@@ -5591,6 +5624,275 @@ def skyward_file(slug):
                        guessed=sorted(guessed), ungraded=sorted(ungraded),
                        nameless=sorted(nameless),
                        filename=_safe_filename(item.title) + " - Skyward.csv")
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Gradebook (Nov 2026, the teacher's request: "a gradebook page that lists
+# all the students assignments with their scores and average grade ... the
+# students should also have access ... choose categories for assignments ...
+# and export all the assignments into the skyward csv")
+#
+# One page per class for the teacher (/teacher/class/<id>/gradebook): every
+# student on the roster down the side, every assignment students can see
+# across the top, oldest first, each with its Skyward category and due date
+# (set in the column's header), and each row's average. The teacher's
+# choices: WEIGHTED categories (the weights at the top, percent; a category
+# with no weight, or no assignments, counts nothing), and missing work
+# counts 0. Hidden assignments don't count until they're shown, and one with
+# no category is listed but left out of the average, marked so. A score is
+# what every other total is: _total(score, _earned) — the teacher's score
+# plus questions and checked tests. The level suggester (v11, ⭐/🔒) sits on
+# each row. Students get the same numbers for themselves alone
+# (/class/<id>/grades). Export to Skyward makes ONE file of every counted
+# assignment with a category and a due date (skyward_file's format), the
+# rest named so the teacher knows why they're missing.
+# --------------------------------------------------------------------------
+
+def _auto_out_of(item):
+    """What an assignment is worth when Out of is empty: its questions' and
+    tests' points, as the assignment page fills Out of."""
+    return math.ceil(sum(q["points"] for q in _quiz_possible(item))
+                     + _grader(item).possible(item.file_map()))
+
+
+def _gradebook(db, course, only=None):
+    """{assignments: [...], students: [...], weights: {code: pct}, plain: bool}.
+    `only` (a User) narrows the students to that one, for their own page."""
+    rows = (db.query(accounts.ClassItem)
+              .filter(accounts.ClassItem.class_id == course.id,
+                      accounts.ClassItem.assignment_id.isnot(None),
+                      accounts.ClassItem.hidden == 0)
+              .order_by(accounts.ClassItem.position.desc()).all())
+    items = {a.id: a for a in db.query(accounts.Assignment).filter(
+        accounts.Assignment.id.in_([r.assignment_id for r in rows] or [0]))}
+    grades = {g.assignment_id: g for g in db.query(AssignmentGrade).filter(
+        AssignmentGrade.assignment_id.in_(list(items) or [0]))}
+    assignments = []
+    for r in rows:
+        a = items.get(r.assignment_id)
+        if a is None or getattr(a, "archived", 0):
+            continue
+        g = grades.get(a.id)
+        out_of = a.out_of or _auto_out_of(a)
+        assignments.append({"id": a.id, "slug": a.slug, "title": a.title, "out_of": out_of,
+                            "category": g.category if g else "", "due": g.due if g else ""})
+    # Students: the roster, and anyone else with work here (a student added
+    # by hand, or before the roster synced), each once.
+    people = []
+    if only is not None:
+        people.append({"uid": only.id, "name": only.display_name(), "email": (only.email or "").lower(), "enr": None})
+    else:
+        enr = db.query(accounts.Enrollment).filter_by(class_id=course.id).all()
+        users = {}
+        emails = [e.email.lower() for e in enr]
+        if emails:
+            for u in db.query(accounts.User).filter(func.lower(accounts.User.email).in_(emails)):
+                users[(u.email or "").lower()] = u
+        names = {p["id"]: p["name"] for p in _picker_names(db, course)}
+        for e in enr:
+            u = users.get(e.email.lower())
+            people.append({"uid": u.id if u else None, "email": e.email.lower(), "enr": e.id,
+                           "name": (u.display_name() if u else "") or e.name or names.get(e.id) or e.email})
+        seen = {p["uid"] for p in people if p["uid"]}
+        extra = (db.query(accounts.User).join(accounts.Submission, accounts.Submission.student_id == accounts.User.id)
+                   .filter(accounts.Submission.assignment_id.in_([a["id"] for a in assignments] or [0]),
+                           accounts.User.id != course.teacher_id).all())
+        for u in extra:
+            if u.id not in seen:
+                seen.add(u.id)
+                people.append({"uid": u.id, "name": u.display_name(), "email": (u.email or "").lower(), "enr": None})
+        people.sort(key=lambda p: (p["name"] or "").lower())
+    scores = {}
+    for a in assignments:
+        earned = _earned(db, a["id"])
+        subs = {s.student_id: s for s in db.query(accounts.Submission).filter_by(assignment_id=a["id"])}
+        for p in people:
+            if p["uid"] is None:
+                continue
+            sub = subs.get(p["uid"])
+            total = _total(sub.score if sub else None, earned.get(p["uid"]))
+            if total is not None:
+                scores[(a["id"], p["uid"])] = total
+    weights = {w.category: w.weight for w in db.query(CategoryWeight).filter_by(class_id=course.id)}
+    plain = not any(v > 0 for v in weights.values())
+    for p in people:
+        cells, by_cat, all_got, all_out = [], {}, 0.0, 0.0
+        for a in assignments:
+            got = scores.get((a["id"], p["uid"])) if p["uid"] else None
+            cells.append({"score": got, "missing": got is None})
+            if not a["out_of"]:
+                continue
+            g = got or 0.0                                   # missing counts 0
+            all_got += g
+            all_out += a["out_of"]
+            if a["category"]:
+                c = by_cat.setdefault(a["category"], [0.0, 0.0])
+                c[0] += g
+                c[1] += a["out_of"]
+        cats = {c: round(100.0 * v[0] / v[1], 1) for c, v in by_cat.items() if v[1]}
+        if plain:
+            avg = round(100.0 * all_got / all_out, 1) if all_out else None
+        else:
+            use = [(weights.get(c, 0), pct) for c, pct in cats.items() if weights.get(c, 0) > 0]
+            wsum = sum(w for w, _ in use)
+            avg = round(sum(w * pct for w, pct in use) / wsum, 1) if wsum else None
+        p.update(cells=cells, cats=cats, avg=avg)
+    return {"assignments": assignments, "students": people, "weights": weights, "plain": plain}
+
+
+@app.get("/teacher/class/<int:class_id>/gradebook")
+def class_gradebook(class_id):
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None or not accounts.is_teacher(user.email):
+            abort(404)
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id,
+                                                  accounts.Course.app.in_(EDITOR_IDES)).first()
+        if course is None or course.teacher_id != user.id:
+            abort(404)
+        book = _gradebook(db, course)
+        sugs = {r.enrollment_id: r for r in db.query(LevelSuggestion).filter_by(class_id=course.id)}
+        for p in book["students"]:
+            s = sugs.get(p["enr"]) if p["enr"] else None
+            p["level"] = s.level if s is not None and s.level in LEVELS else ""
+            p["locked"] = bool(s.locked) if s is not None else False
+        setting = db.query(LevelSetting).filter_by(class_id=course.id).first()
+        ctx = user_context(db)
+        ctx.update(course=course, book=book, categories=SKYWARD_CATEGORIES, levels=LEVELS,
+                   teacher_name=(setting.teacher_name if setting else ""))
+        return render_template("gradebook.html", **ctx)
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/gradebook")
+def class_gradebook_save(class_id):
+    """{assignment: slug, category?, due?} for a column, or {weights: {code: pct}}."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        if "weights" in data:
+            got = data.get("weights") if isinstance(data.get("weights"), dict) else {}
+            for code, _ in SKYWARD_CATEGORIES:
+                if code not in got:
+                    continue
+                try:
+                    w = max(0.0, min(float(got[code] or 0), 1000.0))
+                except (TypeError, ValueError):
+                    return jsonify(error="A weight is a number."), 400
+                row = db.query(CategoryWeight).filter_by(class_id=course.id, category=code).first()
+                if row is None:
+                    row = CategoryWeight(class_id=course.id, category=code)
+                    db.add(row)
+                row.weight = w
+            db.commit()
+            return jsonify(ok=True)
+        item = db.query(accounts.Assignment).filter_by(slug=clean(data.get("assignment"), 16)).first()
+        placed = item is not None and db.query(accounts.ClassItem).filter_by(
+            class_id=course.id, assignment_id=item.id).first() is not None
+        if not placed:
+            return jsonify(error="That assignment isn't in this class."), 404
+        row = db.query(AssignmentGrade).filter_by(assignment_id=item.id).first()
+        if row is None:
+            row = AssignmentGrade(assignment_id=item.id)
+            db.add(row)
+        if "category" in data:
+            cat = str(data.get("category") or "")
+            if cat and cat not in dict(SKYWARD_CATEGORIES):
+                return jsonify(error="Not one of your Skyward categories."), 400
+            row.category = cat
+        if "due" in data:
+            due = str(data.get("due") or "")
+            if due:
+                try:
+                    datetime.strptime(due, "%Y-%m-%d")
+                except ValueError:
+                    return jsonify(error="Not a date."), 400
+            row.due = due
+        db.commit()
+        return jsonify(ok=True, category=row.category, due=row.due)
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/gradebook/skyward")
+def class_gradebook_skyward(class_id):
+    """Every counted assignment as one Skyward import file: skyward_file's
+    seven columns, a row per student per assignment. Missing work goes in as
+    0 (the gradebook counts it 0) unless `missing_zero` is false. An
+    assignment with no category or no due date is left out and named."""
+    import csv
+    import io
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        zero = data.get("missing_zero", True) is not False
+        book = _gradebook(db, course)
+        users = {u.id: u for u in db.query(accounts.User).filter(
+            accounts.User.id.in_([p["uid"] for p in book["students"] if p["uid"]] or [0]))}
+        enr = {e.id: e for e in db.query(accounts.Enrollment).filter_by(class_id=course.id)}
+        lines, skipped, guessed, nameless = [], [], set(), set()
+        for i, a in enumerate(book["assignments"]):
+            if not a["category"] or not a["due"]:
+                skipped.append(a["title"])
+                continue
+            due = datetime.strptime(a["due"], "%Y-%m-%d").strftime("%m%d%Y")
+            for p in book["students"]:
+                cell = p["cells"][i]
+                if cell["missing"] and not zero:
+                    continue
+                u = users.get(p["uid"]) if p["uid"] else None
+                first, last = (u.first_name, u.last_name) if u else ("", "")
+                if not (first and last):
+                    full = (u.name if u else "") or (enr[p["enr"]].name if p["enr"] in enr else "")
+                    first, last = _split_name(full)
+                    if not (first and last):
+                        nameless.add(p["name"])
+                        continue
+                    guessed.add(p["name"])
+                lines.append([last, first, a["title"], due, a["category"], a["out_of"],
+                              _score_text(cell["score"] or 0)])
+        lines.sort(key=lambda r: (r[2].lower(), r[0].lower(), r[1].lower()))
+        out = io.StringIO()
+        csv.writer(out, lineterminator="\r\n").writerows(lines)
+        return jsonify(csv=out.getvalue(), count=len(lines), skipped=skipped,
+                       guessed=sorted(guessed), nameless=sorted(nameless),
+                       filename=_safe_filename(course.name) + " - Skyward.csv")
+    finally:
+        db.close()
+
+
+@app.get("/class/<int:class_id>/grades")
+def student_grades(class_id):
+    """A student's own row of the gradebook: their scores, each category and
+    their average. Only their own; the teacher sees the whole gradebook."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        if user is None:
+            return redirect(url_for("login", next=request.path))
+        course = db.query(accounts.Course).filter(accounts.Course.id == class_id,
+                                                  accounts.Course.app.in_(EDITOR_IDES)).first()
+        if course is not None and course.teacher_id == user.id:
+            return redirect(url_for("class_gradebook", class_id=course.id))
+        enrolled = course is not None and db.query(accounts.Enrollment).filter_by(
+            class_id=course.id, email=(user.email or "").lower()).first() is not None
+        if not enrolled:
+            return render_template("404.html", message="That isn't one of your classes."), 404
+        book = _gradebook(db, course, only=user)
+        ctx = user_context(db)
+        ctx.update(course=course, book=book, me=book["students"][0],
+                   category_names=dict(SKYWARD_CATEGORIES))
+        return render_template("grades_student.html", **ctx)
     finally:
         db.close()
 

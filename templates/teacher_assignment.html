@@ -326,10 +326,10 @@
               category is picked for each assignment, never carried over. #}
           <select id="sky-cat" class="field">
             <option value="">Choose…</option>
-            {% for code, name in skyward_categories %}<option value="{{ code }}">{{ name }} ({{ code }})</option>{% endfor %}
+            {% for code, name in skyward_categories %}<option value="{{ code }}"{{ ' selected' if grade_category == code }}>{{ name }} ({{ code }})</option>{% endfor %}
           </select>
           <label for="sky-due">Due</label>
-          <input id="sky-due" class="field" type="date">
+          <input id="sky-due" class="field" type="date" data-kept="{{ grade_due }}">
           {% if posts %}
             <select id="sky-post" class="field" aria-label="Which class">
               {% for p in posts %}<option value="{{ p.id }}">{{ p.course_name or "A class" }}</option>{% endfor %}
@@ -705,14 +705,15 @@
     // typed into the old box) leaves it at "Choose…".
     var catKey = "skyward-category:" + base;
     try {
-      var kept = localStorage.getItem(catKey) || "";
+      var kept = cat.value ? "" : (localStorage.getItem(catKey) || "");   // the gradebook's wins
       for (var i = 0; i < cat.options.length; i++) {
         if (kept && cat.options[i].value === kept) cat.value = kept;
       }
     } catch (e) {}
+    // The gradebook's due date for it, if it has one; else today.
     var d = new Date();
-    due.value = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)
-                + "-" + ("0" + d.getDate()).slice(-2);
+    due.value = due.getAttribute("data-kept") || (d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)
+                + "-" + ("0" + d.getDate()).slice(-2));
 
     function say(text) {
       state.hidden = !text;

@@ -1751,6 +1751,20 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .levels-table th, .levels-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .levels-table .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .level-hint { margin-top: 4px; color: var(--accent); }
+/* The class's gradebook (gradebook.html) and a student's own grades. */
+.gradebook-scroll { overflow-x: auto; }
+.gradebook { border-collapse: collapse; font-size: 14px; }
+.gradebook th, .gradebook td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.gradebook th.gb-col { min-width: 130px; max-width: 170px; }
+.gradebook th.gb-col a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gradebook th.gb-col .field { width: 100%; margin-top: 4px; font-size: 12px; }
+.gradebook .gb-name { position: sticky; left: 0; background: var(--bg); white-space: nowrap; }
+.gradebook .gb-missing { color: var(--muted); font-style: italic; }
+.gradebook .gb-warn { color: var(--accent); }
+.gradebook .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.weights { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.weights .field { width: 70px; }
+.gradebook-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
 /* The same step in the editor (`:::pop editor`, app.js): a bubble under the
    student's last line, pointing up at where the line goes. Clicks go through
    it, so it never stops the typing it asks for. */

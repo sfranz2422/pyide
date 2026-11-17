@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gradebook · {{ course.name }} — Online IDE</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<script>
+  try {
+    var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) {}
+</script>
+</head>
+<body class="class-page class-teacher">
+
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
+  <div class="meta"><span class="pagetitle">{{ course.name }} · Gradebook</span></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}" title="Each student's recent levels, with hints">Level details</a>
+    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
+  </div>
+</header>
+
+{#  app.py, "Gradebook": every assignment students can see, oldest first, its
+    Skyward category and due date set here; each row's average from the
+    weighted categories (missing work counts 0; an assignment with no
+    category is shown but not counted). The ⭐ level suggester is the v11
+    one (app.py "Levels"), the same as the Levels page. #}
+
+<main class="page gradebook-page">
+  <section class="card">
+    <h2>Category weights</h2>
+    <p class="small dim">Each student's average is the weighted mix of their category averages, like a weighted Skyward class.
+      A category with no weight counts nothing. Missing work counts 0. Hidden assignments don't count until you show them.
+      {% if book.plain %}<strong>No weights set yet: the average is total points for now.</strong>{% endif %}</p>
+    <div class="weights">
+      {% for code, name in categories %}
+        <label class="weight">{{ name }} ({{ code }})
+          <input class="field js-weight" type="number" min="0" max="1000" step="1" data-code="{{ code }}"
+                 value="{{ '%g'|format(book.weights.get(code, 0)) }}"> %</label>
+      {% endfor %}
+      <button class="btn" id="save-weights" type="button">Save weights</button>
+      <span class="small dim" id="weights-said"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="gradebook-tools">
+      <button class="btn btn-primary" id="sky-all" type="button">Export all to Skyward</button>
+      <label class="small"><input type="checkbox" id="sky-zero" checked> Missing work as 0</label>
+      <span class="small" id="sky-said"></span>
+      <label class="small level-name-row">Your name on a suggestion:
+        <input id="teacher-name" class="field" type="text" maxlength="80" placeholder="Your teacher" value="{{ teacher_name }}"></label>
+    </div>
+    <p class="small dim">Skyward: Assignment Import, template <strong>Import Scores and Create Assignments</strong>, this class,
+      <em>Import File Has Header Row</em> unticked. An assignment needs a category and a due date to go in the file.</p>
+    {% if not book.assignments %}
+      <p class="dim">No assignments students can see yet.</p>
+    {% elif not book.students %}
+      <p class="dim">No students on this class's roster yet. Link it to a Classroom class on the class page.</p>
+    {% endif %}
+    <div class="gradebook-scroll">
+    <table class="gradebook">
+      <thead>
+        <tr>
+          <th class="gb-name">Student</th>
+          <th class="gb-avg">Average</th>
+          <th class="gb-level" title="The level suggested for v11 lessons: points count only at this level">Level ⭐</th>
+          {% for a in book.assignments %}
+            <th class="gb-col {{ 'gb-nocat' if not a.category }}" data-slug="{{ a.slug }}">
+              <a href="{{ url_for('teacher_assignment', slug=a.slug) }}" title="{{ a.title }}">{{ a.title }}</a>
+              <div class="small dim">/ {{ a.out_of }}</div>
+              <select class="field js-cat" aria-label="Category of {{ a.title }}">
+                <option value="">Category…</option>
+                {% for code, name in categories %}<option value="{{ code }}" {{ 'selected' if a.category == code }}>{{ name }}</option>{% endfor %}
+              </select>
+              <input class="field js-due" type="date" value="{{ a.due }}" aria-label="Due date of {{ a.title }}">
+              {% if not a.category %}<div class="small gb-warn">Not counted: no category</div>{% endif %}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in book.students %}
+          <tr data-enr="{{ p.enr or '' }}" data-level="{{ p.level or '' }}">
+            <td class="gb-name">{{ p.name }}</td>
+            <td class="gb-avg"><strong>{{ '%.1f%%'|format(p.avg) if p.avg is not none else '—' }}</strong>
+              <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
+            <td class="gb-level">
+              {% if p.enr %}
+                {% for lv in levels %}<button type="button" class="btn small js-level {{ 'is-on' if p.level == lv }}" data-level="{{ lv }}"
+                  aria-pressed="{{ 'true' if p.level == lv else 'false' }}" title="{{ lv|capitalize }}">{{ lv[:1]|upper }}</button>{% endfor %}
+                <label class="small" title="Lock: this is their level, no choosing"><input type="checkbox" class="js-lock" {{ 'checked' if p.locked }} {{ '' if p.level else 'disabled' }}>🔒</label>
+              {% else %}<span class="dim small">not on roster</span>{% endif %}
+            </td>
+            {% for c in p.cells %}
+              <td class="gb-cell {{ 'gb-missing' if c.missing }}">{{ 'missing' if c.missing else ('%g'|format(c.score)) }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var CLASS = {{ course.id }};
+  function post(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); });
+  }
+  document.getElementById("save-weights").addEventListener("click", function () {
+    var w = {};
+    Array.prototype.forEach.call(document.querySelectorAll(".js-weight"), function (i) { w[i.getAttribute("data-code")] = i.value; });
+    post("/api/class/" + CLASS + "/gradebook", { weights: w }).then(function (d) {
+      if (d.ok) location.reload();
+      else document.getElementById("weights-said").textContent = d.error || "Couldn't save.";
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("th.gb-col"), function (th) {
+    var slug = th.getAttribute("data-slug");
+    th.querySelector(".js-cat").addEventListener("change", function (e) {
+      post("/api/class/" + CLASS + "/gradebook", { assignment: slug, category: e.target.value }).then(function () { location.reload(); });
+    });
+    th.querySelector(".js-due").addEventListener("change", function (e) {
+      post("/api/class/" + CLASS + "/gradebook", { assignment: slug, due: e.target.value });
+    });
+  });
+  var name = document.getElementById("teacher-name");
+  name.addEventListener("change", function () {
+    post("/api/class/" + CLASS + "/levels", { teacher_name: name.value });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".gradebook tr[data-enr]"), function (tr) {
+    var enr = tr.getAttribute("data-enr");
+    if (!enr) return;
+    var lock = tr.querySelector(".js-lock");
+    function save(level, locked) {
+      post("/api/class/" + CLASS + "/levels", { enrollment: Number(enr), level: level, locked: locked }).then(function (d) {
+        if (!d.ok) return;
+        tr.setAttribute("data-level", d.level);
+        Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
+          var on = !!d.level && b.getAttribute("data-level") === d.level;
+          b.classList.toggle("is-on", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        lock.checked = d.locked;
+        lock.disabled = !d.level;
+      });
+    }
+    Array.prototype.forEach.call(tr.querySelectorAll(".js-level"), function (b) {
+      b.addEventListener("click", function () {
+        var lv = b.getAttribute("data-level");
+        save(tr.getAttribute("data-level") === lv ? "" : lv, lock.checked);
+      });
+    });
+    lock.addEventListener("change", function () { save(tr.getAttribute("data-level"), lock.checked); });
+  });
+  document.getElementById("sky-all").addEventListener("click", function () {
+    var said = document.getElementById("sky-said");
+    said.textContent = "Making the file…";
+    post("/api/class/" + CLASS + "/gradebook/skyward", { missing_zero: document.getElementById("sky-zero").checked }).then(function (d) {
+      if (d.error) { said.textContent = d.error; return; }
+      var blob = new Blob([d.csv], { type: "text/csv" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = d.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var bits = [d.count + " scores in the file."];
+      if (d.skipped.length) bits.push("Left out (no category or due date): " + d.skipped.join(", ") + ".");
+      if (d.guessed.length) bits.push("Names guessed (check Skyward's preview): " + d.guessed.join(", ") + ".");
+      if (d.nameless.length) bits.push("No name to match on: " + d.nameless.join(", ") + ".");
+      said.textContent = bits.join(" ");
+    });
+  });
+})();
+</script>
+</body>
+</html>

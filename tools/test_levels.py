@@ -316,8 +316,9 @@ check("the Levels page lists the roster with the name students see",
       "Kid" in page and "Ana" in page and "Bo" in page and "Mr. Franz" in page, page[:200])
 check("  each student's suggestion shows on it (Bo: Medium)",
       'data-id="%d" data-level="medium"' % ENR["kid3@example.org"] in page)
-check("  the class page links to it", "/teacher/class/%d/levels" % CID in
-      teacher.get("/teacher/class/%d" % CID).get_data(as_text=True))
+check("  the class page's Gradebook links to it", "/teacher/class/%d/gradebook" % CID in
+      teacher.get("/teacher/class/%d" % CID).get_data(as_text=True) and "/teacher/class/%d/levels" % CID in
+      teacher.get("/teacher/class/%d/gradebook" % CID).get_data(as_text=True))
 t_try = teacher.post("/api/level", json={"assignment": LS, "key": "exercise", "level": "easy"}).get_json()
 check("the teacher trying their own lesson keeps nothing", t_try.get("practice") is True)
 
