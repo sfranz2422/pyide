@@ -666,6 +666,17 @@ class AssignmentGrade(Base):
     due = Column(String(10), nullable=False, default="")
 
 
+class GradebookHidden(Base):
+    """An assignment the teacher isn't going to grade, hidden from the
+    class's gradebook (the teacher's request): not in the gradebook, the
+    averages, the Skyward file or the students' own grades. Its own table
+    rather than a column on assignment_grades, which is already deployed —
+    create_all makes tables, never columns."""
+    __tablename__ = "gradebook_hidden"
+
+    assignment_id = Column(Integer, primary_key=True, autoincrement=False)
+
+
 class CategoryWeight(Base):
     """How much one Skyward category counts in a class's average (the
     gradebook's weights, Skyward's weighted categories), in percent."""
@@ -5502,10 +5513,15 @@ def _gradebook(db, course, only=None):
         accounts.Assignment.id.in_([r.assignment_id for r in rows] or [0]))}
     grades = {g.assignment_id: g for g in db.query(AssignmentGrade).filter(
         AssignmentGrade.assignment_id.in_(list(items) or [0]))}
-    assignments = []
+    skipped = {h.assignment_id for h in db.query(GradebookHidden).filter(
+        GradebookHidden.assignment_id.in_(list(items) or [0]))}
+    assignments, hidden = [], []
     for r in rows:
         a = items.get(r.assignment_id)
         if a is None or getattr(a, "archived", 0):
+            continue
+        if a.id in skipped:
+            hidden.append({"slug": a.slug, "title": a.title})
             continue
         g = grades.get(a.id)
         out_of = a.out_of or _auto_out_of(a)
@@ -5572,7 +5588,8 @@ def _gradebook(db, course, only=None):
             wsum = sum(w for w, _ in use)
             avg = round(sum(w * pct for w, pct in use) / wsum, 1) if wsum else None
         p.update(cells=cells, cats=cats, avg=avg)
-    return {"assignments": assignments, "students": people, "weights": weights, "plain": plain}
+    return {"assignments": assignments, "students": people, "weights": weights, "plain": plain,
+            "hidden": hidden}
 
 
 @app.get("/teacher/class/<int:class_id>/gradebook")
@@ -5587,12 +5604,8 @@ def class_gradebook(class_id):
         if course is None or course.teacher_id != user.id:
             abort(404)
         book = _gradebook(db, course)
-        sugs = {r.enrollment_id: r for r in db.query(LevelSuggestion).filter_by(class_id=course.id)}
-        for p in book["students"]:
-            s = sugs.get(p["enr"]) if p["enr"] else None
-            p["level"] = s.level if s is not None and s.level in LEVELS else ""
         ctx = user_context(db)
-        ctx.update(course=course, book=book, categories=SKYWARD_CATEGORIES, levels=LEVELS)
+        ctx.update(course=course, book=book, categories=SKYWARD_CATEGORIES)
         return render_template("gradebook.html", **ctx)
     finally:
         db.close()
@@ -5600,7 +5613,7 @@ def class_gradebook(class_id):
 
 @app.post("/api/class/<int:class_id>/gradebook")
 def class_gradebook_save(class_id):
-    """{assignment: slug, category?, due?} for a column, or {weights: {code: pct}}."""
+    """{assignment: slug, category?, due?, hidden?} for a column, or {weights: {code: pct}}."""
     db = SessionLocal()
     try:
         user, course, bounce = _own_class(db, class_id)
@@ -5628,6 +5641,14 @@ def class_gradebook_save(class_id):
             class_id=course.id, assignment_id=item.id).first() is not None
         if not placed:
             return jsonify(error="That assignment isn't in this class."), 404
+        if "hidden" in data:
+            gone = db.query(GradebookHidden).filter_by(assignment_id=item.id).first()
+            if data.get("hidden") and gone is None:
+                db.add(GradebookHidden(assignment_id=item.id))
+            elif not data.get("hidden") and gone is not None:
+                db.delete(gone)
+            db.commit()
+            return jsonify(ok=True, hidden=bool(data.get("hidden")))
         row = db.query(AssignmentGrade).filter_by(assignment_id=item.id).first()
         if row is None:
             row = AssignmentGrade(assignment_id=item.id)

@@ -25,6 +25,7 @@
   <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
   <div class="meta"><span class="pagetitle">{{ course.name }} · Levels</span></div>
   <div class="actions">
+    <a class="btn" href="{{ url_for('class_gradebook', class_id=course.id) }}">Gradebook</a>
     <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
   </div>
 </header>
@@ -39,7 +40,7 @@
     <h2>Levels</h2>
     <p class="small dim">Each student's level in v11 lessons: the exercise and the challenge they see. Easy until you set it.
       Students never see a choice or which level they're on. Easy counts the exercise's points 80% (B-), Medium 88% (B+),
-      Master 100%; the challenge is always a bonus. Set levels here or in the gradebook.</p>
+      Master 100%; the challenge is always a bonus. </p>
     {% if not rows %}
       <p class="dim">No students on this class's roster yet. Link it to a Classroom class on the class page.</p>
     {% else %}

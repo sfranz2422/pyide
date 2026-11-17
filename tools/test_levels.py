@@ -303,13 +303,13 @@ page = teacher.get("/teacher/%s" % LS).get_data(as_text=True)
 check("the assignment page shows each student's level", "Level: Master" in page)
 check("  and counts the bonus apart: + 2 bonus", "+ 2 bonus" in page)
 gb = teacher.get("/teacher/class/%d/gradebook" % CID).get_data(as_text=True)
-check("the gradebook sets levels, Easy shown until set",
-      gb.count("js-level is-on") == 2 and 'data-level="master"' in gb, gb.count("js-level is-on"))
 page = teacher.get("/teacher/class/%d/levels" % CID).get_data(as_text=True)
-check("Level details lists the roster and their levels", "Kid" in page and "Ana" in page
-      and 'data-id="%d" data-level="master"' % ENR["kid2@example.org"] in page)
-check("  the class page's Gradebook links to it", "/teacher/class/%d/gradebook" % CID in
-      teacher.get("/teacher/class/%d" % CID).get_data(as_text=True) and "/teacher/class/%d/levels" % CID in gb)
+check("the Levels page sets levels, Easy shown until set",
+      page.count("js-level is-on") == 2 and 'data-id="%d" data-level="master"' % ENR["kid2@example.org"] in page
+      and "Kid" in page and "Ana" in page, page.count("js-level is-on"))
+check("  the class page links to it, and so does the gradebook (which has no level buttons)",
+      "/teacher/class/%d/levels" % CID in teacher.get("/teacher/class/%d" % CID).get_data(as_text=True)
+      and "/teacher/class/%d/levels" % CID in gb and "js-level" not in gb)
 for k_ in ("suggest", "🔒", "Your name on"):
     check("  nothing left of suggestions or locks: no %r" % k_, k_ not in gb and k_ not in page)
 
