@@ -167,6 +167,28 @@ WEB_PAGE = """<!DOCTYPE html>
 </html>
 """
 
+# A quiz (`quiz: yes`, the teacher, Nov 2026): the student is never told how
+# a check or an answer went. A wrong step, checked from the bubble, says
+# "Checked" and moves on — never "Not yet" or ✗; the question says it was
+# saved. The teacher writing it still sees the card's ✓/✗.
+QUIZ_NOTES = """quiz: yes
+# Quiz
+
+:::pop editor
+✏ Make `size` hold `4`.
+:::
+
+```tests
+size == 4
+```
+
+```quiz
+What does len("hi") return?
+- [ ] 1
+- [x] 2
+```
+"""
+
 print("The editor's guide bubble, in a real browser")
 chrome = find_chrome()
 if chrome is None or shutil.which("node") is None:
@@ -183,6 +205,8 @@ else:
     slug = made.get_json()["slug"]
     slug2 = teacher.post("/api/assignment", json={"title": "Exercise", "code": "# Exercise\n",
                                                   "files": {"notes.md": NOTES2}}).get_json()["slug"]
+    qslug = teacher.post("/api/assignment", json={"title": "Quiz", "code": "size = 0\n",
+                                                  "files": {"notes.md": QUIZ_NOTES}}).get_json()["slug"]
     # Another teacher: one teacher has one lesson on the air, and going live
     # with a web project would end the Python one above.
     wteacher = client(add_user("w", "webteacher@example.org", "Web"))
@@ -206,7 +230,7 @@ else:
     sign = P.app.session_interface.get_signing_serializer(P.app)
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "web": "/a/" + wslug, "webLive": "/live/" + wcode,
+        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "quiz": "/a/" + qslug, "quizTeacher": "/teacher/%s/edit" % qslug, "web": "/a/" + wslug, "webLive": "/live/" + wcode,
                    "student": sign.dumps({"uid": sid}), "student2": sign.dumps({"uid": sid2}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "editor_tips_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -277,6 +301,15 @@ else:
     check("  and the step is hidden on the live slide", r.get("webLiveStepOnSlide") is False, r.get("webLiveStepOnSlide"))
     check("web live: its check passes from the bubble, and their page is run",
           r.get("webLivePassed") is True and r.get("webLiveRan") is True, (r.get("webLivePassed"), r.get("webLiveRan")))
+    q = r.get("quizStudent") or {}
+    check("quiz: a wrong step checked from the bubble says Checked — never Not yet or ✗",
+          "Checked" in (q.get("tip") or "") and "Not yet" not in (q.get("tip") or "") and "✗" not in (q.get("tip") or ""), q)
+    check("  its card has no ✓ or ✗, and says only that it was checked",
+          q.get("marks") == "○" and "teacher will see" in (q.get("sum") or ""), q)
+    check("  a right answer to a question says it was saved, not that it was right",
+          "Answer saved" in (q.get("answer") or "") and "Correct" not in (q.get("answer") or ""), q.get("answer"))
+    qt = r.get("quizTeacher") or {}
+    check("  the teacher writing the quiz still sees the card's marks", qt.get("marks") == "✗", qt)
     server.shutdown()
 
 print()

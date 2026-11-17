@@ -235,6 +235,29 @@ area(3, 4) == 12
 ## Step 2
 …</pre>
 
+  <h2 id="quiz-mode">Making the notes a quiz</h2>
+  <p>Put <code>quiz: yes</code> as a line at the top of the notes (beside <code>theme:</code>,
+    <code>animate:</code> and <code>locked:</code>, in any order), and students are never told how
+    they did. Everything else works as usual: their answers are kept and marked, their
+    <strong>Check my work</strong> runs and is kept, and you see it all on the assignment's page.
+    But a question only says <em>Answer saved</em> (no ✓ or ✗, no points), a tests card only says
+    <em>Checked</em> (no ✓ or ✗, no reasons, no "3 of 5 passing"), and the editor's bubble moves
+    on once a step is checked, whether it passed or not. No XP that would give it away is paid:
+    none for a right answer, a passing test or full marks. Answering every question still earns its
+    bonus. Their <strong>My work</strong> and class page leave the quiz's points out of their grade;
+    they see your score once you give one. <code>locked: yes</code> does nothing in a quiz, because
+    opening the next slide would tell them they passed. Your own view of the notes still shows
+    every result.</p>
+  <pre class="help-src">quiz: yes
+
+# Loops quiz
+
+```quiz
+What does range(3) give?
+- [x] 0, 1, 2
+- [ ] 1, 2, 3
+```</pre>
+
   <h2 id="themes">Themes</h2>
   <p>Make the very first line of the notes <code>theme:</code> and a name, and every slide
     takes that look: in the editor, on the class's page and in a lesson. The line itself

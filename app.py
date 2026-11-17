@@ -1936,6 +1936,10 @@ def my_work():
 
         earned = {}
         for aid in items:
+            # A quiz's points (`quiz: yes`) are the teacher's to tell: shown
+            # here, they'd move with each answer and say whether it was right.
+            if _is_quiz(items[aid]):
+                continue
             got = _earned(db, aid).get(user.id)
             if got is not None:
                 earned[aid] = got
@@ -2325,8 +2329,25 @@ def _earned_one(key, answer):
     return round(key.points * _mark(key, answer.response), 2)
 
 
-def _answer_reply(key, answer, **more):
-    """What the student's page is told about one of their answers."""
+def _is_quiz(item):
+    """The assignment's notes say `quiz: yes` (quiz.is_quiz): its students
+    are never told how an answer or a check went, only that it was kept."""
+    return quiz.is_quiz(item.file_map().get(_notes_name(item), ""))
+
+
+def _answer_reply(key, answer, hidden=False, **more):
+    """What the student's page is told about one of their answers. In a
+    quiz (`hidden`), that it was kept and nothing more: no right or wrong,
+    no points earned, no mark on a long response — the reply is all the
+    page knows, so leaving it out here is what keeps it from the student."""
+    if hidden:
+        out = {"response": (quiz.clean_html(answer.response)
+                            if key is not None and key.kind == "long" else answer.response),
+               "hidden": True, "points": key.points if key is not None else 0}
+        if key is not None and key.kind == "long":
+            out["kind"] = "long"
+        out.update(more)
+        return out
     if key is not None and key.kind == "long":
         out = {"kind": "long", "response": quiz.clean_html(answer.response),
                "graded": answer.score is not None, "correct": None,
@@ -2468,6 +2489,7 @@ def quiz_answer():
         if user.id == item.teacher_id:
             return jsonify(_answer_reply(
                 key, accounts.QuizAnswer(response=response), practice=True))
+        hidden = _is_quiz(item)
 
         had = db.query(accounts.QuizAnswer).filter_by(
             assignment_id=item.id, student_id=user.id, qid=qid).first()
@@ -2494,11 +2516,11 @@ def quiz_answer():
             turned = _auto_turn_in(db, item, user, draft)
             # Only for an answer this request recorded: a second click that
             # found the first one's answer is not a second chance at XP.
-            gained = (_quiz_xp(db, item, user, key, had)
+            gained = (_quiz_xp(db, item, user, key, had, quiet=hidden)
                       if had.response == response else 0)
-            return jsonify(_answer_reply(key, had, already=had.response != response,
+            return jsonify(_answer_reply(key, had, hidden, already=had.response != response,
                                          turned_in_at=_when(turned), xp=gained))
-        return jsonify(_answer_reply(key, had, already=had.response != response))
+        return jsonify(_answer_reply(key, had, hidden, already=had.response != response))
     finally:
         db.close()
 
@@ -2517,7 +2539,8 @@ def quiz_mine(slug):
             return jsonify(error="No such assignment."), 404
         keys = {k.qid: k for k in db.query(accounts.QuizQuestion)
                 .filter_by(assignment_id=item.id).all()}
-        out = {a.qid: _answer_reply(keys.get(a.qid), a)
+        hidden = _is_quiz(item) and user.id != item.teacher_id
+        out = {a.qid: _answer_reply(keys.get(a.qid), a, hidden)
                for a in db.query(accounts.QuizAnswer).filter_by(
                    assignment_id=item.id, student_id=user.id).all()}
         return jsonify(answers=out, closed=bool(item.closed))
@@ -2732,6 +2755,10 @@ def tests_self():
         if user.id == item.teacher_id or accounts.is_teacher(user.email):
             return jsonify(ok=True, practice=True)
         row = _keep_result(db, item, user.id, "self", data)
+        if _is_quiz(item):
+            # Kept for the teacher as always; the XP for a passing test would
+            # say it passed (`quiz: yes`), and so would the points.
+            return jsonify(ok=True, xp=0, hidden=True)
         gained = _self_tests_xp(db, item, user.id, row)
         return jsonify(ok=True, earned=row.earned, possible=row.possible, xp=gained)
     finally:
@@ -5849,7 +5876,8 @@ def _class_rows(db, course, user=None, student=False):
                                              if a.classroom_work_id else [])}
         if student:
             sub = subs.get(a.id)
-            earned = _earned(db, a.id).get(user.id) if user else None
+            # A quiz's points (`quiz: yes`) are the teacher's to tell (My work says why).
+            earned = _earned(db, a.id).get(user.id) if user and not _is_quiz(a) else None
             total = _total(sub.score if sub else None, earned)
             # The live link only if the teacher shows it — or it is on the
             # air now, when hiding it would hide the lesson from the class.
@@ -6399,15 +6427,19 @@ def _earns_xp(user):
     return user is not None and not accounts.is_teacher(user.email)
 
 
-def _quiz_xp(db, item, user, key, answer):
+def _quiz_xp(db, item, user, key, answer, quiet=False):
     """XP for an answer just given: its part of the question's points, then
     a bonus once every question in the notes has an answer, then the
     assignment's full-marks bonus if that answer got them there. Called
-    after the answer is committed, so nothing here can lose it."""
+    after the answer is committed, so nothing here can lose it.
+
+    `quiet` (a quiz, `quiz: yes`): only the bonus for answering them all,
+    which says nothing about how they went. XP for a right answer, or for
+    full marks, would pop up and tell the student it was right."""
     if not _earns_xp(user):
         return 0
     got = 0
-    if key.kind != "long":
+    if key.kind != "long" and not quiet:
         # Marked against the key as it is now, once. A long response has no
         # key — its points come from the teacher's mark, which is a grade,
         # not something the notes marked themselves.
@@ -6424,7 +6456,7 @@ def _quiz_xp(db, item, user, key, answer):
         if asked <= have:
             got += xp.award(db, user.id, "all:%d" % item.id, xp.ALL_ANSWERED_XP,
                             "Answered every question in %s" % item.title, APP_NAME)
-    return got + _full_marks_xp(db, item, user.id)
+    return got + (0 if quiet else _full_marks_xp(db, item, user.id))
 
 
 def _has_full_marks(db, item, student_id):

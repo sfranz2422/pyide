@@ -114,7 +114,7 @@ window.PyIDEEditorTip = (function () {
         btn.addEventListener("click", function () {
           btn.disabled = true;
           btn.textContent = "Checking…";
-          Promise.resolve(window.IDENotesChecks.check()).then(function () {
+          Promise.resolve(window.IDENotesChecks.check(t.card)).then(function () {
             btn.disabled = false;
             btn.textContent = "✔ Check my work";
             // Still this step (a pass would have redrawn it as ✓): say why
@@ -156,7 +156,9 @@ window.PyIDEEditorTip = (function () {
       if (t.passed) {
         var mark = document.createElement("p");
         mark.className = "editor-tip-done";
-        mark.textContent = "✓ Done!";
+        // A quiz's step is "done" once checked, never once passed (notes.js):
+        // saying Done! would say it passed.
+        mark.textContent = t.quiz ? "✓ Checked" : "✓ Done!";
         bubble.appendChild(mark);
         gone = setTimeout(remove, 1600);
       }

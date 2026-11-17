@@ -164,6 +164,31 @@ try {
   out.challengeTip = await ex(tipText);
   out.challengeButton = await ex(`!!(${TIP} && ${TIP}.querySelector('.editor-tip-check'))`);
 
+  // ---- a quiz (`quiz: yes`): nothing says how a check or an answer went
+  const qz = await open(cfg.student, cfg.quiz);
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await qz(`!!${TIP}`)) break; }
+  await qz(`${cm}.setValue('size = 5\\n')`);
+  await qz(`${TIP}.querySelector('.editor-tip-check').click()`);
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await qz("document.querySelector('.tests-card').hasAttribute('data-checked') && !/Checking/.test(document.querySelector('.tests-card .tests-run').textContent)")) break; }
+  await sleep(300);
+  const qcard = "document.querySelector('.tests-card')";
+  out.quizStudent = { tip: await qz(tipText),
+    marks: await qz(`[...${qcard}.querySelectorAll('.tests-mark')].map(m => m.textContent).join('')`),
+    sum: await qz(`${qcard}.querySelector('.tests-sum').textContent`) };
+  await qz("[...document.querySelectorAll('.quiz input')].find(i => i.value === '2').click()");
+  await qz("document.querySelector('.quiz-send').click()");
+  for (let k = 0; k < 60; k++) { await sleep(150); if (await qz("/saved|Correct|Not quite/.test(document.querySelector('.quiz-result').textContent)")) break; }
+  out.quizStudent.answer = await qz("document.querySelector('.quiz-result').textContent");
+  await qz.shot("4-quiz");
+  // The teacher writing it: the card's own Check my work, marks shown.
+  const qt = await open(cfg.teacher, cfg.quizTeacher);
+  await qt("[...document.querySelectorAll('#file-tabs *')].find(t => /notes\\.md/.test(t.textContent) && t.children.length === 0)?.click()");
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await qt("!!document.querySelector('.tests-card .tests-run')")) break; }
+  await sleep(500);
+  await qt("document.querySelector('.tests-card .tests-run').click()");
+  for (let k = 0; k < 600; k++) { await sleep(150); if (await qt("/[✓✗]/.test(document.querySelector('.tests-card').textContent)")) break; }
+  out.quizTeacher = { marks: await qt("[...document.querySelectorAll('.tests-card .tests-mark')].map(m => m.textContent).join('')") };
+
   // ---- a web page: the bubble goes inside <body>, under the comment
   // Another student: this one has the web lesson's live page open below, and
   // two tabs saving the same draft rightly stops one with an alert.

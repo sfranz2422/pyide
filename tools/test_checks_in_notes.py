@@ -367,6 +367,65 @@ var tick = function () { return new Promise(function (r) { setTimeout(r, 0); });
   out.pin.free = { at: pv.v.at(), next: pv.next.disabled, prev: prevB.disabled, title: prevB.title };
   pv.pane.remove();
 
+  // ---------------------------------------------------- a quiz (`quiz: yes`)
+  // The check runs and is kept, but the student isn't told how it went:
+  // no marks, no reasons, no "1 of 2", no data-passed — and no lock, which
+  // would say it passed by opening the slide. The teacher (reveal) sees all.
+  C.forget(); C.reveal(null);
+  out.qHeader = [N.takeHeader("quiz: yes\n# A").quiz, N.takeHeader("theme: ocean\nlocked: yes\nquiz: yes\n# A").quiz,
+                 N.takeHeader("# A\nquiz: yes").quiz, N.takeHeader("quiz: no\n# A").quiz,
+                 N.slides("quiz: yes\n# A\n---\n# B")[0].indexOf("quiz") < 0];
+  var qdeck = "locked: yes\nquiz: yes\n# One\n---\n# Two";
+  answer = { results: [{ label: "Step test", ok: false, detail: "nope" }] };
+  var q = await viewer(qdeck, { locked: true, key: "quiz" });
+  var qc = q.put(); await refresh(q, qdeck);
+  var qState = function () {
+    return { marks: qc.querySelectorAll(".tests-mark").map(function (m) { return m.textContent; }),
+             why: qc.querySelectorAll(".tests-why").map(function (m) { return m.textContent; }).join(""),
+             sum: qc.querySelector(".tests-sum").textContent, passed: qc.hasAttribute("data-passed"),
+             checked: qc.hasAttribute("data-checked"),
+             lines: qc.querySelectorAll(".test-line.fail").length + qc.querySelectorAll(".test-line.pass").length };
+  };
+  out.qNotHeld = q.next.disabled;
+  out.qBefore = qState();
+  qc.querySelector(".tests-run").click(); await tick(); await tick();
+  out.qFail = qState();
+  answer = { results: [{ label: "Step test", ok: true }] };
+  await C.check();
+  out.qPass = qState();
+  out.qPassHeld = q.next.disabled;
+  var drawn = C.card([{ label: "Step test", points: 1 }]);     // drawn before it's put in the slide
+  out.qRedrawn = drawn.querySelectorAll(".tests-mark").map(function (m) { return m.textContent; }).join("") + (drawn.hasAttribute("data-passed") ? "P" : "");
+  C.reveal(function () { return true; });
+  out.qTeacher = qState();
+  C.reveal(null);
+  q.pane.remove();
+  // The editor bubble in a quiz: a step is done once its check was pressed
+  // (nobody's told it passed), and it says "Checked", never "Done!".
+  var said = [], plainEvent = CustomEvent;
+  CustomEvent = function (type, o) { this.type = type; this.detail = o && o.detail; };   // the tip rides on detail
+  document.dispatchEvent = function (e) { said.push(e.detail); };
+  El.prototype.compareDocumentPosition = function (other) {
+    var all = [root].concat(root.querySelectorAll("div,p,span,ul,li,button,pre,code"));
+    return all.indexOf(other) > all.indexOf(this) ? 4 : 2;
+  };
+  C.forget();
+  answer = { results: [{ label: "Step test", ok: false, detail: "nope" }] };
+  var tdeck = "quiz: yes\n# One";
+  var tw = await viewer(tdeck, { editorTips: true, key: "qtip" });
+  var pop1 = tw.body.appendChild(new El("div")); pop1.className = "pop-box to-editor"; pop1.innerHTML = "Type one";
+  var c1 = tw.put();
+  var pop2 = tw.body.appendChild(new El("div")); pop2.className = "pop-box to-editor"; pop2.innerHTML = "Type two";
+  var c2 = tw.put();
+  await refresh(tw, tdeck);
+  await C.check();            // a check from elsewhere (no card's button): the viewer hears, and says the step
+  out.tipFirst = (said[said.length - 1] || {}).html;
+  await C.check(c1);
+  var last = said[said.length - 1] || {};
+  out.tipAfter = { html: last.html, quiz: last.quiz, c2checked: c2.hasAttribute("data-checked") };
+  tw.pane.remove();
+  delete document.dispatchEvent; delete El.prototype.compareDocumentPosition; CustomEvent = plainEvent;
+
   console.log(JSON.stringify(out));
 })().catch(function (e) { console.log(JSON.stringify({ error: String(e && e.stack || e) })); });
 """ % GLOBAL
@@ -403,6 +462,25 @@ if "error" not in got:
     a = got["allPass"]
     check("all passing: every ✓, no why, and the card is passed", a["marks"] == ["✓", "✓"] and a["passed"] and a["why"] == ["", ""], a)
     check("a card drawn again shows the last check at once", got["redrawn"] is True)
+
+    print("\nquiz: yes")
+    check("`quiz: yes` is a header line (with the others, in any order), taken off the slide",
+          got["qHeader"] == [True, True, False, False, True], got["qHeader"])
+    check("  and never locked, even with `locked: yes` (opening would say it passed)", got["qNotHeld"] is False)
+    qb, qf, qp = got["qBefore"], got["qFail"], got["qPass"]
+    check("a quiz's failing check: no ✗, no why, no count — only that it was checked",
+          qf["marks"] == ["○"] and qf["why"] == "" and qf["lines"] == 0
+          and qf["sum"] == "Checked — your teacher will see how it went." and qf["checked"], qf)
+    check("  before it's pressed it doesn't say checked", "Checked" not in qb["sum"] and not qb["checked"], qb)
+    check("  passing: no ✓ and not data-passed either (the lock, bubble and live count read it)",
+          qp["marks"] == ["○"] and qp["passed"] is False and qp["lines"] == 0 and got["qPassHeld"] is False, qp)
+    check("  a card drawn again after the check (back to the slide) shows nothing either", got["qRedrawn"] == "○", got["qRedrawn"])
+    check("  the teacher's page (reveal) sees the marks", got["qTeacher"]["marks"] == ["✓"]
+          and got["qTeacher"]["passed"] is True, got["qTeacher"])
+    check("the editor bubble in a quiz starts at the first step", got.get("tipFirst") == "Type one", got.get("tipFirst"))
+    ta = got["tipAfter"]
+    check("  moves on once that step's check is pressed — failing or not — and only that card counts",
+          ta.get("html") == "Type two" and ta.get("quiz") is True and ta["c2checked"] is False, ta)
 
     print("\nlocked: yes")
     he = got["held"]

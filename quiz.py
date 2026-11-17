@@ -477,6 +477,57 @@ def redact(md):
     return "\n".join(out)
 
 
+# The notes' header lines, read exactly as notes.js's takeHeader reads them:
+# up to four lines at the top, each a known `theme:`, `animate:`, `locked:`
+# or `quiz:` line (the first of each kind), stopping at the first that isn't.
+# A theme or animation notes.js doesn't know isn't a header line there — it
+# stays on the slide as text — so it ends the header here too.
+# test_quiz_mode.py runs takeHeader on the same notes to hold the two together.
+HEADER_THEMES = {"ocean", "sunset", "forest", "chalkboard", "arcade", "notebook", "space",
+                 "halloween", "fall", "thanksgiving", "winter", "christmas", "spring", "summer"}
+_ANIMATIONS = {"words", "word", "reveal", "on", "yes", "true", "type", "typewriter", "typing"}
+_SPEEDS = {"slow", "normal", "fast"}
+_THEME_LINE = re.compile(r"^[ \t]*theme[ \t]*:[ \t]*([a-z]+)[ \t]*$", re.I)
+_ANIMATE_LINE = re.compile(r"^[ \t]*animate[ \t]*:[ \t]*([a-z]+)(?:[ \t]+([a-z]+))?[ \t]*$", re.I)
+_LOCKED_LINE = re.compile(r"^[ \t]*locked[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$", re.I)
+_QUIZ_LINE = re.compile(r"^[ \t]*quiz[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$", re.I)
+
+
+def _animate_ok(line):
+    a = _ANIMATE_LINE.match(line)
+    if not a:
+        return False
+    first, second = a.group(1).lower(), (a.group(2) or "").lower()
+    if first in _SPEEDS and not second:
+        return True
+    return first in _ANIMATIONS and (not second or second in _SPEEDS)
+
+
+def is_quiz(md):
+    """True when the notes say `quiz: yes` in their header (notes.js): a
+    student is then never told how an answer or a check went — the teacher,
+    Nov 2026: "i don't want them to know if they pass the code tests or get
+    the questions correct"."""
+    text = str(md or "")
+    seen, quiz = set(), None
+    for _ in range(4):
+        m = re.match(r"\s*([^\n]*)\n?", text)
+        line = m.group(1).rstrip("\r")
+        t, l, z = _THEME_LINE.match(line), _LOCKED_LINE.match(line), _QUIZ_LINE.match(line)
+        if t and "theme" not in seen and t.group(1).lower() in HEADER_THEMES:
+            seen.add("theme")
+        elif _animate_ok(line) and "animate" not in seen:
+            seen.add("animate")
+        elif l and "locked" not in seen:
+            seen.add("locked")
+        elif z and quiz is None:
+            quiz = z.group(1).lower() in ("yes", "on", "true")
+        else:
+            break
+        text = text[m.end():]
+    return bool(quiz)
+
+
 def is_notes(name):
     return bool(re.search(r"\.(md|markdown)$", name or "", re.I))
 

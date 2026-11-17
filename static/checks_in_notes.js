@@ -23,6 +23,15 @@
  * A card whose every line passed has data-passed; after each check every
  * card sends an "ide-checks" event (it bubbles) — notes.js's slideView
  * listens for it, to open the next slide when the notes say `locked: yes`.
+ *
+ * A QUIZ (`quiz: yes` in the notes' header; notes.js calls setQuiz) never tells a student how a check went (the teacher, Nov
+ * 2026: "i don't want them to know if they pass the code tests"): the
+ * check runs and is kept for the teacher exactly as before, and the card
+ * says only that it was checked — no ✓ or ✗, no reasons, no "3 of 5", and
+ * no data-passed, so nothing reading that (the lock, the editor bubble, the
+ * live lesson's step count) can give it away either. data-checked says the
+ * card's own check was pressed, whatever it found. Pages where the teacher is the one looking
+ * (authoring, teaching live) say so with reveal(fn), and see everything.
  */
 window.IDENotesChecks = window.IDENotesChecks || (function () {
   "use strict";
@@ -30,6 +39,17 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   var runner = null;      // the page's: () => Promise<{results}>, or null
   var latest = null;      // label -> {ok, detail}, from the last check
   var busy = false;
+  var revealFn = null;    // the page's: () => true where the teacher is looking
+  var quizNotes = false;  // notes.js: the notes on this page say `quiz: yes`
+
+  /* Is this card's result kept from whoever's looking? In a quiz's notes
+     (notes.js says so with setQuiz as it shows them), unless the page says
+     it's the teacher's. Told, not read off the page: a card is drawn — with
+     the last check's marks — before it's put into the slide, so going back
+     to a slide after a check would show them. */
+  function hiding() {
+    return quizNotes && !(revealFn && revealFn());
+  }
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -61,7 +81,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     var foot = el("div", "tests-foot");
     var btn = el("button", "btn btn-check tests-run", "✔ Check my work");
     btn.type = "button";
-    btn.addEventListener("click", function () { check(); });
+    btn.addEventListener("click", function () { check(box); });
     foot.appendChild(btn);
     foot.appendChild(el("span", "tests-sum dim small"));
     box.appendChild(foot);
@@ -74,22 +94,25 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   /* One card, from the latest results: its lines, its button, its total. */
   function paint(box) {
     var lines = box.querySelectorAll(".test-line"), passing = 0, checked = 0;
+    var hide = hiding();
     Array.prototype.forEach.call(lines, function (li) {
       var r = latest && latest[li.getAttribute("data-label")];
+      if (r) checked++;
+      if (r && r.ok) passing++;
+      if (hide) r = null;
       li.classList.toggle("pass", !!(r && r.ok));
       li.classList.toggle("fail", !!(r && !r.ok));
       li.querySelector(".tests-mark").textContent = busy ? "…" : r ? (r.ok ? "✓" : "✗") : "○";
       li.querySelector(".tests-why").textContent = r && !r.ok && r.detail ? r.detail : "";
-      if (r) checked++;
-      if (r && r.ok) passing++;
     });
     var btn = box.querySelector(".tests-run");
     btn.hidden = !runner;
     btn.disabled = busy;
     btn.textContent = busy ? "Checking…" : "✔ Check my work";
     box.querySelector(".tests-sum").textContent = !runner ? "" : busy ? "" :
-      checked ? passing + " of " + lines.length + " passing" : lines.length + " to pass";
-    if (lines.length && passing === lines.length) box.setAttribute("data-passed", "");
+      hide ? (box.hasAttribute("data-checked") ? "Checked — your teacher will see how it went." : "")
+      : checked ? passing + " of " + lines.length + " passing" : lines.length + " to pass";
+    if (!hide && lines.length && passing === lines.length) box.setAttribute("data-passed", "");
     else box.removeAttribute("data-passed");
   }
 
@@ -106,9 +129,14 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   }
 
   /* Runs the page's check and shows it in every card. Resolves what the
-     runner did, or null when there's no runner or one is going already. */
-  function check() {
+     runner did, or null when there's no runner or one is going already.
+     `box`, the card whose button it was (or the editor bubble's card), gets
+     data-checked: in a quiz, where nobody's told what passed, that is what
+     moves the bubble on to the next step. Only that card's — every check
+     runs every test, so "has results" would be every card on the slide. */
+  function check(box) {
     if (!runner || busy) return Promise.resolve(null);
+    if (box && box.setAttribute) box.setAttribute("data-checked", "");
     busy = true;
     paintAll(false);
     return Promise.resolve().then(runner).then(function (got) {
@@ -138,6 +166,19 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     paintAll(false);
   }
 
-  return { card: card, check: check, setRunner: setRunner, forget: forget,
+  /* fn() true where the teacher is the one looking (their own notes, their
+     live lesson): a quiz's results are shown to them as to any check. */
+  function reveal(fn) {
+    revealFn = typeof fn === "function" ? fn : null;
+    paintAll(false);
+  }
+
+  function setQuiz(on) {
+    if (!!on === quizNotes) return;
+    quizNotes = !!on;
+    paintAll(false);
+  }
+
+  return { card: card, check: check, setRunner: setRunner, forget: forget, reveal: reveal, setQuiz: setQuiz,
            results: function () { return latest; } };
 })();

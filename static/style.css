@@ -1544,6 +1544,9 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .prose .quiz.quiz-preview { border-left-color: var(--purple); }
 .prose .quiz.quiz-wrong { border-left-color: var(--red); }
 .prose .quiz.quiz-partial { border-left-color: var(--amber); }
+/* A quiz's answer (`quiz: yes`): kept, and nothing said about it. */
+.prose .quiz.quiz-saved { border-left-color: var(--accent); }
+.quiz-saved .quiz-result { color: var(--accent); font-weight: 600; }
 .quiz-partial .quiz-result { color: var(--amber); font-weight: 600; }
 .quiz-head { display: flex; justify-content: space-between; gap: 10px;
              font-size: 12px; text-transform: uppercase; letter-spacing: .06em;

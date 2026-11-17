@@ -134,6 +134,15 @@ window.PyIDENotes = (function () {
      a student's own editor. `locked: no` is a header line too, and says so. */
   var LOCKED_LINE = /^[ \t]*locked[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$/i;
 
+  /* `quiz: yes` beside them makes the notes a quiz (the teacher, Nov 2026):
+     everything works as before, but a student is never told how a tests
+     card's check or a question went — checks_in_notes.js keeps the card's
+     marks to itself, and the server leaves right/wrong out of an answer's
+     reply (quiz.py's is_quiz reads this header exactly as takeHeader does;
+     test_quiz_mode.py holds them together). The lock (`locked: yes`) is
+     off in a quiz: it would say a check had passed by opening the slide. */
+  var QUIZ_LINE = /^[ \t]*quiz[ \t]*:[ \t]*(yes|no|on|off|true|false)[ \t]*$/i;
+
   /* {animate, speed} from an `animate:` line, or null when it isn't one
      notes.js knows — a typo stays on the slide as text. */
   function readAnimate(line) {
@@ -152,18 +161,19 @@ window.PyIDENotes = (function () {
      instead of silently doing nothing. Taken out before the notes are cut
      into slides (slides()), so no count can differ between anyone. */
   function takeHeader(md) {
-    var text = String(md || ""), theme = "", animate = "", speed = "", locked = null;
-    for (var k = 0; k < 3; k++) {
+    var text = String(md || ""), theme = "", animate = "", speed = "", locked = null, quiz = null;
+    for (var k = 0; k < 4; k++) {
       var m = text.match(/^\s*([^\n]*)\n?/);
       var line = m ? m[1].replace(/\r$/, "") : "";
-      var t = line.match(THEME_LINE), a = readAnimate(line), l = line.match(LOCKED_LINE);
+      var t = line.match(THEME_LINE), a = readAnimate(line), l = line.match(LOCKED_LINE), z = line.match(QUIZ_LINE);
       if (t && !theme && THEMES.indexOf(t[1].toLowerCase()) >= 0) theme = t[1].toLowerCase();
       else if (a && !animate) { animate = a.animate; speed = a.speed; }
       else if (l && locked === null) locked = /^(yes|on|true)$/i.test(l[1]);
+      else if (z && quiz === null) quiz = /^(yes|on|true)$/i.test(z[1]);
       else break;
       text = text.slice(m[0].length);
     }
-    return { theme: theme, animate: animate, speed: speed, locked: !!locked, body: text };
+    return { theme: theme, animate: animate, speed: speed, locked: !!locked, quiz: !!quiz, body: text };
   }
 
   /* {name, body}: the theme the notes ask for ("" for none), and the notes
@@ -586,6 +596,7 @@ window.PyIDENotes = (function () {
        slide changes. Worked out again whenever the arrows are (every part
        played, every check, every slide), and said only when it changes. */
     var tipSaid = "";      // nothing said yet: a page without the bubble never hears a word
+    var quizOn = false;    // `quiz: yes`: a step is done once CHECKED, as nobody's told it passed
     function tipsWanted() {
       var t = opts && opts.editorTips;
       return !!t && (typeof t === "function" ? t() : true);
@@ -625,9 +636,11 @@ window.PyIDENotes = (function () {
           else steps.push({ boxes: [box], card: card });
         });
         for (var i = 0; i < steps.length; i++) {
-          var passed = !!steps[i].card && steps[i].card.hasAttribute("data-passed");
+          var card = steps[i].card;
+          var passed = !!card && (card.hasAttribute("data-passed")
+                                  || (quizOn && card.hasAttribute("data-checked")));
           tip = { html: steps[i].boxes.map(function (b) { return b.innerHTML; }).join(""),
-                  passed: passed, slide: at, step: i, card: steps[i].card };
+                  passed: passed, slide: at, step: i, card: card, quiz: quizOn };
           if (!passed) break;
         }
       }
@@ -909,7 +922,9 @@ window.PyIDENotes = (function () {
         mode = wanted() ? head.animate : "";
         speed = head.speed;
         var wasLock = lockOn;
-        lockOn = lockWanted() && head.locked;
+        lockOn = lockWanted() && head.locked && !head.quiz;
+        quizOn = head.quiz;
+        if (window.IDENotesChecks && window.IDENotesChecks.setQuiz) window.IDENotesChecks.setQuiz(quizOn);
         if (lockOn && !wasLock) unlocked = loadUnlocked();
         var c = slides(md);
         // One slide is not slides, as everywhere else.
@@ -1689,6 +1704,13 @@ window.PyIDENotes = (function () {
       disable();
       send.hidden = true;
       if (runIt) runIt.show(false);
+      if (got.hidden) {
+        // A quiz (`quiz: yes`): the server said only that it was kept.
+        box.classList.add("quiz-saved");
+        note.className = "quiz-result small";
+        note.textContent = "✓ Answer saved — your teacher will see how you did.";
+        return;
+      }
       var partly = !got.correct && got.earned > 0;
       box.classList.toggle("quiz-right", !!got.correct);
       box.classList.toggle("quiz-partial", partly);
@@ -2165,7 +2187,8 @@ window.PyIDENotes = (function () {
       send.hidden = true;
       longStore(q.id, "");
       note.className = "quiz-result small";
-      note.textContent = got.graded
+      note.textContent = got.hidden ? "✓ Turned in — your teacher will see how you did."
+        : got.graded
         ? "Marked — " + got.earned + " of " + pointsText(got.points)
         : "✓ Turned in — your teacher will mark it.";
       box.classList.toggle("quiz-marked", !!got.graded);

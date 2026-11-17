@@ -96,9 +96,9 @@ check("node ran notes.js", got is not None, res.stderr[-300:])
 if got:
     h = got["header"]
     print("\nThe header lines")
-    check("animate: words is taken out, and named", h["words"] == {"theme": "", "animate": "words", "speed": "normal", "locked": False, "body": "# Hi"}, h["words"])
+    check("animate: words is taken out, and named", h["words"] == {"theme": "", "animate": "words", "speed": "normal", "locked": False, "quiz": False, "body": "# Hi"}, h["words"])
     check("  beside a theme, in either order; on means words, type a typewriter",
-          h["both"] == {"theme": "ocean", "animate": "type", "speed": "normal", "locked": False, "body": "# Hi"}
+          h["both"] == {"theme": "ocean", "animate": "type", "speed": "normal", "locked": False, "quiz": False, "body": "# Hi"}
           and h["swapped"]["theme"] == "forest" and h["swapped"]["animate"] == "words"
           and h["swapped"]["body"].strip() == "# Hi", (h["both"], h["swapped"]))
     check("  a name it doesn't know stays in, as text, so the typo shows",

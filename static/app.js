@@ -678,6 +678,11 @@
   }
   // The notes' own ✔ Check my work, on each tests card.
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
+  // A quiz (`quiz: yes`) keeps a check's marks from students; the teacher
+  // looking at their own notes, or teaching them live, still sees them.
+  if (window.IDENotesChecks && window.IDENotesChecks.reveal) {
+    window.IDENotesChecks.reveal(function () { return !!window.PYIDE.authoring || !!liveCode; });
+  }
 
 
   /* The support address, put together at run time.
