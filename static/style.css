@@ -1763,6 +1763,10 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .gradebook th.gb-col .field { width: 100%; margin-top: 4px; font-size: 12px; }
 .gradebook .gb-name { position: sticky; left: 0; background: var(--bg); white-space: nowrap; }
 .gradebook .gb-missing { color: var(--muted); font-style: italic; }
+.gradebook .gb-score { width: 4.5em; padding: 2px 4px; font: inherit; color: var(--text); background: transparent;
+                       border: 1px solid transparent; border-radius: 4px; }
+.gradebook .gb-score:hover, .gradebook .gb-score:focus { border-color: var(--line); background: var(--bg); }
+.gradebook .gb-score::placeholder { color: var(--muted); font-style: italic; }
 .gradebook .gb-warn { color: var(--accent); }
 .gradebook .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .weights { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

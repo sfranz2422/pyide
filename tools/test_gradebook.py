@@ -162,7 +162,8 @@ check("Ava sees her average and her scores", "62.0%" in mine and "Strings HW" in
 check("  and nobody else's", "Ben" not in mine and "Cy Dee" not in mine)
 theirs = kb.get("/class/%d/grades" % CID).get_data(as_text=True)
 check("Ben sees his: 60.0%, his HW missing", "60.0%" in theirs and "missing" in theirs)
-stranger = client(add_user("s", "stranger@example.org", "Stranger Q"))
+stranger_id = add_user("s", "stranger@example.org", "Stranger Q")
+stranger = client(stranger_id)
 check("someone not in the class is told it isn't theirs", stranger.get("/class/%d/grades" % CID).status_code == 404)
 check("the teacher going there gets the gradebook", teacher.get("/class/%d/grades" % CID).status_code == 302)
 check("the student's class page links to it", "/class/%d/grades" % CID in ka.get("/class/%d" % CID).get_data(as_text=True))
@@ -186,6 +187,41 @@ y = teacher.post(API + "/skyward", json={"missing_zero": False}).get_json()
 check("missing work left out when asked", y["count"] == 3 and "Strings HW" not in [l[2] for l in csv.reader(io.StringIO(y["csv"])) if l[0] == "Cole"],
       y["csv"])
 check("only the teacher exports", other.post(API + "/skyward", json={}).status_code in (403, 404))
+
+print("\nTyping a grade into a cell")
+SC = API + "/score"
+r = teacher.post(SC, json={"assignment": A, "student": ben, "score": "7"}).get_json()
+db = P.SessionLocal()
+sub = db.query(accounts.Submission).filter_by(assignment_id=aid, student_id=ben).first()
+db.close()
+check("a missing cell typed 7: kept as his grade (a submission made for it)", r.get("ok") and r["total"] == "7"
+      and sub is not None and sub.score == 7, r)
+page = teacher.get(GB).get_data(as_text=True)
+check("  his average moves: HW 70%, Test 100% -> 0.4*70 + 0.6*100 = 88.0%", "88.0%" in page)
+check("  the cell is a box with the grade in it", 'value="7"' in page and 'data-student="%d"' % ben in page)
+# Points the checks earned count in the total: the number typed IS the total.
+db = P.SessionLocal()
+db.add(accounts.TestResult(assignment_id=aid, student_id=ava, kind="verified", earned=3, possible=3, details="[]"))
+db.commit()
+db.close()
+r = teacher.post(SC, json={"assignment": A, "student": ava, "score": "9"}).get_json()
+db = P.SessionLocal()
+s_ava = db.query(accounts.Submission).filter_by(assignment_id=aid, student_id=ava).first().score
+db.close()
+check("a total typed over checked points: 9 = 3 from the tests + 6 of the teacher's", r["total"] == "9" and s_ava == 6, (r, s_ava))
+r = teacher.post(SC, json={"assignment": A, "student": ava, "score": ""}).get_json()
+check("  emptied: the teacher's score goes, the tests' 3 stay", r["total"] == "3" and r["score"] == "", r)
+teacher.post(SC, json={"assignment": A, "student": ava, "score": "8"})
+check("a word isn't a grade", teacher.post(SC, json={"assignment": A, "student": ava, "score": "ten"}).status_code == 400)
+check("a student who isn't in the class can't be given one",
+      teacher.post(SC, json={"assignment": A, "student": stranger_id, "score": "5"}).status_code == 404)
+check("only the class's teacher types grades",
+      other.post(SC, json={"assignment": A, "student": ava, "score": "1"}).status_code in (403, 404)
+      and ka.post(SC, json={"assignment": A, "student": ava, "score": "10"}).status_code in (401, 403, 404))
+db = P.SessionLocal()
+s_ava = db.query(accounts.Submission).filter_by(assignment_id=aid, student_id=ava).first().score
+db.close()
+check("  (Ava's is still the teacher's: 8 = 3 + 5)", s_ava == 5, s_ava)
 
 print("\nHiding an assignment the teacher won't grade")
 h = teacher.post(API, json={"assignment": B, "hidden": True}).get_json()

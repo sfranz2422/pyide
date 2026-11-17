@@ -5672,6 +5672,59 @@ def class_gradebook_save(class_id):
         db.close()
 
 
+@app.post("/api/class/<int:class_id>/gradebook/score")
+def class_gradebook_score(class_id):
+    """{assignment, student, score}: a grade typed into a gradebook cell (the
+    teacher: "edit scores directly in the gradebook without opening the
+    assignment page"). The cell shows the TOTAL — the teacher's score plus
+    the questions' and checked tests' points (_total) — so the number typed
+    is the total: the teacher's score is set to whatever makes it so. Empty
+    takes the teacher's score back, leaving what the questions and tests
+    earned. A student with nothing turned in gets a submission with no
+    snapshot (as a lesson's turn-in has), so missing work can be given a 0."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        item = db.query(accounts.Assignment).filter_by(slug=clean(data.get("assignment"), 16)).first()
+        if item is None or db.query(accounts.ClassItem).filter_by(class_id=course.id, assignment_id=item.id).first() is None:
+            return jsonify(error="That assignment isn't in this class."), 404
+        try:
+            sid = int(data.get("student"))
+        except (TypeError, ValueError):
+            return jsonify(error="No such student."), 404
+        student = db.query(accounts.User).filter_by(id=sid).first()
+        on_roster = student is not None and db.query(accounts.Enrollment).filter(
+            accounts.Enrollment.class_id == course.id,
+            func.lower(accounts.Enrollment.email) == (student.email or "").lower()).first() is not None
+        has_work = student is not None and db.query(accounts.Submission).filter_by(
+            assignment_id=item.id, student_id=sid).first() is not None
+        if not (on_roster or has_work):
+            return jsonify(error="No such student."), 404
+        total, why = _parse_score(data.get("score"))
+        if why:
+            return jsonify(error=why), 400
+        earned = _earned(db, item.id).get(sid)
+        sub = db.query(accounts.Submission).filter_by(assignment_id=item.id, student_id=sid).first()
+        if sub is None:
+            if total is None:
+                return jsonify(ok=True, total="")
+            sub = accounts.Submission(assignment_id=item.id, student_id=sid, snippet_slug="",
+                                      times_submitted=0)
+            db.add(sub)
+        sub.score = None if total is None else round(total - (earned or 0), 2)
+        sub.feedback_at = accounts.now() if (sub.score is not None or sub.feedback) else None
+        sub.feedback_seen = 0
+        db.commit()
+        _full_marks_xp(db, item, sid)
+        now = _total(sub.score, _earned(db, item.id).get(sid))
+        return jsonify(ok=True, total=_score_text(now), score=_score_text(sub.score))
+    finally:
+        db.close()
+
+
 @app.post("/api/class/<int:class_id>/gradebook/skyward")
 def class_gradebook_skyward(class_id):
     """Every counted assignment as one Skyward import file: skyward_file's

@@ -93,8 +93,14 @@
             <td class="gb-name">{{ p.name }}</td>
             <td class="gb-avg"><strong>{{ '%.1f%%'|format(p.avg) if p.avg is not none else '—' }}</strong>
               <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
-            {% for c in p.cells %}
-              <td class="gb-cell {{ 'gb-missing' if c.missing }}">{{ 'missing' if c.missing else ('%g'|format(c.score)) }}</td>
+            {% for c in p.cells %}{% set a = book.assignments[loop.index0] %}
+              <td class="gb-cell {{ 'gb-missing' if c.missing }}">
+                {% if p.uid %}<input class="gb-score js-score" type="text" inputmode="decimal" size="4"
+                  value="{{ '' if c.missing else ('%g'|format(c.score)) }}" placeholder="missing"
+                  data-slug="{{ a.slug }}" data-student="{{ p.uid }}" aria-label="{{ p.name }}: {{ a.title }}"
+                  title="Type the grade out of {{ a.out_of }}; empty takes your score back">
+                {% else %}<span class="dim" title="Not signed in here yet, so there's nowhere to keep a grade">missing</span>{% endif %}
+              </td>
             {% endfor %}
           </tr>
         {% endfor %}
@@ -132,6 +138,30 @@
     th.querySelector(".js-due").addEventListener("change", function (e) {
       post("/api/class/" + CLASS + "/gradebook", { assignment: slug, due: e.target.value });
     });
+  });
+  // A grade typed into a cell: saved on Enter or leaving the box, then the
+  // page again (the averages move), back where it was.
+  try {
+    var y = sessionStorage.getItem("gb-scroll:" + CLASS);
+    if (y) { var xy = y.split(","); sessionStorage.removeItem("gb-scroll:" + CLASS);
+             window.scrollTo(0, +xy[1]); var sc = document.querySelector(".gradebook-scroll"); if (sc) sc.scrollLeft = +xy[0]; }
+  } catch (e) {}
+  Array.prototype.forEach.call(document.querySelectorAll(".js-score"), function (box) {
+    var was = box.value;
+    function save() {
+      if (box.value.trim() === was.trim()) return;
+      box.disabled = true;
+      post("/api/class/" + CLASS + "/gradebook/score",
+           { assignment: box.getAttribute("data-slug"), student: Number(box.getAttribute("data-student")), score: box.value.trim() })
+        .then(function (d) {
+          if (d.error) { alert(d.error); box.value = was; box.disabled = false; return; }
+          try { var sc = document.querySelector(".gradebook-scroll");
+                sessionStorage.setItem("gb-scroll:" + CLASS, (sc ? sc.scrollLeft : 0) + "," + window.scrollY); } catch (e) {}
+          location.reload();
+        });
+    }
+    box.addEventListener("change", save);
+    box.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); box.blur(); } });
   });
   Array.prototype.forEach.call(document.querySelectorAll("th.gb-col .js-hide"), function (b) {
     b.addEventListener("click", function () {
