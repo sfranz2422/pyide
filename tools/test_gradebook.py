@@ -226,9 +226,10 @@ check("  (Ava's is still the teacher's: 8 = 3 + 5)", s_ava == 5, s_ava)
 print("\nHiding an assignment the teacher won't grade")
 h = teacher.post(API, json={"assignment": B, "hidden": True}).get_json()
 page = teacher.get(GB).get_data(as_text=True)
-col = page.split("<tbody>")[0]
+col = page.split('<table class="gradebook">')[1].split("<tbody>")[0]
 check("hidden: its column goes from the gradebook", h.get("ok") and "Strings Test" not in col, col.count("gb-col"))
-check("  it's listed under the table with a Show button", "Hidden from the gradebook" in page and 'class="linkbtn small js-show" data-slug="%s"' % B in page)
+check("  it's listed in its own box (one per line, scrolling) with a Show button",
+      'class="gb-hidden-list"' in page and "Hidden from the gradebook" in page and 'class="linkbtn small js-show" data-slug="%s"' % B in page)
 check("  the averages leave it out: Ava is her HW alone (80.0%)", "80.0%" in page.split("<tbody>")[1].split("</tr>")[0], page.count("%"))
 mine = ka.get("/class/%d/grades" % CID).get_data(as_text=True)
 check("  the student's own grades leave it out too", "Strings Test" not in mine and "80.0%" in mine)
@@ -238,7 +239,9 @@ check("only the teacher hides", ka.post(API, json={"assignment": A, "hidden": Tr
       and other.post(API, json={"assignment": A, "hidden": True}).status_code in (403, 404))
 teacher.post(API, json={"assignment": B, "hidden": False})
 page = teacher.get(GB).get_data(as_text=True)
-check("Show puts it back, and the average with it (62.0%)", "Strings Test" in page.split("<tbody>")[0] and "62.0%" in page)
+check("Show puts it back, and the average with it (62.0%)",
+      "Strings Test" in page.split('<table class="gradebook">')[1].split("<tbody>")[0] and "62.0%" in page
+      and "gb-hidden-list" not in page)
 
 print("\nThe assignment page's Download for Skyward shares them")
 teacher.post("/api/assignment/%s/skyward" % D, json={"category": "Prj", "due": "2026-12-01"})

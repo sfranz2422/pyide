@@ -1771,6 +1771,10 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .gradebook .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .weights { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .weights .field { width: 70px; }
+.gb-hidden-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto;
+                  display: flex; flex-direction: column; gap: 2px; }
+.gb-hidden-list li { display: flex; gap: 10px; align-items: center; justify-content: space-between;
+                     padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .gradebook-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
 /* The same step in the editor (`:::pop editor`, app.js): a bubble under the
    student's last line, pointing up at where the line goes. Clicks go through

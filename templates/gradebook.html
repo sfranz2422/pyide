@@ -53,6 +53,18 @@
     </div>
   </section>
 
+  {% if book.hidden %}
+  {#  Its own box, not under the table: the table's card is as wide as the
+      table, and a list in it ran off the screen with no way to reach it. #}
+  <section class="card gb-hidden">
+    <h2>Hidden from the gradebook <span class="small dim">({{ book.hidden|length }}: not graded, and not on students' grades)</span></h2>
+    <ul class="gb-hidden-list">
+      {% for h in book.hidden %}<li><span>{{ h.title }}</span>
+        <button type="button" class="linkbtn small js-show" data-slug="{{ h.slug }}">Show</button></li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section class="card">
     <div class="gradebook-tools">
       <button class="btn btn-primary" id="sky-all" type="button">Export all to Skyward</button>
@@ -107,11 +119,7 @@
       </tbody>
     </table>
     </div>
-    {% if book.hidden %}
-      <p class="small dim gb-hidden">Hidden from the gradebook (not graded, and not on students' grades):
-        {% for h in book.hidden %}<span class="gb-hidden-one">{{ h.title }}
-          <button type="button" class="linkbtn small js-show" data-slug="{{ h.slug }}">Show</button></span>{% if not loop.last %} · {% endif %}{% endfor %}</p>
-    {% endif %}
+
   </section>
 </main>
 
