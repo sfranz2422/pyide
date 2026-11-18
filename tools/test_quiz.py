@@ -587,6 +587,15 @@ check("  cleaned on the way out as well", not re.search(
     .split("</ol>")[0]))
 check("  and its header says how many wait", re.search(
     r'id="needs-grading"[^>]*>1 to grade<', page) is not None)
+# Marked walking round the room and typed into the gradebook as a total:
+# nothing is left to grade (the teacher, Nov 2026: 12 "to grade" stayed on
+# the Quarter 2 Question after every score was in). Emptied, it's back.
+r = teacher.post("/api/class/%d/gradebook/score" % CLASS, json={"assignment": ESSAY, "student": KID, "score": "4"})
+check("a grade typed into the gradebook for it", r.status_code == 200, r.get_json())
+check("  clears its to grade", "to grade" not in teacher.get("/teacher").get_data(as_text=True)
+      and "Needs grading" not in teacher.get("/teacher/class/%d" % CLASS).get_data(as_text=True))
+teacher.post("/api/class/%d/gradebook/score" % CLASS, json={"assignment": ESSAY, "student": KID, "score": ""})
+check("  and emptying that grade brings it back", "1 to grade" in teacher.get("/teacher").get_data(as_text=True))
 
 GRADE = {"assignment": ESSAY, "student": KID, "question": lq["qid"], "score": "3"}
 r = kid.post("/api/quiz/grade", json=GRADE)

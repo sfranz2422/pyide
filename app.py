@@ -2470,7 +2470,12 @@ def _ungraded(db, assignment_ids):
     page's "needs grading". Only from students who have turned the work in:
     a half-done lesson is not yet the teacher's to mark, and the page where
     answers are marked lists turned-in work only — counting the others
-    would show a tag the teacher could never clear."""
+    would show a tag the teacher could never clear.
+
+    Nor from a turn-in the teacher has scored by hand (a grade typed into
+    the gradebook): they marked it walking round the room, and the 12 "to
+    grade" left on the Quarter 2 Question (Nov 2026) could never be cleared
+    short of marking each answer again. Emptying that score brings it back."""
     if not assignment_ids:
         return {}
     Q, A, S = accounts.QuizQuestion, accounts.QuizAnswer, accounts.Submission
@@ -2479,7 +2484,7 @@ def _ungraded(db, assignment_ids):
               .join(S, (S.assignment_id == A.assignment_id)
                     & (S.student_id == A.student_id))
               .filter(A.assignment_id.in_(list(assignment_ids)),
-                      Q.kind == "long", A.score.is_(None))
+                      Q.kind == "long", A.score.is_(None), S.score.is_(None))
               .group_by(A.assignment_id))
     return dict(rows)
 
