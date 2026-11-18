@@ -95,6 +95,8 @@
               <input class="field js-due" type="date" value="{{ a.due }}" aria-label="Due date of {{ a.title }}">
               {% if not a.category %}<div class="small gb-warn">Not counted: no category</div>{% endif %}
               <button type="button" class="linkbtn small js-hide" title="Not grading this one: take it out of the gradebook, the averages, the Skyward file and the students' grades">Hide</button>
+              {% if a.tests %}<button type="button" class="btn small js-checkall" data-slug="{{ a.slug }}"
+                title="Run its tests on everyone's turned-in code ({{ '%g'|format(a.tests) }} points), as the assignment page's Check all does">Check all</button>{% endif %}
             </th>
           {% endfor %}
         </tr>
@@ -107,6 +109,7 @@
               <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
             {% for c in p.cells %}{% set a = book.assignments[loop.index0] %}
               <td class="gb-cell {{ 'gb-missing' if c.missing }}">
+                {% if c.unchecked %}<span class="gb-unchecked" title="Tests not checked yet: {{ '%g'|format(a.tests) }} points pending. Press Check all on this column.">⟳</span>{% endif %}
                 {% if p.uid %}<input class="gb-score js-score" type="text" inputmode="decimal" size="4"
                   value="{{ '' if c.missing else ('%g'|format(c.score)) }}" placeholder="missing"
                   data-slug="{{ a.slug }}" data-student="{{ p.uid }}" aria-label="{{ p.name }}: {{ a.title }}"
@@ -170,6 +173,26 @@
     }
     box.addEventListener("change", save);
     box.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); box.blur(); } });
+  });
+  // Check all from here: the assignment page's own Check all, opened in a
+  // small window that runs it and says when it's done; then this page again.
+  function keepScroll() {
+    try { var sc = document.querySelector(".gradebook-scroll");
+          sessionStorage.setItem("gb-scroll:" + CLASS, (sc ? sc.scrollLeft : 0) + "," + window.scrollY); } catch (e) {}
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".js-checkall"), function (b) {
+    b.addEventListener("click", function () {
+      b.disabled = true;
+      b.textContent = "Checking…";
+      var w = window.open("/teacher/" + b.getAttribute("data-slug") + "?checkall=1", "checkall-" + b.getAttribute("data-slug"),
+                          "width=560,height=420");
+      if (!w) { b.disabled = false; b.textContent = "Check all"; alert("Allow pop-ups for this site to check from the gradebook."); }
+    });
+  });
+  window.addEventListener("message", function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.type !== "pyide-checked") return;
+    keepScroll();
+    location.reload();
   });
   Array.prototype.forEach.call(document.querySelectorAll("th.gb-col .js-hide"), function (b) {
     b.addEventListener("click", function () {

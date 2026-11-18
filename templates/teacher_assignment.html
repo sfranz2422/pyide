@@ -1232,12 +1232,23 @@
         paintRow(work[i].student, saved.d, got.results);
       }
       state.textContent = "Checked " + work.length + " project" + (work.length === 1 ? "" : "s") + ".";
+      // Opened from the gradebook's Check all: say so there, and close.
+      if (AUTORUN && window.opener) {
+        try { window.opener.postMessage({ type: "pyide-checked", slug: slug }, location.origin); } catch (e) {}
+        setTimeout(function () { window.close(); }, 600);
+      }
     } catch (e) {
       state.textContent = "Stopped: " + (e && e.message ? e.message : e) + ". Press Check all to try again.";
     } finally {
       btn.disabled = false;
     }
   });
+  // The gradebook opens this page with ?checkall=1 to run it from there.
+  var AUTORUN = /[?&]checkall=1\b/.test(location.search);
+  if (AUTORUN && !btn.disabled) {
+    btn.scrollIntoView({ block: "center" });
+    btn.click();
+  }
 })();
 </script>
 {% endif %}

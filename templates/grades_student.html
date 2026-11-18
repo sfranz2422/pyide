@@ -49,7 +49,8 @@
             <td><a href="{{ url_for('open_assignment', slug=a.slug) }}">{{ a.title }}</a></td>
             <td>{{ category_names.get(a.category, '') }}</td>
             <td>{{ a.due }}</td>
-            <td class="{{ 'gb-missing' if c.missing }}">{{ 'missing' if c.missing else ('%g'|format(c.score)) }} / {{ a.out_of }}</td>
+            <td class="{{ 'gb-missing' if c.missing }}">{{ 'missing' if c.missing else ('%g'|format(c.score)) }} / {{ a.out_of }}
+              {% if c.unchecked %}<span class="small dim" title="Your code's tests haven't been checked by your teacher yet">⟳ tests not graded yet</span>{% endif %}</td>
           </tr>
         {% endfor %}
       </tbody>

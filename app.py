@@ -5526,7 +5526,9 @@ def _gradebook(db, course, only=None):
         g = grades.get(a.id)
         out_of = a.out_of or _auto_out_of(a)
         assignments.append({"id": a.id, "slug": a.slug, "title": a.title, "out_of": out_of,
-                            "category": g.category if g else "", "due": g.due if g else ""})
+                            "category": g.category if g else "", "due": g.due if g else "",
+                            # What its tests add once the teacher's Check all has run.
+                            "tests": _grader(a).possible(a.file_map())})
     # Students: the roster, and anyone else with work here (a student added
     # by hand, or before the roster synced), each once.
     people = []
@@ -5553,10 +5555,12 @@ def _gradebook(db, course, only=None):
                 seen.add(u.id)
                 people.append({"uid": u.id, "name": u.display_name(), "email": (u.email or "").lower(), "enr": None})
         people.sort(key=lambda p: (p["name"] or "").lower())
-    scores = {}
+    scores, unchecked = {}, set()
     for a in assignments:
         earned = _earned(db, a["id"])
         subs = {s.student_id: s for s in db.query(accounts.Submission).filter_by(assignment_id=a["id"])}
+        checked = ({r.student_id: r for r in db.query(accounts.TestResult).filter_by(
+            assignment_id=a["id"], kind="verified")} if a["tests"] else {})
         for p in people:
             if p["uid"] is None:
                 continue
@@ -5564,13 +5568,22 @@ def _gradebook(db, course, only=None):
             total = _total(sub.score if sub else None, earned.get(p["uid"]))
             if total is not None:
                 scores[(a["id"], p["uid"])] = total
+            # Turned-in code the teacher's Check all hasn't run (or ran before
+            # the last turn-in): its tests' points aren't in the number yet,
+            # and a low score there must not look final (the teacher, Nov
+            # 2026: "the student scored the max" — 6 of 26, tests unchecked).
+            if a["tests"] and sub is not None and sub.snippet_slug:
+                v = checked.get(p["uid"])
+                if v is None or _when_naive(v.checked_at) < _when_naive(sub.submitted_at):
+                    unchecked.add((a["id"], p["uid"]))
     weights = {w.category: w.weight for w in db.query(CategoryWeight).filter_by(class_id=course.id)}
     plain = not any(v > 0 for v in weights.values())
     for p in people:
         cells, by_cat, all_got, all_out = [], {}, 0.0, 0.0
         for a in assignments:
             got = scores.get((a["id"], p["uid"])) if p["uid"] else None
-            cells.append({"score": got, "missing": got is None})
+            cells.append({"score": got, "missing": got is None,
+                          "unchecked": (a["id"], p["uid"]) in unchecked})
             if not a["out_of"]:
                 continue
             g = got or 0.0                                   # missing counts 0

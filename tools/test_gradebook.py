@@ -228,6 +228,41 @@ s_ava = db.query(accounts.Submission).filter_by(assignment_id=aid, student_id=av
 db.close()
 check("  (Ava's is still the teacher's: 8 = 3 + 5)", s_ava == 5, s_ava)
 
+print("\nTests not checked yet")
+T_ = teacher.post("/api/assignment", json={"title": "Loop Lab", "code": "x = 0\n",
+                                             "files": {"notes.md": "# L\n```tests\nprints hi    (4 points)\n```\n"}}).get_json()["slug"]
+db = P.SessionLocal()
+tl = db.query(accounts.Assignment).filter_by(slug=T_).first()
+db.add(accounts.ClassItem(class_id=CID, assignment_id=tl.id, hidden=0, position=-999))
+db.add(accounts.Submission(assignment_id=tl.id, student_id=ava, snippet_slug="snap1", times_submitted=1,
+                           submitted_at=P.datetime(2026, 11, 17, 10, 0)))
+db.commit()
+tlid = tl.id
+db.close()
+page = teacher.get(GB).get_data(as_text=True)
+check("turned-in code the teacher hasn't checked is marked ⟳, with the points pending",
+      'class="gb-unchecked"' in page and "4 points pending" in page, page.count("gb-unchecked"))
+check("  and its column has a Check all button", 'class="btn small js-checkall" data-slug="%s"' % T_ in page)
+check("  a column with no tests has none", 'js-checkall" data-slug="%s"' % A not in page)
+check("  the student's own grades say so too", "tests not graded yet" in ka.get("/class/%d/grades" % CID).get_data(as_text=True))
+db = P.SessionLocal()
+db.add(accounts.TestResult(assignment_id=tlid, student_id=ava, kind="verified", earned=4, possible=4, details="[]",
+                           checked_at=P.datetime(2026, 11, 17, 11, 0)))
+db.commit()
+db.close()
+page = teacher.get(GB).get_data(as_text=True)
+check("checked after the turn-in: no ⟳", 'class="gb-unchecked"' not in page)
+db = P.SessionLocal()
+db.query(accounts.Submission).filter_by(assignment_id=tlid, student_id=ava).update(
+    {"submitted_at": P.datetime(2026, 11, 17, 12, 0)})
+db.commit()
+db.close()
+check("  turned in again since: ⟳ again", 'class="gb-unchecked"' in teacher.get(GB).get_data(as_text=True))
+apage = teacher.get("/teacher/%s?checkall=1" % T_).get_data(as_text=True)
+check("the assignment page runs Check all by itself when the gradebook opens it, and tells the gradebook",
+      "checkall=1" in apage and 'type: "pyide-checked"' in apage and "btn.click()" in apage)
+teacher.post(API, json={"assignment": T_, "hidden": True})
+
 print("\nHiding an assignment the teacher won't grade")
 h = teacher.post(API, json={"assignment": B, "hidden": True}).get_json()
 page = teacher.get(GB).get_data(as_text=True)
@@ -246,7 +281,7 @@ teacher.post(API, json={"assignment": B, "hidden": False})
 page = teacher.get(GB).get_data(as_text=True)
 check("Show puts it back, and the average with it (62.0%)",
       "Strings Test" in page.split('<table class="gradebook">')[1].split("<tbody>")[0] and "62.0%" in page
-      and "gb-hidden-list" not in page)
+      and 'js-show" data-slug="%s"' % B not in page)
 
 print("\nThe assignment page's Download for Skyward shares them")
 teacher.post("/api/assignment/%s/skyward" % D, json={"category": "Prj", "due": "2026-12-01"})
