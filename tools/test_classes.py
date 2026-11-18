@@ -550,6 +550,47 @@ check("  and its link is shown while it's on the air, hidden or not",
       'href="/live/%s"' % _live_code in kid1.get("/class/%d" % C4).get_data(as_text=True))
 teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": True})
 
+# Assign, Watch Teacher Lecture and the live link are three separate switches
+# (the teacher, Nov 2026: slides or the live view "without showing the
+# assignment"). One that isn't assigned reaches students with only the
+# button that is switched on: no Open Assignment, no grade, title not a link.
+def _kid_card():
+    page = kid1.get("/class/%d" % C4).get_data(as_text=True)
+    m = re.search(r'<article class="card[^"]*">(?:(?!</article>)[\s\S])*?Hello World[\s\S]*?</article>', page)
+    return m.group(0) if m else ""
+_open = 'href="/a/%s"' % HELLO
+teacher.post("/api/class/%d/item/%d" % (C4, hello_row),
+             json={"hidden": True, "show_live": False, "show_deck": False})
+check("unassigned, with no lecture or live link shown: not on the students' page, even on the air",
+      _kid_card() == "" and 'href="/live/%s"' % _live_code not in kid1.get("/class/%d" % C4).get_data(as_text=True))
+_hrow = re.search(r'data-item="%d"[\s\S]*?</tr>' % hello_row, teacher.get("/teacher/class/%d" % C4).get_data(as_text=True))
+_hrow = _hrow.group(0) if _hrow else ""
+check("  and the teacher's button says Assign, the row 'not assigned'",
+      ">Assign<" in _hrow and "not assigned" in _hrow and ">Show<" not in _hrow, _hrow[-600:])
+teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": True})
+_card = _kid_card()
+check("its live link shown: the card has Open Live View and nothing else",
+      'href="/live/%s"' % _live_code in _card and _open not in _card
+      and "Watch Teacher Lecture" not in _card and "card-title" in _card and "<a class=\"card-title\"" not in _card, _card)
+db = P.SessionLocal()
+db.query(accounts.Assignment).filter_by(slug=HELLO).update({"deck_id": 999999})
+db.commit()
+db.close()
+teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": False, "show_deck": True})
+_card = _kid_card()
+check("its lecture shown: Watch Teacher Lecture and nothing else",
+      "Watch Teacher Lecture" in _card and _open not in _card
+      and 'href="/live/' not in _card, _card)
+teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"hidden": False, "show_deck": False})
+_card = _kid_card()
+check("assigned, lecture and live link off: Open Assignment and nothing else",
+      _open in _card and "Watch Teacher Lecture" not in _card, _card)
+db = P.SessionLocal()
+db.query(accounts.Assignment).filter_by(slug=HELLO).update({"deck_id": None})
+db.commit()
+db.close()
+teacher.post("/api/class/%d/item/%d" % (C4, hello_row), json={"show_live": True})
+
 # A heading with nothing of theirs under it says nothing to them.
 teacher.post("/api/class/%d/group" % C4, json={"title": "Coming soon"})
 check("an empty heading is left off the students' page",
@@ -997,6 +1038,19 @@ with _old.connect() as _c:
     _sd = _c.execute(sqlalchemy.text("SELECT show_deck, show_live FROM class_items WHERE id = 2")).fetchall()
 check("  once only: one the teacher shows afterwards stays shown",
       not _again and _sd == [(1, 1)], _sd)
+
+# 2026-11-18: a hidden row's lecture and live link now reach students, so
+# both are turned off on every hidden row once, or a future lesson someone
+# had flipped a switch on would suddenly appear to the class.
+with _old.begin() as _c:
+    _c.execute(sqlalchemy.text(
+        "INSERT INTO class_items (id, class_id, assignment_id, title, hidden, position, created_at, "
+        "show_deck, show_live) VALUES (3, 1, 8, '', 1, 2, '2026-10-08 10:00:00', 1, 1)"))
+_first = P._once("hidden-rows-switches-off-2026-11-18", P.HIDDEN_ROWS_SWITCHES_OFF, _old)
+with _old.connect() as _c:
+    _sd = _c.execute(sqlalchemy.text("SELECT id, show_deck, show_live FROM class_items ORDER BY id")).fetchall()
+check("every hidden row has its lecture and live link turned off, the shown ones left",
+      _first and _sd[2] == (3, 0, 0) and _sd[1] == (2, 1, 1) and _sd[0][1:] == (1, 1), _sd)
 
 # Tables from before the banner and before long responses: the columns must
 # be added, or the class pages and every quiz answer fail after the deploy.

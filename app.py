@@ -754,6 +754,15 @@ HIDE_OLD_LECTURES = ("UPDATE class_items SET show_deck = 0, show_live = 0 "
                      "WHERE assignment_id IS NOT NULL")
 _once("hide-lectures-and-live-2026-11-10", HIDE_OLD_LECTURES)
 
+# Since 2026-11-18 a lecture or live link shown on an assignment that isn't
+# assigned (hidden) reaches students on its own (_class_rows). Before, both
+# switches did nothing on a hidden row, so one flipped on there would suddenly
+# show a future lesson to the class. Off on every hidden row, once: what
+# students see is unchanged, and the teacher turns them on from here.
+HIDDEN_ROWS_SWITCHES_OFF = ("UPDATE class_items SET show_deck = 0, show_live = 0 "
+                            "WHERE assignment_id IS NOT NULL AND hidden = 1")
+_once("hidden-rows-switches-off-2026-11-18", HIDDEN_ROWS_SWITCHES_OFF)
+
 
 # Columns added after the table first shipped, with the DDL to add each one.
 # Every default has to make an existing row correct: an old snapshot has no
@@ -6736,7 +6745,15 @@ def _class_rows(db, course, user=None, student=False):
         if a is None:
             continue
         # Archived ones go to `archived` below, which a student never gets.
-        if student and r.hidden:
+        # Assigned (not hidden), its Watch Teacher Lecture and its live link are
+        # three separate switches (the teacher, Nov 2026: "make all of those
+        # things independent of each other"). A row that isn't assigned still
+        # reaches a signed-in student when its lecture or live link is shown,
+        # with only that button: no Open Assignment, no grade. The view-only
+        # link (no user) has neither button, so it still gets nothing.
+        lecture_only = bool(r.show_deck) and bool(a.deck_id) and a.kind != "lab"
+        live_only = bool(r.show_live) and a.kind != "lab"
+        if student and r.hidden and (user is None or not (lecture_only or live_only)):
             continue
         live = lessons.get(a.id)
         row = {"group": False, "material": False, "id": r.id, "slug": a.slug,
@@ -6766,12 +6783,15 @@ def _class_rows(db, course, user=None, student=False):
             total = _total(sub.score if sub else None, earned)
             # The live link only if the teacher shows it — or it is on the
             # air now, when hiding it would hide the lesson from the class.
-            if not (r.show_live or row["on_air"]):
+            # Not for one that isn't assigned: there the switch alone decides.
+            if not (r.show_live or (row["on_air"] and not r.hidden)):
                 row["live_code"] = ""
             # Watch Teacher Lecture only where the teacher shows it.
             if not r.show_deck:
                 row["has_deck"] = False
             row.update(
+                # False: shown only for its lecture or live link (above).
+                assigned=not r.hidden,
                 turned_in=bool(sub),
                 grade=_score_text(total),
                 quest_done=a.id in quests_done,

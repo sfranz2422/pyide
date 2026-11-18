@@ -348,7 +348,14 @@ start hidden from students** (`_place`, Nov 2026, the teacher's choice), and
 the class page's Show live link / Show lecture make them visible. Rows from
 before keep what they had (`show_live`, `show_deck` default to shown). The
 student's buttons are **Watch Teacher Lecture, Open Live View, Open
-Assignment** (Open Lesson / Open Lab). The assignment page's **Edit teacher
+Assignment** (Open Lesson / Open Lab), and **the three are independent**
+(Nov 2026, the teacher's request): the class page's old Show / Hide is
+**Assign / Unassign** ("that is what it does, puts it in the gradebook"),
+and an unassigned row still reaches signed-in students when its lecture or
+live link is shown — that button only, no Open Assignment, grade or title
+link (`_class_rows`' `assigned`). Not on the view-only link. On the air no
+longer shows an unassigned row's live link by itself. Every hidden row's two
+switches were turned off once when this shipped, so nothing appeared. The assignment page's **Edit teacher
 slides** opens its deck in the library's PresMaker.
 
 **Questions in the notes** (`quiz.py`, `notes.js`'s `parseQuiz`/`buildQuiz`,

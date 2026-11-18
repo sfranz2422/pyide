@@ -108,18 +108,25 @@
             {% if r.description %}<div class="md stream-intro" data-md="{{ r.description }}">{{ r.description }}</div>{% endif %}
           </section>
         {% else %}
-          <article class="card {{ 'card-done' if r.turned_in }}">
+          {#  r.assigned is false on a row shown only for its lecture or its
+              live link (_class_rows): those buttons and nothing else. #}
+          {% set work = visitor or r.assigned %}
+          <article class="card {{ 'card-done' if r.turned_in and work }}">
             <div class="card-head">
               <span class="card-icon" aria-hidden="true">{{ "📘" if r.kind == "lesson" else "🛠" if r.kind == "lab" else "📝" }}</span>
+              {% if work %}
               <a class="card-title" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) if visitor else r.open_url }}"
                  {% if r.turned_in %}title="What you turned in"{% endif %}>{{ r.title }}</a>
+              {% else %}
+              <span class="card-title">{{ r.title }}</span>
+              {% endif %}
               <span class="card-badges">
-                {% if r.quest_xp %}<span class="badge badge-quest {{ 'done' if r.quest_done }}"
+                {% if r.quest_xp and work %}<span class="badge badge-quest {{ 'done' if r.quest_done }}"
                   title="{{ 'Quest XP earned' if r.quest_done else 'Full marks earn the XP' }}">{{ "✓ Quest complete" if r.quest_done else "⚔️ Quest · +%d XP" % r.quest_xp }}</span>{% endif %}
                 {% if r.on_air %}<span class="live-pill">● Live now</span>{% endif %}
-                {% if r.grade %}<span class="badge badge-grade">{{ r.grade }}{% if r.out_of %} / {{ r.out_of }}{% endif %}</span>{% endif %}
-                {% if r.turned_in %}<span class="badge badge-done">✓ Turned in</span>{% endif %}
-                {% if r.closed %}<span class="badge">Closed</span>{% endif %}
+                {% if r.grade and work %}<span class="badge badge-grade">{{ r.grade }}{% if r.out_of %} / {{ r.out_of }}{% endif %}</span>{% endif %}
+                {% if r.turned_in and work %}<span class="badge badge-done">✓ Turned in</span>{% endif %}
+                {% if r.closed and work %}<span class="badge">Closed</span>{% endif %}
               </span>
             </div>
             {% if r.description %}<div class="md card-desc" data-md="{{ r.description }}">{{ r.description }}</div>{% endif %}
@@ -138,7 +145,7 @@
               {% if visitor %}
                 <a class="btn btn-primary" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) }}"
                    title="A preview: nothing is saved or turned in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Assignment" }}</a>
-              {% else %}
+              {% elif r.assigned %}
                 <a class="btn btn-primary" href="{{ url_for('open_assignment', slug=r.slug) }}"
                    title="Your own copy, to work in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Assignment" }}</a>
               {% endif %}
