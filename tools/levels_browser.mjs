@@ -104,6 +104,12 @@ try {
   await h(`${NEXT}.click()`);
   await sleep(800);
   out.bonusHolds = await h(`${NEXT}.disabled`);
+  // ---- a web lesson, as the Easy student: only Easy's tests run
+  const wb = await open(cfg.student, cfg.web, ".level-part:not([hidden])");
+  await wb("[...document.querySelectorAll('.tests-card')].find(c => c.offsetParent !== null).querySelector('.tests-run').click()");
+  for (let k = 0; k < 100; k++) { await sleep(200); if (await wb("!!(window.IDENotesChecks.results && window.IDENotesChecks.results())")) break; }
+  await sleep(500);
+  out.web = { shown: await wb(SHOWN), ran: await wb("Object.keys(window.IDENotesChecks.results() || {})") };
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

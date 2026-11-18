@@ -107,6 +107,41 @@ check("  plain, exercise and bonus, each maybe with a level; other words aren't 
 check("  a bonus test is out of nothing; one level's exercise counts: possible 4",
       autograde.possible({"notes.md": SAMPLE}) == 4.0, autograde.possible({"notes.md": SAMPLE}))
 
+# The web grammar (WebIDE's, for HTML/CSS/JS lessons) reads levels the same way.
+import autograde_web                                         # noqa: E402
+WSAMPLE = """```tests
+has h1
+```
+```tests exercise easy
+has 2 li       (2 points)
+```
+```tests exercise master
+has 3 li       (2 points)
+```
+```tests bonus easy
+has footer
+```
+```tests nope
+has p
+```
+"""
+wpy = [(t["label"], t["part"], t["level"]) for t in autograde_web.parse(WSAMPLE)[0]]
+wharness = """
+var window = {}; var document = {};
+eval(require("fs").readFileSync(%s, "utf8"));
+console.log(JSON.stringify(window.WebIDETests.parse(%s).tests.map(function (t) { return [t.label, t.part, t.level]; })));
+""" % (json.dumps(os.path.join(PYIDE, "static", "web", "autograde.js")), json.dumps(WSAMPLE))
+wout = subprocess.run(["node", "-e", wharness], capture_output=True, text=True)
+try:
+    wjs = [tuple(x) for x in json.loads(wout.stdout.strip().splitlines()[-1])]
+except (ValueError, IndexError):
+    wjs = wout.stderr[-300:]
+check("web lessons: autograde_web.py and web/autograde.js read parts and levels the same",
+      wjs == wpy and [w[1:] for w in wpy] == [("", ""), ("exercise", "easy"), ("exercise", "master"), ("bonus", "easy")],
+      (wpy, wjs))
+check("  and Out of is one level's exercise, no bonus: 1 + 2",
+      autograde_web.possible({"notes.md": WSAMPLE}) == 3.0, autograde_web.possible({"notes.md": WSAMPLE}))
+
 # ---------------------------------------------------------------- a v11 lesson
 # Each level its own tests (its own variables and values), 5 points an
 # exercise, 1 a challenge. No choice slides: the teacher sets the level.
@@ -288,6 +323,23 @@ HI = [{"label": "Prints Hi", "ok": True, "points": 5}]
 r = k.post("/api/tests/self", json={"assignment": SS, "results": HI}).get_json()
 check("level boxes with one shared tests block: still scaled by level (Easy: 4 of 5)",
       r.get("earned") == 4.0 and r.get("possible") == 5.0, r)
+
+# A web assignment is scored by the same rule (its own grammar's labels).
+WEB = "# W\n```tests\nhas h1\n```\n:::level easy\ne\n```tests exercise easy\nhas 2 li     (2 points)\n```\n:::end\n" \
+      ":::level master\nm\n```tests exercise master\nhas 3 li     (2 points)\n```\n:::end\n"
+wslug = teacher.post("/api/assignment", json={"title": "Web v11", "ide": "webide", "code": "",
+                                              "files": {"index.html": "<h1>x</h1>", "notes.md": WEB}}).get_json()["slug"]
+db = P.SessionLocal()
+witem = db.query(accounts.Assignment).filter_by(slug=wslug).first()
+db.add(accounts.ClassItem(class_id=CID, assignment_id=witem.id))
+db.commit()
+db.close()
+wl = lambda n: [{"label": t["label"], "ok": True, "points": t["points"]} for t in autograde_web.parse(WEB)[0]
+                if t["level"] in ("", n)]
+r = k2.post("/api/tests/self", json={"assignment": wslug, "results": wl("master")}).get_json()
+check("a web lesson: the Master student's own tests count whole (1 + 2 of 3)", r.get("earned") == 3.0 and r.get("possible") == 3.0, r)
+r = k.post("/api/tests/self", json={"assignment": wslug, "results": wl("easy")}).get_json()
+check("  and Easy's at 80% (1 + 1.6)", r.get("earned") == 2.6, r)
 
 print("\nThe teacher's pages")
 db = P.SessionLocal()

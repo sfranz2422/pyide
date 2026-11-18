@@ -1352,7 +1352,10 @@
      what counts. */
   var checking = false;
   function liveTests() {
-    return window.WebIDETests && liveNotes ? window.WebIDETests.parse(liveNotes).tests : [];
+    if (!window.WebIDETests || !liveNotes) return [];
+    var all = window.WebIDETests.parse(liveNotes).tests;
+    // v11: a level's own tests only for the level the student is on.
+    return window.WebIDETests.forLevels ? window.WebIDETests.forLevels(all) : all;
   }
 
   /* The run itself, on THEIR page — never the mirror's, from the ✔ on

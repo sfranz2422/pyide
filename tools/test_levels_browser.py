@@ -164,11 +164,15 @@ else:
                                                  "files": {"notes.md": NOTES}}).get_json()["slug"]
     slug2 = teacher.post("/api/assignment", json={"title": "Slides", "code": "# Slides\n",
                                                   "files": {"notes.md": SLIDES}}).get_json()["slug"]
+    WEB_NOTES = ("# Web\n\n:::level easy\nWEB-EASY\n```tests exercise easy\nhas h1\n```\n:::end\n"
+                 ":::level master\nWEB-MASTER\n```tests exercise master\nhas h2\n```\n:::end\n")
+    wslug = teacher.post("/api/assignment", json={"title": "Web levels", "ide": "webide", "code": "",
+                                                  "files": dict(P.WEB_STARTER, **{"notes.md": WEB_NOTES})}).get_json()["slug"]
     db = P.SessionLocal()
     course = accounts.Course(teacher_id=tid, name="100 Days", app="pyide")
     db.add(course)
     db.commit()
-    for s in (slug, slug2):
+    for s in (slug, slug2, wslug):
         it = db.query(accounts.Assignment).filter_by(slug=s).first()
         db.add(accounts.ClassItem(class_id=course.id, assignment_id=it.id))
     for email in ("kid@example.org", "master@example.org"):
@@ -185,7 +189,7 @@ else:
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
         json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug,
-                   "slides": "/a/" + slug2, "student": sign.dumps({"uid": sid}),
+                   "slides": "/a/" + slug2, "web": "/a/" + wslug, "student": sign.dumps({"uid": sid}),
                    "master": sign.dumps({"uid": mid}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "levels_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -226,6 +230,9 @@ else:
     check("  passing Master's check opens the way on (Easy's hidden card holds nothing)", r.get("exerciseOpen") is False,
           r.get("exerciseOpen"))
     check("a bonus check never holds the way on", r.get("bonusHolds") is False, r.get("bonusHolds"))
+    w = r.get("web") or {}
+    check("a web lesson: Easy's box only, and its Check my work runs only Easy's tests",
+          w.get("shown") == ["WEB-EASY"] and w.get("ran") == ["Has h1"], w)
 
 print()
 failed = results.count(False)

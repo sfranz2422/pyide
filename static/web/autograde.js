@@ -37,11 +37,25 @@ window.WebIDETests = (function () {
   var STYLE = /^(.+?)\s+([A-Za-z-]+)\s+is\s+(.+)$/i;
   var TIME_LIMIT_MS = 8000;
 
-  function blocks(md) {
+  /* v11 levels (PyIDE, Nov 2026), as autograde_web.py: ```tests exercise
+     [level] counts at the student's level, ```tests bonus [level] adds
+     points out of nothing; only the student's level's are run (forLevels). */
+  var PARTS = ["exercise", "bonus"], LEVELS = ["easy", "medium", "master"];
+  function partOf(info) {
+    var words = String(info || "").trim().toLowerCase().split(/\s+/);
+    if (!words[0] || words[0] !== "tests") return null;
+    if (words.length === 1) return { part: "", level: "" };
+    if (words.length === 2 && PARTS.indexOf(words[1]) >= 0) return { part: words[1], level: "" };
+    if (words.length === 3 && PARTS.indexOf(words[1]) >= 0 && LEVELS.indexOf(words[2]) >= 0)
+      return { part: words[1], level: words[2] };
+    return null;
+  }
+  function blocksWithParts(md) {
     var out = [], lines = String(md || "").split("\n"), i = 0;
     while (i < lines.length) {
       var f = FENCE.exec(lines[i]);
-      if (f && f[2].trim().toLowerCase() === "tests") {
+      var part = f ? partOf(f[2]) : null;
+      if (part !== null) {
         var fence = f[1], body = [];
         i++;
         while (i < lines.length) {
@@ -50,11 +64,21 @@ window.WebIDETests = (function () {
           body.push(lines[i]);
           i++;
         }
-        out.push(body.join("\n"));
+        out.push({ part: part.part, level: part.level, body: body.join("\n") });
       }
       i++;
     }
     return out;
+  }
+  function blocks(md) { return blocksWithParts(md).map(function (b) { return b.body; }); }
+  function forLevels(tests) {
+    var N = window.PyIDENotes;
+    if (!N || !N.shownLevels) return tests;
+    var shown = N.shownLevels();
+    return tests.filter(function (t) {
+      if (!t.level) return true;
+      return shown[t.part === "bonus" ? "challenge" : "exercise"] === t.level;
+    });
   }
 
   function check(line) {
@@ -138,8 +162,9 @@ window.WebIDETests = (function () {
 
   function parse(md) {
     var tests = [], errors = [];
-    blocks(md).forEach(function (b) {
-      var got = parseBlock(b);
+    blocksWithParts(md).forEach(function (b) {
+      var got = parseBlock(b.body);
+      got.tests.forEach(function (t) { t.part = b.part; t.level = b.level; });
       tests = tests.concat(got.tests);
       errors = errors.concat(got.errors);
     });
@@ -409,20 +434,23 @@ window.WebIDETests = (function () {
 
   /* A ```tests block in rendered notes, as a list a student can read. */
   function renderBlocks(root) {
-    Array.prototype.forEach.call(root.querySelectorAll("pre > code.language-tests"), function (code) {
+    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus']";
+    Array.prototype.forEach.call(root.querySelectorAll(sel), function (code) {
       var got = parseBlock(code.textContent);
       if (!got.tests.length) return;
+      var bonus = /\blanguage-tests-bonus/.test(code.className);
+      var heading = bonus ? "★ Bonus check — optional" : "✔ Tests your page will be checked against";
       // With checks_in_notes.js on the page, a card the student checks their
       // work from, results and all; without it, the list of what's checked.
       if (window.IDENotesChecks) {
-        code.parentNode.replaceWith(window.IDENotesChecks.card(got.tests, "✔ Tests your page will be checked against"));
+        code.parentNode.replaceWith(window.IDENotesChecks.card(got.tests, heading, bonus ? "bonus" : ""));
         return;
       }
       var box = document.createElement("div");
-      box.className = "tests-card";
+      box.className = "tests-card" + (bonus ? " tests-bonus" : "");
       var head = document.createElement("div");
       head.className = "tests-head";
-      head.textContent = "✔ Tests your page will be checked against";
+      head.textContent = heading;
       box.appendChild(head);
       var list = document.createElement("ul");
       got.tests.forEach(function (t) {
@@ -435,6 +463,6 @@ window.WebIDETests = (function () {
     });
   }
 
-  return { parse: parse, parseBlock: parseBlock, fromFiles: fromFiles, places: places, run: run,
+  return { parse: parse, parseBlock: parseBlock, fromFiles: fromFiles, places: places, run: run, forLevels: forLevels,
            renderBlocks: renderBlocks, TIME_LIMIT_MS: TIME_LIMIT_MS };
 })();

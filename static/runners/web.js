@@ -299,7 +299,10 @@
     var checking = false;
 
     function testsHere() {
-      return window.WebIDETests ? window.WebIDETests.fromFiles(allFiles()).tests : [];
+      if (!window.WebIDETests) return [];
+      var all = window.WebIDETests.fromFiles(allFiles()).tests;
+      // v11: a level's own tests only for the level the student is on.
+      return window.WebIDETests.forLevels ? window.WebIDETests.forLevels(all) : all;
     }
 
     async function runChecks() {
