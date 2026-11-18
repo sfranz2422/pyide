@@ -264,6 +264,8 @@ else:
     check("its check, run from the bubble's button, passes in the real Pyodide", r.get("firstPassed") is True, r)
     check("  and the bubble moves on to the next step",
           "print(title[2:6])" in (r.get("second") or ""), r.get("second"))
+    check("  a long program scrolled to its top: the next step's bubble is scrolled into sight, whole",
+          r.get("secondInView") == {"top": True, "bottom": True}, r.get("secondInView"))
     check("the last step passed: the bubble says so", r.get("allPassed") is True and "✓" in (r.get("done") or ""),
           r.get("done"))
     check("  and then goes", r.get("goneAfter") is True, r.get("goneAfter"))

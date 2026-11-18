@@ -78,10 +78,51 @@ window.PyIDEEditorTip = (function () {
       bubble.style.marginTop = (Math.round(editor.defaultTextHeight()) + 12) + "px";
       editor.addWidget({ line: lastLine(), ch: 0 }, bubble, false);
       refreshCode();                 // drawn while detached, it measured nothing
+      makeRoom();
+    }
+    /* Room under the code for the whole bubble, and the bubble in sight (the
+       teacher, Nov 2026: "kids are not seeing the popup"). A widget is drawn
+       over the editor, not in it, so CodeMirror's scroll height stopped at
+       the last line: a bubble under the last line was cut off at the bottom
+       and couldn't be scrolled to, until a student happened to press Enter a
+       few times. The padding is on .CodeMirror-lines, which CodeMirror
+       counts in the document's height (paddingVert), so its own scrollbar
+       reaches it too. */
+    var lines = editor.getWrapperElement().querySelector(".CodeMirror-lines");
+    var basePad = null;
+    function makeRoom() {
+      if (!lines) return;
+      if (basePad === null) basePad = parseFloat(getComputedStyle(lines).paddingBottom) || 0;
+      var need = 0;
+      if (bubble && bubble.parentNode) {
+        var bottom = bubble.offsetTop + bubble.offsetHeight + 16;
+        // How far the bubble reaches past the end of the document.
+        need = Math.max(0, bottom - (editor.heightAtLine(editor.lastLine() + 1, "local")));
+      }
+      var pad = (basePad + need) + "px";
+      if (lines.style.paddingBottom !== pad) { lines.style.paddingBottom = pad; editor.refresh(); }
+    }
+    /* Scroll so the whole bubble shows: in the editor, from the line being
+       typed on (or the bubble's code line) to the bubble's bottom — if both
+       won't fit, CodeMirror keeps the top, so the cursor never goes out of
+       sight — and then the page itself, when the editor is below the window
+       (a phone, a short laptop screen with the notes above). Only when the
+       step is new or the bubble grew (Not yet), never on every keystroke. */
+    function reveal(fromCursor) {
+      if (!bubble || !bubble.parentNode) return;
+      var top = fromCursor ? editor.cursorCoords(null, "local").top
+        : editor.charCoords({ line: lastLine(), ch: 0 }, "local").top;
+      top = Math.min(top, bubble.offsetTop);
+      editor.scrollIntoView({ left: 0, right: 0, top: top, bottom: bubble.offsetTop + bubble.offsetHeight + 8 });
+      var r = bubble.getBoundingClientRect();
+      var h = window.innerHeight || document.documentElement.clientHeight;
+      if (r.bottom > h) window.scrollBy(0, Math.min(r.bottom - h + 8, Math.max(0, r.top - 8)));
+      else if (r.top < 0) window.scrollBy(0, r.top - 8);
     }
     function remove() {
       if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble);
       bubble = null;
+      makeRoom();
     }
     function draw(t) {
       clearTimeout(gone);
@@ -144,6 +185,8 @@ window.PyIDEEditorTip = (function () {
                 nope.appendChild(p);
               });
               bubble.insertBefore(nope, foot);
+              makeRoom();
+              reveal(true);
             }
           }, function () {
             btn.disabled = false;
@@ -163,9 +206,18 @@ window.PyIDEEditorTip = (function () {
         gone = setTimeout(remove, 1600);
       }
       place();
+      // A new step: show it whole. Its code blocks lay out a frame later.
+      if (!same && !t.passed) requestAnimationFrame(function () { makeRoom(); reveal(false); });
     }
     document.addEventListener("ide-editor-tip", function (e) { draw(e.detail); });
-    editor.on("change", function () { if (bubble) place(); });
+    editor.on("change", function () {
+      if (!bubble) return;
+      place();
+      /* Typing on the line the bubble is under (Enter there moves it down):
+         keep it in sight as it moves. Typing higher up in the file, leave
+         the view where the student put it. */
+      if (editor.getCursor().line >= lastLine() - 1) reveal(true);
+    });
     editor.on("swapDoc", function () { if (bubble) place(); });
   }
   return { attach: attach };

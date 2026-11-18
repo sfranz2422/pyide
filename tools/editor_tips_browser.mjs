@@ -90,7 +90,10 @@ try {
   out.cardsOnSlide = await ev(VIS('.tests-card'));
   out.cardsInPage = await ev("document.querySelectorAll('.tests-card').length");
   out.holdWhy = await ev("[...document.querySelectorAll('.reveal-hint, .slide-btn, .reveal-play')].map(e => (e.textContent || '') + ' ' + (e.title || '')).join(' | ')");
-  await ev(`${cm}.setValue('# My code\\ntitle = "Mohawk"\\n\\n')`);
+  // A long program, scrolled to its top: the next step's bubble is under the
+  // last line, out of sight, and below the end of the document.
+  await ev(`${cm}.setValue('# My code\\ntitle = "Mohawk"\\n' + Array.from({ length: 60 }, (_, i) => '# note ' + i).join('\\n') + '\\n')`);
+  await ev(`${cm}.scrollTo(0, 0)`);
   await sleep(200);
   // Check my work: the first step passes, so the bubble moves on to the second.
   // Check my work, then wait for that card's verdict (the first run loads
@@ -109,6 +112,12 @@ try {
   await sleep(400);
   out.firstPassed = await ev("!!document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')");
   out.second = await ev(tipText);
+  await sleep(300);
+  // The new step's bubble is scrolled into sight, all of it, in the editor
+  // and the window (kids never saw one below the end of their code).
+  out.secondInView = await ev(`(() => { const t = ${TIP}; if (!t) return null; const r = t.getBoundingClientRect();
+    const v = ${cm}.getScrollerElement().getBoundingClientRect();
+    return { top: r.top >= v.top - 1 && r.top >= -1, bottom: r.bottom <= v.bottom + 1 && r.bottom <= window.innerHeight + 1 }; })()`);
   await ev(`${cm}.setValue('title = "Mohawk"\\nprint(title[2:6])\\n')`);
   await ev(`${TIP}.querySelector('.editor-tip-check').click()`);
   for (let k = 0; k < 600; k++) { await sleep(150); if (await ev("[...document.querySelectorAll('.tests-card')].every(c => c.hasAttribute('data-passed'))")) break; }
