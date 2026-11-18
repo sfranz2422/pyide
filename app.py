@@ -5494,6 +5494,21 @@ def skyward_file(slug):
 # rest named so the teacher knows why they're missing.
 # --------------------------------------------------------------------------
 
+def _school_today():
+    return datetime.now(SCHOOL_TZ).strftime("%Y-%m-%d")
+
+
+def _due_from_today(db, assignment_id):
+    """An assignment just shown to its class: today (school time) is its
+    gradebook due date, if it has none yet. Not committed here."""
+    g = db.query(AssignmentGrade).filter_by(assignment_id=assignment_id).first()
+    if g is None:
+        g = AssignmentGrade(assignment_id=assignment_id)
+        db.add(g)
+    if not g.due:
+        g.due = _school_today()
+
+
 def _auto_out_of(item):
     """What an assignment is worth when Out of is empty: its questions' and
     tests' points, as the assignment page fills Out of."""
@@ -5525,8 +5540,15 @@ def _gradebook(db, course, only=None):
             continue
         g = grades.get(a.id)
         out_of = a.out_of or _auto_out_of(a)
+        # Its due date: the one set in the gradebook, or the day it was shown
+        # to the class (_due_from_today); one shown before that was kept has
+        # the day it was made, the nearest thing there is.
+        made = a.created_at
+        if made is not None and made.tzinfo is None:
+            made = made.replace(tzinfo=timezone.utc)        # SQLite hands back naive UTC
+        due = (g.due if g and g.due else "") or (made.astimezone(SCHOOL_TZ).strftime("%Y-%m-%d") if made else "")
         assignments.append({"id": a.id, "slug": a.slug, "title": a.title, "out_of": out_of,
-                            "category": g.category if g else "", "due": g.due if g else "",
+                            "category": g.category if g else "", "due": due,
                             # What its tests add once the teacher's Check all has run.
                             "tests": _grader(a).possible(a.file_map())})
     # Students: the roster, and anyone else with work here (a student added
@@ -6361,7 +6383,13 @@ def class_item_update(class_id, item_id):
             return jsonify(error="No such item."), 404
         data = request.get_json(silent=True) or {}
         if "hidden" in data:
+            was_hidden = bool(row.hidden)
             row.hidden = 1 if data.get("hidden") else 0
+            # Shown to the class: that day is its due date in the gradebook
+            # (the teacher: "the assignment due date should be the date i show
+            # it in the classroom"), unless one was already set there.
+            if was_hidden and not row.hidden and row.assignment_id is not None:
+                _due_from_today(db, row.assignment_id)
         if "show_live" in data:
             row.show_live = 1 if data.get("show_live") else 0
         if "show_deck" in data:

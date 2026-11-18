@@ -117,6 +117,10 @@ else:
     sub = db.query(accounts.Submission).filter_by(student_id=sid).first()
     db.close()
     check("  as the teacher's score that makes the total 3 (3 - 4 = -1)", sub is not None and sub.score == -1, sub and sub.score)
+    check("a hidden column sits in a closed pane at the bottom", r.get("hiddenClosed") is True, r.get("hiddenClosed"))
+    ho = r.get("hiddenOpen") or {}
+    check("  opened, its assignment is there to see, with Show", ho.get("shown") is True and "Say hi" in (ho.get("text") or "")
+          and "Show" in (ho.get("text") or ""), ho)
 
 print()
 failed = results.count(False)

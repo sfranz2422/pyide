@@ -283,6 +283,36 @@ check("Show puts it back, and the average with it (62.0%)",
       "Strings Test" in page.split('<table class="gradebook">')[1].split("<tbody>")[0] and "62.0%" in page
       and 'js-show" data-slug="%s"' % B not in page)
 
+print("\nDue dates follow showing")
+N_, nid = make("Shown Later", 5, hidden=True)
+db = P.SessionLocal()
+ci = db.query(accounts.ClassItem).filter_by(assignment_id=nid).first().id
+db.close()
+teacher.post("/api/class/%d/item/%d" % (CID, ci), json={"hidden": False})
+db = P.SessionLocal()
+g = db.query(P.AssignmentGrade).filter_by(assignment_id=nid).first()
+db.close()
+check("showing an assignment makes that day (school time) its gradebook due date",
+      g is not None and g.due == P._school_today(), g and g.due)
+teacher.post(API, json={"assignment": N_, "due": "2026-12-25"})
+teacher.post("/api/class/%d/item/%d" % (CID, ci), json={"hidden": True})
+teacher.post("/api/class/%d/item/%d" % (CID, ci), json={"hidden": False})
+db = P.SessionLocal()
+g = db.query(P.AssignmentGrade).filter_by(assignment_id=nid).first()
+db.close()
+check("  a due date the teacher set isn't changed by showing it again", g.due == "2026-12-25", g.due)
+db = P.SessionLocal()
+book = P._gradebook(db, db.get(accounts.Course, CID))
+d_col = [a for a in book["assignments"] if a["slug"] == D][0]
+db.close()
+check("an assignment shown before this kept no date: the day it was made",
+      d_col["due"] == P._school_today(), d_col["due"])
+page = teacher.get(GB).get_data(as_text=True)
+teacher.post(API, json={"assignment": N_, "hidden": True})
+page = teacher.get(GB).get_data(as_text=True)
+check("hidden assignments are a closed pane at the bottom, below the table",
+      '<details class="card gb-hidden">' in page and page.index('<details class="card gb-hidden">') > page.index('<table class="gradebook">'))
+
 print("\nThe assignment page's Download for Skyward shares them")
 teacher.post("/api/assignment/%s/skyward" % D, json={"category": "Prj", "due": "2026-12-01"})
 page = teacher.get("/teacher/%s" % D).get_data(as_text=True)

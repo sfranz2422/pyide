@@ -56,6 +56,14 @@ try {
   for (let k = 0; k < 50; k++) { await sleep(200); if ((await ev(`${CELL} && ${CELL}.value`)) === "3" && (await ev("document.readyState")) === "complete" && (await ev("!window.__typed"))) break; }
   await sleep(1500);
   out.typed = await ev(`${CELL}.value`);
+  // Hide the column, then open the closed pane at the bottom: its assignments show.
+  await ev(`document.querySelector('th.gb-col .js-hide').click()`);
+  for (let k = 0; k < 50; k++) { await sleep(200); if (await ev("!!document.querySelector('details.gb-hidden')")) break; }
+  await sleep(500);
+  out.hiddenClosed = await ev("(() => { const li = document.querySelector('.gb-hidden-list li'); return li ? !li.checkVisibility() : null; })()");
+  await ev("document.querySelector('details.gb-hidden').open = true");
+  await sleep(300);
+  out.hiddenOpen = await ev("(() => { const li = document.querySelector('.gb-hidden-list li'); if (!li) return null; const r = li.getBoundingClientRect(); return { shown: li.checkVisibility() && r.height > 0, text: li.textContent.trim() }; })()");
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {
