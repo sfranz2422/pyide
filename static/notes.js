@@ -243,6 +243,7 @@ window.PyIDENotes = (function () {
       enhanceCards(target);
       enhanceLevels(target);
       applyLevels(target);
+      copyButtons(target);
       if (target.querySelector(".level-part")) {
         loadLevels().then(function () {
           applyLevels(target);
@@ -1474,6 +1475,52 @@ window.PyIDENotes = (function () {
     return { exercise: lv, challenge: lv };
   }
 
+  /* Copy to editor (Nov 2026, the teacher's request, "especially in the web
+     design class"): under the code with blanks in an Easy box, a button that
+     puts that code, blanks and all, into the student's editor, so the
+     exercise is filling the blanks rather than retyping a dozen lines of
+     HTML around them. Easy only, and only code that HAS blanks: Medium and
+     Master are writing it, which a button would answer. Only where the page
+     registered a copier (setCopier: the student's own editor), so a lesson
+     page, the library or a view-only link has no button that does nothing.
+     The file is the one the box's direction names (`script.js`), if any. */
+  var copier = null;           // {copy({code, file}), on()} from the page
+  var FILE_NAME = /^[\w./-]+\.(py|html?|css|js|sql|php|txt|csv|json)$/i;
+  function copyButtons(root) {
+    if (!copier || !copier.on()) return;
+    Array.prototype.forEach.call((root || document).querySelectorAll('.level-part[data-level="easy"] pre > code'), function (code) {
+      var pre = code.parentNode;
+      if (/language-(text|output|plain|tests|quiz)/.test(code.className || "")) return;
+      if (code.textContent.indexOf("_____") < 0) return;
+      var next = pre.nextElementSibling;
+      if (next && next.classList.contains("copy-to-editor")) return;
+      var box = pre.closest(".level-part"), file = "";
+      // The file named last BEFORE this code: "In `index.html` … Then in
+      // `style.css`:" are two pieces for two files in one box.
+      Array.prototype.forEach.call(box.querySelectorAll("code"), function (c) {
+        if (c.closest("pre") || !(c.compareDocumentPosition(pre) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+        var t = c.textContent.trim();
+        if (FILE_NAME.test(t)) file = t;
+      });
+      var wrap = el("p", "copy-to-editor");
+      var btn = el("button", "btn small copy-to-editor-btn", "📋 Copy to editor");
+      btn.type = "button";
+      btn.title = file ? "Puts this code, blanks and all, into " + file + " — then fill in every _____"
+                       : "Puts this code, blanks and all, into your editor — then fill in every _____";
+      btn.addEventListener("click", function () {
+        var said = copier && copier.copy({ code: code.textContent.replace(/\n$/, ""), file: file });
+        btn.textContent = said === false ? "Open your editor first" : "✓ In your editor — fill in the blanks";
+        setTimeout(function () { btn.textContent = "📋 Copy to editor"; }, 2500);
+      });
+      wrap.appendChild(btn);
+      pre.parentNode.insertBefore(wrap, pre.nextSibling);
+    });
+  }
+  function setCopier(c) {
+    copier = c && typeof c.copy === "function" ? { copy: c.copy, on: c.on || function () { return true; } } : null;
+    copyButtons(document);
+  }
+
   function setLevelTeacher(fn) {
     levelTeacher = typeof fn === "function" ? fn : null;
     applyLevels(document);
@@ -2468,6 +2515,7 @@ window.PyIDENotes = (function () {
     parseQuiz: parseQuiz,
     setQuizContext: setQuizContext,
     setLevelTeacher: setLevelTeacher,
+    setCopier: setCopier,
     shownLevels: shownLevels,
     levelMarks: levelMarks,
     _levels: function () { return { level: myLevel, preview: preview }; },

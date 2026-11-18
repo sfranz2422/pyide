@@ -63,7 +63,7 @@
     </div>
     <p class="small dim">Skyward: Assignment Import, template <strong>Import Scores and Create Assignments</strong>, this class,
       <em>Import File Has Header Row</em> unticked. That template makes a NEW assignment every time, so Export sends only
-      assignments never sent before (✓ In Skyward); a score that changes afterwards is marked △ for you to type into Skyward.
+      assignments never sent before (✓ In Skyward); a score that changes afterwards is marked △ for you to type into Skyward — then click the △ to clear it.
       An assignment needs a category and a due date to go in the file.</p>
     {% if not book.assignments %}
       <p class="dim">No assignments students can see yet.</p>
@@ -87,7 +87,8 @@
               <input class="field js-due" type="date" value="{{ a.due }}" aria-label="Due date of {{ a.title }}">
               {% if not a.category %}<div class="small gb-warn">Not counted: no category</div>{% endif %}
               {% if a.sent %}<div class="small gb-sent" title="Already in Skyward: Export leaves it out (Skyward would make a second one). Changed scores are marked △ — type those into Skyward.">✓ In Skyward ({{ a.sent }})
-                <button type="button" class="linkbtn small js-resend" data-slug="{{ a.slug }}" title="Put it in the next Export again (only if it isn't in Skyward)">Send again</button></div>{% endif %}
+                <button type="button" class="linkbtn small js-resend" data-slug="{{ a.slug }}" title="Put it in the next Export again (only if it isn't in Skyward)">Send again</button>
+                {% if a.changed %}<br><button type="button" class="linkbtn small js-updated" data-slug="{{ a.slug }}" title="You typed every changed score (△) in this column into Skyward: clear them all">△ All typed into Skyward</button>{% endif %}</div>{% endif %}
               <button type="button" class="linkbtn small js-hide" title="Not grading this one: take it out of the gradebook, the averages, the Skyward file and the students' grades">Hide</button>
               {% if a.tests %}<button type="button" class="btn small js-checkall" data-slug="{{ a.slug }}"
                 title="Run its tests on everyone's turned-in code ({{ '%g'|format(a.tests) }} points), as the assignment page's Check all does">Check all</button>{% endif %}
@@ -103,7 +104,8 @@
               <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
             {% for c in p.cells %}{% set a = book.assignments[loop.index0] %}
               <td class="gb-cell {{ 'gb-missing' if c.missing }}">
-                {% if c.changed %}<span class="gb-changed" title="Changed since it was sent to Skyward (sent: {{ c.was }}). Type the new score into Skyward.">△</span>{% endif %}
+                {% if c.changed %}<button type="button" class="gb-changed js-updated" data-slug="{{ a.slug }}" data-student="{{ p.key }}"
+                  title="Changed since it was sent to Skyward (sent: {{ c.was }}). Type the new score into Skyward, then click here to clear the △.">△</button>{% endif %}
                 {% if c.unchecked %}<span class="gb-unchecked" title="Tests not checked yet: {{ '%g'|format(a.tests) }} points pending. Press Check all on this column.">⟳</span>{% endif %}
                 {% if p.uid %}<input class="gb-score js-score" type="text" inputmode="decimal" size="4"
                   value="{{ '' if c.missing else ('%g'|format(c.score)) }}" placeholder="missing"
@@ -204,6 +206,16 @@
   });
   document.getElementById("sky-mark").addEventListener("click", function () {
     post("/api/class/" + CLASS + "/gradebook/skyward/mark", { all: true }).then(function () { keepScroll(); location.reload(); });
+  });
+  // △ clicked: that changed score was typed into Skyward, so it's cleared
+  // (the column's link clears them all).
+  Array.prototype.forEach.call(document.querySelectorAll(".js-updated"), function (b) {
+    b.addEventListener("click", function () {
+      var body = { assignment: b.getAttribute("data-slug"), updated: true };
+      if (b.getAttribute("data-student")) body.student = b.getAttribute("data-student");
+      b.disabled = true;
+      post("/api/class/" + CLASS + "/gradebook/skyward/mark", body).then(function () { keepScroll(); location.reload(); });
+    });
   });
   Array.prototype.forEach.call(document.querySelectorAll(".js-resend"), function (b) {
     b.addEventListener("click", function () {

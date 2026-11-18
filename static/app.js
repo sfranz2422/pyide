@@ -293,6 +293,23 @@
   // The guide bubble for `:::pop editor` steps (editor_tip.js), in this
   // editor; notes.js says which step is current (editorTips above).
   if (window.PyIDEEditorTip) window.PyIDEEditorTip.attach(editor);
+  /* Copy to editor under an Easy box's code with blanks (notes.js
+     copyButtons): into the file the step names when the project has it,
+     else the file open now. Never into the notes. For a student working,
+     as the bubble is — the teacher writing the notes has no use for it. */
+  if (window.PyIDENotes.setCopier && window.PyIDEEditorTip && window.PyIDEEditorTip.insertCode) {
+    window.PyIDENotes.setCopier({
+      on: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; },
+      copy: function (what) {
+        var name = what.file && docs[what.file] ? what.file : lastCodeFile;
+        if (!docs[name] || window.PyIDENotes.isMarkdown(name)) return false;
+        switchTo(name);
+        if (editor.getDoc() !== docs[name]) showEditorDoc(name);
+        window.PyIDEEditorTip.insertCode(editor, what.code);
+        return true;
+      }
+    });
+  }
 
   function showNotes(name) {
     notesName.textContent = name;

@@ -236,6 +236,35 @@ try {
   out.webLivePassed = await wl("document.querySelector('.tests-card').hasAttribute('data-passed')");
   for (let k = 0; k < 40; k++) { await sleep(150); if (await wl("/Harvest/.test(document.getElementById('preview').srcdoc || '')")) break; }
   out.webLiveRan = await wl("/Harvest/.test(document.getElementById('preview').srcdoc || '')");
+
+  // ---- Copy to editor, under the Easy box's code with blanks
+  const cpg = await open(cfg.student3, cfg.copy);
+  const c3 = "document.querySelector('.CodeMirror').CodeMirror";
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await cpg("!!document.querySelector('.copy-to-editor-btn')")) break; }
+  await sleep(300);
+  const copy = {};
+  copy.easyButtons = await cpg("document.querySelectorAll('.level-part[data-level=\"easy\"] .copy-to-editor-btn').length");
+  copy.otherButtons = await cpg("document.querySelectorAll('.level-part:not([data-level=\"easy\"]) .copy-to-editor-btn').length");
+  const activeTab = "(document.querySelector('#file-tabs .active, #file-tabs [aria-selected=\"true\"]') || {}).textContent || ''";
+  await cpg(`${c3}.getDoc() && document.querySelectorAll('.copy-to-editor-btn')[0].click()`);
+  await sleep(300);
+  copy.htmlFile = (await cpg(activeTab)).replace(/[^\w.]/g, "");
+  copy.htmlInBody = await cpg(`(() => { const v = ${c3}.getValue(); const i = v.indexOf('    <h2>_____</h2>' + String.fromCharCode(10) + '    <p class="_____">'); return i > 0 && i < v.indexOf('</body>'); })()`);
+  copy.selected = await cpg(`${c3}.getSelection()`);
+  await cpg("document.querySelectorAll('.copy-to-editor-btn')[0].click()");
+  await sleep(300);
+  copy.twice = await cpg(`${c3}.getValue().split('<h2>_____</h2>').length - 1`);
+  await cpg("document.querySelectorAll('.copy-to-editor-btn')[1].click()");
+  await sleep(300);
+  copy.cssFile = (await cpg(activeTab)).replace(/[^\w.]/g, "");
+  copy.cssText = await cpg(`${c3}.getValue()`);
+  copy.cssIn = /h2 \{ color: _____; \}/.test(copy.cssText) && /margin: 0/.test(copy.cssText);
+  await cpg.shot("5-copy");
+  const ct = await open(cfg.webTeacher, cfg.copyTeacher);
+  await ct("[...document.querySelectorAll('#file-tabs *')].find(t => /notes\\.md/.test(t.textContent) && t.children.length === 0)?.click()");
+  await sleep(1500);
+  copy.teacherButtons = await ct("document.querySelectorAll('.copy-to-editor-btn').length");
+  out.copy = copy;
 } catch (e) {
   out.error = String(e);
 } finally {

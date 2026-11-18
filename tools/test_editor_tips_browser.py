@@ -167,6 +167,44 @@ WEB_PAGE = """<!DOCTYPE html>
 </html>
 """
 
+# Copy to editor (Nov 2026, the teacher's request, "especially in the web
+# design class"): the Easy box's code with blanks has a button that puts it
+# into the file its direction names, blanks and all. Medium's code has blanks
+# too and gets no button: only Easy is given the code to copy.
+COPY_NOTES = """# Exercise
+
+:::level easy
+✏ In `index.html`, type this and fill in every `_____`:
+
+```html
+<h2>_____</h2>
+<p class="_____">Pies and cider</p>
+```
+
+✏ Then in `style.css`:
+
+```css
+h2 { color: _____; }
+```
+
+```text
+Fall Fair
+```
+:::end
+
+:::level medium
+✏ In `index.html`:
+
+```html
+<h3>_____</h3>
+```
+:::end
+
+:::level master
+✏ In `index.html`, add an `<h4>` that says Harvest.
+:::end
+"""
+
 # A quiz (`quiz: yes`, the teacher, Nov 2026): the student is never told how
 # a check or an answer went. A wrong step, checked from the bubble, says
 # "Checked" and moves on — never "Not yet" or ✗; the question says it was
@@ -209,7 +247,8 @@ else:
                                                   "files": {"notes.md": QUIZ_NOTES}}).get_json()["slug"]
     # Another teacher: one teacher has one lesson on the air, and going live
     # with a web project would end the Python one above.
-    wteacher = client(add_user("w", "webteacher@example.org", "Web"))
+    wteacher_id = add_user("w", "webteacher@example.org", "Web")
+    wteacher = client(wteacher_id)
     wslug = wteacher.post("/api/assignment", json={"title": "Fair", "ide": "webide", "code": "",
                                                   "files": {"index.html": WEB_PAGE, "notes.md": WEB_NOTES}}).get_json()["slug"]
     wcode = wteacher.post("/api/live/start", json={"assignment": wslug, "body": WEB_PAGE, "ide": "webide",
@@ -217,6 +256,10 @@ else:
     wpushed = wteacher.post("/api/live/%s/push" % wcode, json={"body": WEB_PAGE, "filename": "index.html",
                                                            "notes": WEB_NOTES, "slide": "1/1", "seq": 50})
     check("a web lesson goes live too", wpushed.status_code == 200, wpushed.get_json())
+    cslug = wteacher.post("/api/assignment", json={"title": "Copy", "ide": "webide", "code": "",
+                                                  "files": {"index.html": WEB_PAGE, "style.css": "body { margin: 0; }\n",
+                                                            "notes.md": COPY_NOTES}}).get_json()["slug"]
+    sid3 = add_user("s3", "kid3@example.org", "Kid Three")
     # And live (the teacher's request: "I've been using live mode a lot"):
     # the teacher goes live on it, on the slide with the steps.
     code = teacher.post("/api/live/start", json={"assignment": slug, "body": "# Slices\n",
@@ -230,7 +273,7 @@ else:
     sign = P.app.session_interface.get_signing_serializer(P.app)
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "quiz": "/a/" + qslug, "quizTeacher": "/teacher/%s/edit" % qslug, "web": "/a/" + wslug, "webLive": "/live/" + wcode,
+        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "quiz": "/a/" + qslug, "quizTeacher": "/teacher/%s/edit" % qslug, "web": "/a/" + wslug, "webLive": "/live/" + wcode, "copy": "/a/" + cslug, "copyTeacher": "/teacher/%s/edit" % cslug, "student3": sign.dumps({"uid": sid3}), "webTeacher": sign.dumps({"uid": wteacher_id}),
                    "student": sign.dumps({"uid": sid}), "student2": sign.dumps({"uid": sid2}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "editor_tips_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -297,6 +340,14 @@ else:
           r.get("webKept") is True and r.get("webUnderTyped") is True, (r.get("webKept"), r.get("webUnderTyped")))
     check("  its check passes from the bubble, and their page is run", r.get("webPassed") is True and r.get("webRan") is True,
           (r.get("webPassed"), r.get("webRan")))
+    cp = r.get("copy") or {}
+    check("copy to editor: a button under each piece of the Easy box's code with blanks, none for Medium's",
+          cp.get("easyButtons") == 2 and cp.get("otherButtons") == 0, cp)
+    check("  pressed: the code goes into the file the step names, inside <body>, indented, blanks and all",
+          cp.get("htmlFile") == "index.html" and cp.get("htmlInBody") is True and cp.get("selected") == "_____", cp)
+    check("  pressed again: not put in twice", cp.get("twice") == 1, cp)
+    check("  the style.css piece goes into style.css", cp.get("cssFile") == "style.css" and cp.get("cssIn") is True, cp)
+    check("  the teacher writing the notes gets no button", cp.get("teacherButtons") == 0, cp)
     check("web live: the bubble is in the student's own editor, never the teacher's",
           "<h2>Harvest</h2>" in (r.get("webLiveFirst") or "") and r.get("webLiveInMine") is True and r.get("webLiveInMirror") is False,
           (r.get("webLiveFirst"), r.get("webLiveInMine"), r.get("webLiveInMirror")))

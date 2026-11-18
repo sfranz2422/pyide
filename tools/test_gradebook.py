@@ -219,7 +219,8 @@ check("a missing cell typed 7: kept as his grade (a submission made for it)", r.
 page = teacher.get(GB).get_data(as_text=True)
 check("  his average moves: HW 70%, Test 100% -> 0.4*70 + 0.6*100 = 88.0%", "88.0%" in page)
 check("  and it was sent to Skyward as 0: the cell says it changed (△, sent: 0)",
-      'class="gb-changed" title="Changed since it was sent to Skyward (sent: 0)' in page, page.count("gb-changed"))
+      'title="Changed since it was sent to Skyward (sent: 0)' in page and 'data-student="%d"' % ben in page.split("gb-changed js-updated", 1)[-1][:200],
+      page.count("gb-changed"))
 check("  the cell is a box with the grade in it", 'value="7"' in page and 'data-student="%d"' % ben in page)
 # Points the checks earned count in the total: the number typed IS the total.
 db = P.SessionLocal()
@@ -233,6 +234,30 @@ db.close()
 check("a total typed over checked points: 9 = 3 from the tests + 6 of the teacher's", r["total"] == "9" and s_ava == 6, (r, s_ava))
 r = teacher.post(SC, json={"assignment": A, "student": ava, "score": ""}).get_json()
 check("  emptied: the teacher's score goes, the tests' 3 stay", r["total"] == "3" and r["score"] == "", r)
+teacher.post(SC, json={"assignment": A, "student": ava, "score": "8"})
+# △ clicked: the teacher typed the new score into Skyward, so it's cleared —
+# that student's only; then the column's "All typed into Skyward".
+def changed_in(page):
+    return page.count('class="gb-changed js-updated"')
+teacher.post(SC, json={"assignment": A, "student": ava, "score": "5"})
+page = teacher.get(GB).get_data(as_text=True)
+before = changed_in(page)
+check("two changed scores in the column (Ben's 7, Ava's 5), and the column offers to clear them all",
+      before == 2 and "All typed into Skyward" in page, before)
+u = teacher.post(API + "/skyward/mark", json={"assignment": A, "updated": True, "student": str(ben)})
+page = teacher.get(GB).get_data(as_text=True)
+check("△ clicked for Ben: his clears, Ava's stays", u.status_code == 200 and changed_in(page) == 1
+      and 'data-student="%d"' % ava in page.split("gb-changed js-updated", 1)[-1][:200], changed_in(page))
+check("  and what Skyward has is his 7 now: still left out of the next export",
+      teacher.post(API + "/skyward", json={}).get_json()["count"] == 0)
+check("  only the teacher clears", other.post(API + "/skyward/mark",
+      json={"assignment": A, "updated": True}).status_code in (403, 404))
+teacher.post(API + "/skyward/mark", json={"assignment": A, "updated": True})
+page = teacher.get(GB).get_data(as_text=True)
+check("the column's All typed into Skyward clears the rest", changed_in(page) == 0
+      and "All typed into Skyward" not in page, changed_in(page))
+teacher.post(SC, json={"assignment": A, "student": ava, "score": "9"})
+check("  a later change gets a △ again", changed_in(teacher.get(GB).get_data(as_text=True)) == 1)
 teacher.post(SC, json={"assignment": A, "student": ava, "score": "8"})
 check("a word isn't a grade", teacher.post(SC, json={"assignment": A, "student": ava, "score": "ten"}).status_code == 400)
 check("a student who isn't in the class can't be given one",

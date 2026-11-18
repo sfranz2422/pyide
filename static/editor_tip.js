@@ -15,24 +15,53 @@
  * the next step's takes its place.
  */
 window.PyIDEEditorTip = (function () {
+  /* Under the last line with something on it, not below trailing blank
+     lines. In a web page (Web Design 1's v10 lessons, Nov 2026) that's
+     the last line INSIDE <body>: under the whole file was below
+     </html>, where nothing a student types belongs — the starter's
+     "<!-- Build your form here -->" and what they've typed under it are
+     just above </body>. script.js and style.css have no </body>, so
+     they get the last line, as main.py does. Copy to editor puts code
+     here too, so it lands where the bubble says to type. */
+  function lastCodeLine(editor) {
+    var n = editor.lastLine();
+    for (var b = n; b > 0; b -= 1) {
+      if (/^\s*<\/body\s*>/i.test(editor.getLine(b))) { n = b - 1; break; }
+    }
+    while (n > 0 && !editor.getLine(n).trim()) n -= 1;
+    return n;
+  }
+
+  /* Copy to editor (notes.js copyButtons): the code on new lines under the
+     last line with code, indented as that line is in a web page (inside
+     <body>), and the cursor on its first blank. Pressed twice, the code is
+     already there: it isn't put in again, the cursor just goes to it. */
+  function insertCode(editor, code) {
+    var doc = editor.getDoc(), text = editor.getValue();
+    var n = lastCodeLine(editor), line = editor.getLine(n) || "";
+    var indent = /<\/body\s*>/i.test(text) ? (line.match(/^\s*/) || [""])[0] : "";
+    // Indented first, so that "is it already there?" asks about what a
+    // first press put in, and a second press doesn't add it again.
+    code = code.split("\n").map(function (l) { return l ? indent + l : l; }).join("\n");
+    var at = text.indexOf(code);
+    if (at < 0) {
+      var empty = !text.trim();
+      doc.replaceRange((empty ? "" : "\n") + code, empty ? { line: 0, ch: 0 } : { line: n, ch: line.length });
+      at = editor.getValue().indexOf(code);
+    }
+    var blank = code.indexOf("_____");
+    var from = doc.posFromIndex(at + (blank >= 0 ? blank : 0));
+    if (blank >= 0) doc.setSelection(from, { line: from.line, ch: from.ch + 5 });
+    else doc.setCursor(from);
+    editor.focus();
+    editor.scrollIntoView(doc.posFromIndex(at + code.length), 40);
+    editor.scrollIntoView(from, 40);
+  }
+
   function attach(editor) {
     var bubble = null, tip = null, gone = null;
 
-    /* Under the last line with something on it, not below trailing blank
-       lines. In a web page (Web Design 1's v10 lessons, Nov 2026) that's
-       the last line INSIDE <body>: under the whole file was below
-       </html>, where nothing a student types belongs — the starter's
-       "<!-- Build your form here -->" and what they've typed under it are
-       just above </body>. script.js and style.css have no </body>, so
-       they get the last line, as main.py does. */
-    function lastLine() {
-      var n = editor.lastLine();
-      for (var b = n; b > 0; b -= 1) {
-        if (/^\s*<\/body\s*>/i.test(editor.getLine(b))) { n = b - 1; break; }
-      }
-      while (n > 0 && !editor.getLine(n).trim()) n -= 1;
-      return n;
-    }
+    function lastLine() { return lastCodeLine(editor); }
     /* The code to type, drawn as a little read-only editor (the teacher,
        Nov 2026: highlight it more, "enclosed in a little editor block"):
        the same CodeMirror, mode and theme as the student's own, so it looks
@@ -220,5 +249,5 @@ window.PyIDEEditorTip = (function () {
     });
     editor.on("swapDoc", function () { if (bubble) place(); });
   }
-  return { attach: attach };
+  return { attach: attach, insertCode: insertCode };
 })();

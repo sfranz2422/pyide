@@ -5641,9 +5641,11 @@ def _gradebook(db, course, only=None):
         a["sent"] = (r.sent_at.replace(tzinfo=timezone.utc) if r.sent_at.tzinfo is None else r.sent_at
                      ).astimezone(SCHOOL_TZ).strftime("%b %d") if r is not None else ""
         a["sent_scores"] = json.loads(r.scores or "{}") if r is not None else None
+        a["changed"] = False             # any △ in the column (its "All typed into Skyward")
     weights = {w.category: w.weight for w in db.query(CategoryWeight).filter_by(class_id=course.id)}
     plain = not any(v > 0 for v in weights.values())
     for p in people:
+        p["key"] = _student_key(p)
         cells, by_cat, all_got, all_out = [], {}, 0.0, 0.0
         for a in assignments:
             got = scores.get((a["id"], p["uid"])) if p["uid"] else None
@@ -5656,6 +5658,7 @@ def _gradebook(db, course, only=None):
                 now = _score_text(got) if got is not None else "0"
                 if was != now:
                     cell["changed"], cell["was"] = True, was if was is not None else "not sent"
+                    a["changed"] = True
             cells.append(cell)
             if not a["out_of"]:
                 continue
@@ -5876,7 +5879,9 @@ def class_gradebook_skyward(class_id):
 def class_gradebook_skyward_mark(class_id):
     """{all: true}: every assignment in the gradebook now counts as already in
     Skyward, with today's scores as what was sent (the ones imported before
-    this was kept). {assignment: slug, sent: false}: send that one again."""
+    this was kept). {assignment: slug, sent: false}: send that one again.
+    {assignment: slug, updated: true[, student: key]}: its changed scores (△)
+    were typed into Skyward, so they count as sent."""
     db = SessionLocal()
     try:
         user, course, bounce = _own_class(db, class_id)
@@ -5897,6 +5902,26 @@ def class_gradebook_skyward_mark(class_id):
             return jsonify(ok=True, marked=done)
         item = db.query(accounts.Assignment).filter_by(slug=clean(data.get("assignment"), 16)).first()
         row = item and db.query(SkywardSent).filter_by(class_id=course.id, assignment_id=item.id).first()
+        if row is not None and data.get("updated") is True:
+            # The teacher typed the changed score into Skyward by hand (the
+            # △): what Skyward has is now today's score, so the △ goes. One
+            # student (`student`, a gradebook row key), or the whole column.
+            # Today's score is worked out here, never taken from the page.
+            book = _gradebook(db, course)
+            i = next((k for k, a in enumerate(book["assignments"]) if a["id"] == item.id), None)
+            if i is None:
+                return jsonify(error="That assignment isn't in this gradebook."), 404
+            want = clean(data.get("student"), 24) if data.get("student") else None
+            went = json.loads(row.scores or "{}")
+            for p in book["students"]:
+                key = _student_key(p)
+                if want is not None and key != want:
+                    continue
+                c = p["cells"][i]
+                went[key] = _score_text(c["score"]) if not c["missing"] else "0"
+            row.scores = json.dumps(went)
+            db.commit()
+            return jsonify(ok=True)
         if row is not None and data.get("sent") is False:
             db.delete(row)
             db.commit()
