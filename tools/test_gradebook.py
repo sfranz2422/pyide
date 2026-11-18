@@ -188,10 +188,25 @@ check("  missing work as 0 (Ben's HW)", ["Cole", "Ben", "Strings HW", "11202026"
 check("  a name with no first/last kept is guessed and said", "Ben Cole" in x["guessed"], x["guessed"])
 check("  an assignment with no category is left out and named", x["skipped"] == ["Extra Practice"], x["skipped"])
 check("  Cy, never signed in, still gets a row from the roster's name", any(l[:2] == ["Dee", "Cy"] for l in lines), lines)
-y = teacher.post(API + "/skyward", json={"missing_zero": False}).get_json()
-check("missing work left out when asked", y["count"] == 3 and "Strings HW" not in [l[2] for l in csv.reader(io.StringIO(y["csv"])) if l[0] == "Cole"],
-      y["csv"])
 check("only the teacher exports", other.post(API + "/skyward", json={}).status_code in (403, 404))
+
+print("\nNever twice to Skyward (its import always makes a NEW assignment)")
+page = teacher.get(GB).get_data(as_text=True)
+check("sent assignments say so in their column", page.count("class=\"small gb-sent\"") == 2, page.count("gb-sent"))
+y = teacher.post(API + "/skyward", json={"missing_zero": True}).get_json()
+check("exporting again sends nothing already there", y["count"] == 0 and sorted(y["already"]) == ["Strings HW", "Strings Test"], y)
+teacher.post(API + "/skyward/mark", json={"assignment": A, "sent": False})
+y = teacher.post(API + "/skyward", json={"missing_zero": False}).get_json()
+check("Send again puts one back in the next file — and missing work left out when asked",
+      y["count"] == 1 and [l[2] for l in csv.reader(io.StringIO(y["csv"]))] == ["Strings HW"], y["csv"])
+db = P.SessionLocal()
+db.query(P.SkywardSent).delete()
+db.commit()
+db.close()
+m = teacher.post(API + "/skyward/mark", json={"all": True}).get_json()
+check("Mark all as already in Skyward: every column counts as sent", m.get("marked") == 3
+      and teacher.post(API + "/skyward", json={}).get_json()["count"] == 0, m)
+check("  only the teacher marks", other.post(API + "/skyward/mark", json={"all": True}).status_code in (403, 404))
 
 print("\nTyping a grade into a cell")
 SC = API + "/score"
@@ -203,6 +218,8 @@ check("a missing cell typed 7: kept as his grade (a submission made for it)", r.
       and sub is not None and sub.score == 7, r)
 page = teacher.get(GB).get_data(as_text=True)
 check("  his average moves: HW 70%, Test 100% -> 0.4*70 + 0.6*100 = 88.0%", "88.0%" in page)
+check("  and it was sent to Skyward as 0: the cell says it changed (△, sent: 0)",
+      'class="gb-changed" title="Changed since it was sent to Skyward (sent: 0)' in page, page.count("gb-changed"))
 check("  the cell is a box with the grade in it", 'value="7"' in page and 'data-student="%d"' % ben in page)
 # Points the checks earned count in the total: the number typed IS the total.
 db = P.SessionLocal()
@@ -273,6 +290,8 @@ check("  it's listed in its own box (one per line, scrolling) with a Show button
 check("  the averages leave it out: Ava is her HW alone (80.0%)", "80.0%" in page.split("<tbody>")[1].split("</tr>")[0], page.count("%"))
 mine = ka.get("/class/%d/grades" % CID).get_data(as_text=True)
 check("  the student's own grades leave it out too", "Strings Test" not in mine and "80.0%" in mine)
+teacher.post(API + "/skyward/mark", json={"assignment": A, "sent": False})
+teacher.post(API + "/skyward/mark", json={"assignment": B, "sent": False})
 x = teacher.post(API + "/skyward", json={"missing_zero": True}).get_json()
 check("  and so does the Skyward file", "Strings Test" not in x["csv"] and x["count"] == 3, x["csv"])
 check("only the teacher hides", ka.post(API, json={"assignment": A, "hidden": True}).status_code in (401, 403, 404)
@@ -314,7 +333,12 @@ check("hidden assignments are a closed pane at the bottom, below the table",
       '<details class="card gb-hidden">' in page and page.index('<details class="card gb-hidden">') > page.index('<table class="gradebook">'))
 
 print("\nThe assignment page's Download for Skyward shares them")
+teacher.post(API + "/skyward/mark", json={"assignment": D, "sent": False})
 teacher.post("/api/assignment/%s/skyward" % D, json={"category": "Prj", "due": "2026-12-01"})
+db = P.SessionLocal()
+d_sent = db.query(P.SkywardSent).filter_by(class_id=CID, assignment_id=did).first()
+db.close()
+check("its file counts as sent too, so the gradebook's Export won't send it again", d_sent is not None, d_sent)
 page = teacher.get("/teacher/%s" % D).get_data(as_text=True)
 check("its category and due date are the gradebook's now", 'value="Prj" selected' in page and 'data-kept="2026-12-01"' in page)
 page = teacher.get(GB).get_data(as_text=True)

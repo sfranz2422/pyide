@@ -677,6 +677,25 @@ class GradebookHidden(Base):
     assignment_id = Column(Integer, primary_key=True, autoincrement=False)
 
 
+class SkywardSent(Base):
+    """An assignment already sent to Skyward for a class, and the scores that
+    went: Skyward's "Import Scores and Create Assignments" always makes a NEW
+    assignment, so sending one twice made duplicates in the teacher's
+    gradebook. Export to Skyward sends only assignments with no row here; a
+    score that changes after is marked in the gradebook for the teacher to
+    type into Skyward (the teacher's choice). `scores` is JSON {student key:
+    score text}, a key being the user id, or "e<roster id>" for a student who
+    never signed in."""
+    __tablename__ = "skyward_sent"
+    __table_args__ = (UniqueConstraint("class_id", "assignment_id"),)
+
+    id = Column(Integer, primary_key=True)
+    class_id = Column(Integer, index=True, nullable=False)
+    assignment_id = Column(Integer, nullable=False)
+    sent_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    scores = Column(Text, nullable=False, default="{}")
+
+
 class CategoryWeight(Base):
     """How much one Skyward category counts in a class's average (the
     gradebook's weights, Skyward's weighted categories), in percent."""
@@ -5439,6 +5458,7 @@ def skyward_file(slug):
                   .filter(accounts.Submission.assignment_id == item.id).all())
         earned = _earned(db, item.id)
         lines, guessed, ungraded, nameless = [], [], [], []
+        sent_scores = {}
         for sub, student in rows:
             email = student.email.lower()
             if roster is not None and email not in roster:
@@ -5459,11 +5479,23 @@ def skyward_file(slug):
                 guessed.append(student.display_name())
             lines.append([last, first, item.title, due.strftime("%m%d%Y"),
                           category, item.out_of, _score_text(total)])
+            sent_scores[sub.student_id] = _score_text(total)
         db.commit()                        # names learned from the roster
 
         lines.sort(key=lambda r: (r[0].lower(), r[1].lower()))
         out = io.StringIO()
         csv.writer(out, lineterminator="\r\n").writerows(lines)
+        # The gradebook's Export to Skyward must not send it again (Skyward
+        # would make a second assignment): remembered as sent for its class.
+        _, its_class = _class_of(db, item)
+        if its_class is not None and lines:
+            row = db.query(SkywardSent).filter_by(class_id=its_class.id, assignment_id=item.id).first()
+            if row is None:
+                row = SkywardSent(class_id=its_class.id, assignment_id=item.id)
+                db.add(row)
+            row.sent_at = datetime.now(timezone.utc)
+            row.scores = json.dumps({str(sid): sc for sid, sc in sent_scores.items()})
+            db.commit()
         return jsonify(csv=out.getvalue(), count=len(lines),
                        guessed=sorted(guessed), ungraded=sorted(ungraded),
                        nameless=sorted(nameless),
@@ -5514,6 +5546,11 @@ def _auto_out_of(item):
     tests' points, as the assignment page fills Out of."""
     return math.ceil(sum(q["points"] for q in _quiz_possible(item))
                      + _grader(item).possible(item.file_map()))
+
+
+def _student_key(p):
+    """A gradebook row's key in SkywardSent.scores."""
+    return str(p["uid"]) if p.get("uid") else "e%s" % p.get("enr")
 
 
 def _gradebook(db, course, only=None):
@@ -5598,14 +5635,28 @@ def _gradebook(db, course, only=None):
                 v = checked.get(p["uid"])
                 if v is None or _when_naive(v.checked_at) < _when_naive(sub.submitted_at):
                     unchecked.add((a["id"], p["uid"]))
+    sent = {r.assignment_id: r for r in db.query(SkywardSent).filter_by(class_id=course.id)}
+    for a in assignments:
+        r = sent.get(a["id"])
+        a["sent"] = (r.sent_at.replace(tzinfo=timezone.utc) if r.sent_at.tzinfo is None else r.sent_at
+                     ).astimezone(SCHOOL_TZ).strftime("%b %d") if r is not None else ""
+        a["sent_scores"] = json.loads(r.scores or "{}") if r is not None else None
     weights = {w.category: w.weight for w in db.query(CategoryWeight).filter_by(class_id=course.id)}
     plain = not any(v > 0 for v in weights.values())
     for p in people:
         cells, by_cat, all_got, all_out = [], {}, 0.0, 0.0
         for a in assignments:
             got = scores.get((a["id"], p["uid"])) if p["uid"] else None
-            cells.append({"score": got, "missing": got is None,
-                          "unchecked": (a["id"], p["uid"]) in unchecked})
+            cell = {"score": got, "missing": got is None, "unchecked": (a["id"], p["uid"]) in unchecked,
+                    "changed": False, "was": ""}
+            # Sent to Skyward already, and different now: the teacher types it
+            # in there (Skyward's import would make a second assignment).
+            if a["sent_scores"] is not None:
+                was = a["sent_scores"].get(_student_key(p))
+                now = _score_text(got) if got is not None else "0"
+                if was != now:
+                    cell["changed"], cell["was"] = True, was if was is not None else "not sent"
+            cells.append(cell)
             if not a["out_of"]:
                 continue
             g = got or 0.0                                   # missing counts 0
@@ -5779,16 +5830,22 @@ def class_gradebook_skyward(class_id):
         users = {u.id: u for u in db.query(accounts.User).filter(
             accounts.User.id.in_([p["uid"] for p in book["students"] if p["uid"]] or [0]))}
         enr = {e.id: e for e in db.query(accounts.Enrollment).filter_by(class_id=course.id)}
-        lines, skipped, guessed, nameless = [], [], set(), set()
+        lines, skipped, guessed, nameless, already, sending = [], [], set(), set(), [], []
         for i, a in enumerate(book["assignments"]):
+            if a["sent"]:
+                already.append(a["title"])         # in Skyward already: never twice
+                continue
             if not a["category"] or not a["due"]:
                 skipped.append(a["title"])
                 continue
             due = datetime.strptime(a["due"], "%Y-%m-%d").strftime("%m%d%Y")
+            went = {}
+            sending.append((a, went))
             for p in book["students"]:
                 cell = p["cells"][i]
                 if cell["missing"] and not zero:
                     continue
+                went[_student_key(p)] = _score_text(cell["score"] or 0)
                 u = users.get(p["uid"]) if p["uid"] else None
                 first, last = (u.first_name, u.last_name) if u else ("", "")
                 if not (first and last):
@@ -5803,9 +5860,47 @@ def class_gradebook_skyward(class_id):
         lines.sort(key=lambda r: (r[2].lower(), r[0].lower(), r[1].lower()))
         out = io.StringIO()
         csv.writer(out, lineterminator="\r\n").writerows(lines)
-        return jsonify(csv=out.getvalue(), count=len(lines), skipped=skipped,
+        # Remembered as sent, so the next export leaves them out.
+        for a, went in sending:
+            db.add(SkywardSent(class_id=course.id, assignment_id=a["id"], scores=json.dumps(went)))
+        db.commit()
+        return jsonify(csv=out.getvalue(), count=len(lines), skipped=skipped, already=already,
+                       sent=[a["title"] for a, _ in sending],
                        guessed=sorted(guessed), nameless=sorted(nameless),
                        filename=_safe_filename(course.name) + " - Skyward.csv")
+    finally:
+        db.close()
+
+
+@app.post("/api/class/<int:class_id>/gradebook/skyward/mark")
+def class_gradebook_skyward_mark(class_id):
+    """{all: true}: every assignment in the gradebook now counts as already in
+    Skyward, with today's scores as what was sent (the ones imported before
+    this was kept). {assignment: slug, sent: false}: send that one again."""
+    db = SessionLocal()
+    try:
+        user, course, bounce = _own_class(db, class_id)
+        if bounce:
+            return bounce
+        data = request.get_json(silent=True) or {}
+        if data.get("all"):
+            book = _gradebook(db, course)
+            done = 0
+            for i, a in enumerate(book["assignments"]):
+                if a["sent"]:
+                    continue
+                went = {_student_key(p): (_score_text(p["cells"][i]["score"]) if not p["cells"][i]["missing"] else "0")
+                        for p in book["students"]}
+                db.add(SkywardSent(class_id=course.id, assignment_id=a["id"], scores=json.dumps(went)))
+                done += 1
+            db.commit()
+            return jsonify(ok=True, marked=done)
+        item = db.query(accounts.Assignment).filter_by(slug=clean(data.get("assignment"), 16)).first()
+        row = item and db.query(SkywardSent).filter_by(class_id=course.id, assignment_id=item.id).first()
+        if row is not None and data.get("sent") is False:
+            db.delete(row)
+            db.commit()
+        return jsonify(ok=True)
     finally:
         db.close()
 

@@ -56,12 +56,15 @@
 
   <section class="card">
     <div class="gradebook-tools">
-      <button class="btn btn-primary" id="sky-all" type="button">Export all to Skyward</button>
+      <button class="btn btn-primary" id="sky-all" type="button" title="Only assignments not sent before: Skyward's import makes a new assignment every time">Export new to Skyward</button>
+      <button class="btn" id="sky-mark" type="button" title="Everything here is already in Skyward: count it as sent, with today's scores, so Export leaves it out">Mark all as already in Skyward</button>
       <label class="small"><input type="checkbox" id="sky-zero" checked> Missing work as 0</label>
       <span class="small" id="sky-said"></span>
     </div>
     <p class="small dim">Skyward: Assignment Import, template <strong>Import Scores and Create Assignments</strong>, this class,
-      <em>Import File Has Header Row</em> unticked. An assignment needs a category and a due date to go in the file.</p>
+      <em>Import File Has Header Row</em> unticked. That template makes a NEW assignment every time, so Export sends only
+      assignments never sent before (✓ In Skyward); a score that changes afterwards is marked △ for you to type into Skyward.
+      An assignment needs a category and a due date to go in the file.</p>
     {% if not book.assignments %}
       <p class="dim">No assignments students can see yet.</p>
     {% elif not book.students %}
@@ -83,6 +86,8 @@
               </select>
               <input class="field js-due" type="date" value="{{ a.due }}" aria-label="Due date of {{ a.title }}">
               {% if not a.category %}<div class="small gb-warn">Not counted: no category</div>{% endif %}
+              {% if a.sent %}<div class="small gb-sent" title="Already in Skyward: Export leaves it out (Skyward would make a second one). Changed scores are marked △ — type those into Skyward.">✓ In Skyward ({{ a.sent }})
+                <button type="button" class="linkbtn small js-resend" data-slug="{{ a.slug }}" title="Put it in the next Export again (only if it isn't in Skyward)">Send again</button></div>{% endif %}
               <button type="button" class="linkbtn small js-hide" title="Not grading this one: take it out of the gradebook, the averages, the Skyward file and the students' grades">Hide</button>
               {% if a.tests %}<button type="button" class="btn small js-checkall" data-slug="{{ a.slug }}"
                 title="Run its tests on everyone's turned-in code ({{ '%g'|format(a.tests) }} points), as the assignment page's Check all does">Check all</button>{% endif %}
@@ -98,6 +103,7 @@
               <div class="small dim">{% for c, pct in p.cats.items() %}{{ c }} {{ '%.0f'|format(pct) }}%{% if not loop.last %} · {% endif %}{% endfor %}</div></td>
             {% for c in p.cells %}{% set a = book.assignments[loop.index0] %}
               <td class="gb-cell {{ 'gb-missing' if c.missing }}">
+                {% if c.changed %}<span class="gb-changed" title="Changed since it was sent to Skyward (sent: {{ c.was }}). Type the new score into Skyward.">△</span>{% endif %}
                 {% if c.unchecked %}<span class="gb-unchecked" title="Tests not checked yet: {{ '%g'|format(a.tests) }} points pending. Press Check all on this column.">⟳</span>{% endif %}
                 {% if p.uid %}<input class="gb-score js-score" type="text" inputmode="decimal" size="4"
                   value="{{ '' if c.missing else ('%g'|format(c.score)) }}" placeholder="missing"
@@ -196,6 +202,15 @@
     keepScroll();
     location.reload();
   });
+  document.getElementById("sky-mark").addEventListener("click", function () {
+    post("/api/class/" + CLASS + "/gradebook/skyward/mark", { all: true }).then(function () { keepScroll(); location.reload(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".js-resend"), function (b) {
+    b.addEventListener("click", function () {
+      post("/api/class/" + CLASS + "/gradebook/skyward/mark", { assignment: b.getAttribute("data-slug"), sent: false })
+        .then(function () { keepScroll(); location.reload(); });
+    });
+  });
   Array.prototype.forEach.call(document.querySelectorAll("th.gb-col .js-hide"), function (b) {
     b.addEventListener("click", function () {
       post("/api/class/" + CLASS + "/gradebook", { assignment: b.closest("th").getAttribute("data-slug"), hidden: true })
@@ -213,6 +228,7 @@
     said.textContent = "Making the file…";
     post("/api/class/" + CLASS + "/gradebook/skyward", { missing_zero: document.getElementById("sky-zero").checked }).then(function (d) {
       if (d.error) { said.textContent = d.error; return; }
+      if (!d.count) { said.textContent = "Nothing new to send: every assignment is already in Skyward (or needs a category and due date)."; return; }
       var blob = new Blob([d.csv], { type: "text/csv" });
       var a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -220,8 +236,11 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
-      var bits = [d.count + " scores in the file."];
+      var bits = [d.count + " scores in the file, for " + d.sent.join(", ") + "."];
+      if (d.already.length) bits.push("Already in Skyward, left out: " + d.already.length + ".");
       if (d.skipped.length) bits.push("Left out (no category or due date): " + d.skipped.join(", ") + ".");
+      keepScroll();
+      setTimeout(function () { location.reload(); }, 4000);
       if (d.guessed.length) bits.push("Names guessed (check Skyward's preview): " + d.guessed.join(", ") + ".");
       if (d.nameless.length) bits.push("No name to match on: " + d.nameless.join(", ") + ".");
       said.textContent = bits.join(" ");
