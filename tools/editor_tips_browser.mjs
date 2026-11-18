@@ -244,7 +244,8 @@ try {
   await sleep(300);
   const copy = {};
   copy.easyButtons = await cpg("document.querySelectorAll('.level-part[data-level=\"easy\"] .copy-to-editor-btn').length");
-  copy.otherButtons = await cpg("document.querySelectorAll('.level-part:not([data-level=\"easy\"]) .copy-to-editor-btn').length");
+  copy.mediumButtons = await cpg("document.querySelectorAll('.level-part[data-level=medium] .copy-to-editor-btn').length");
+  copy.masterButtons = await cpg("document.querySelectorAll('.level-part[data-level=master] .copy-to-editor-btn').length");
   const activeTab = "(document.querySelector('#file-tabs .active, #file-tabs [aria-selected=\"true\"]') || {}).textContent || ''";
   await cpg(`${c3}.getDoc() && document.querySelectorAll('.copy-to-editor-btn')[0].click()`);
   await sleep(300);
@@ -264,6 +265,12 @@ try {
   await ct("[...document.querySelectorAll('#file-tabs *')].find(t => /notes\\.md/.test(t.textContent) && t.children.length === 0)?.click()");
   await sleep(1500);
   copy.teacherButtons = await ct("document.querySelectorAll('.copy-to-editor-btn').length");
+  const lc = await open(cfg.student3, cfg.copyLive);
+  for (let k = 0; k < 100; k++) { await sleep(100); if (await lc("!!document.querySelector('.copy-to-editor-btn')")) break; }
+  await lc("document.querySelector('.copy-to-editor-btn') && document.querySelector('.copy-to-editor-btn').click()");
+  await sleep(400);
+  copy.liveMine = await lc("document.getElementById('mine').nextElementSibling.CodeMirror.getValue().indexOf('snack = \"_____\"') >= 0");
+  copy.liveMirror = await lc("document.getElementById('mirror').nextElementSibling.CodeMirror.getValue().indexOf('snack =') >= 0");
   out.copy = copy;
 } catch (e) {
   out.error = String(e);

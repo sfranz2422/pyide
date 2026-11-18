@@ -28,7 +28,7 @@ PYIDE = os.path.dirname(HERE)
 TMP = tempfile.mkdtemp()
 
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(TMP, "tips.db")
-os.environ["TEACHER_EMAILS"] = "teacher@example.org,webteacher@example.org"
+os.environ["TEACHER_EMAILS"] = "teacher@example.org,webteacher@example.org,liveteacher@example.org"
 os.environ["SECRET_KEY"] = "k" * 32
 os.environ.pop("ALLOWED_EMAIL_DOMAINS", None)
 
@@ -170,7 +170,7 @@ WEB_PAGE = """<!DOCTYPE html>
 # Copy to editor (Nov 2026, the teacher's request, "especially in the web
 # design class"): the Easy box's code with blanks has a button that puts it
 # into the file its direction names, blanks and all. Medium's code has blanks
-# too and gets no button: only Easy is given the code to copy.
+# too and gets one as well (the teacher, Nov 2026); Master never does.
 COPY_NOTES = """# Exercise
 
 :::level easy
@@ -202,6 +202,23 @@ Fall Fair
 
 :::level master
 ✏ In `index.html`, add an `<h4>` that says Harvest.
+
+```html
+<h4>_____</h4>
+```
+:::end
+"""
+
+# The same on the class's live page, in the student's own editor.
+LIVE_COPY_NOTES = """# Exercise
+
+:::level easy
+✏ In `main.py`, type this and fill in every `_____`:
+
+```python
+snack = "_____"
+print(_____)
+```
 :::end
 """
 
@@ -260,6 +277,13 @@ else:
                                                   "files": {"index.html": WEB_PAGE, "style.css": "body { margin: 0; }\n",
                                                             "notes.md": COPY_NOTES}}).get_json()["slug"]
     sid3 = add_user("s3", "kid3@example.org", "Kid Three")
+    lteacher = client(add_user("lt", "liveteacher@example.org", "Live"))
+    lslug = lteacher.post("/api/assignment", json={"title": "Snack", "code": "# Snack\n",
+                                                  "files": {"notes.md": LIVE_COPY_NOTES}}).get_json()["slug"]
+    lcode = lteacher.post("/api/live/start", json={"assignment": lslug, "body": "# Snack\n",
+                                                    "filename": "main.py"}).get_json()["code"]
+    lteacher.post("/api/live/%s/push" % lcode, json={"body": "# Snack\n", "filename": "main.py",
+                                                     "notes": LIVE_COPY_NOTES, "slide": "1/1", "seq": 50})
     # And live (the teacher's request: "I've been using live mode a lot"):
     # the teacher goes live on it, on the slide with the steps.
     code = teacher.post("/api/live/start", json={"assignment": slug, "body": "# Slices\n",
@@ -273,7 +297,7 @@ else:
     sign = P.app.session_interface.get_signing_serializer(P.app)
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "quiz": "/a/" + qslug, "quizTeacher": "/teacher/%s/edit" % qslug, "web": "/a/" + wslug, "webLive": "/live/" + wcode, "copy": "/a/" + cslug, "copyTeacher": "/teacher/%s/edit" % cslug, "student3": sign.dumps({"uid": sid3}), "webTeacher": sign.dumps({"uid": wteacher_id}),
+        json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug, "live": "/live/" + code, "page2": "/a/" + slug2, "quiz": "/a/" + qslug, "quizTeacher": "/teacher/%s/edit" % qslug, "web": "/a/" + wslug, "webLive": "/live/" + wcode, "copy": "/a/" + cslug, "copyLive": "/live/" + lcode, "copyTeacher": "/teacher/%s/edit" % cslug, "student3": sign.dumps({"uid": sid3}), "webTeacher": sign.dumps({"uid": wteacher_id}),
                    "student": sign.dumps({"uid": sid}), "student2": sign.dumps({"uid": sid2}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "editor_tips_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -341,13 +365,16 @@ else:
     check("  its check passes from the bubble, and their page is run", r.get("webPassed") is True and r.get("webRan") is True,
           (r.get("webPassed"), r.get("webRan")))
     cp = r.get("copy") or {}
-    check("copy to editor: a button under each piece of the Easy box's code with blanks, none for Medium's",
-          cp.get("easyButtons") == 2 and cp.get("otherButtons") == 0, cp)
+    check("copy to editor: a button under each piece of the Easy box's code with blanks",
+          cp.get("easyButtons") == 2, cp)
+    check("  and Medium's, but never Master's", cp.get("mediumButtons") == 1 and cp.get("masterButtons") == 0, cp)
     check("  pressed: the code goes into the file the step names, inside <body>, indented, blanks and all",
           cp.get("htmlFile") == "index.html" and cp.get("htmlInBody") is True and cp.get("selected") == "_____", cp)
     check("  pressed again: not put in twice", cp.get("twice") == 1, cp)
     check("  the style.css piece goes into style.css", cp.get("cssFile") == "style.css" and cp.get("cssIn") is True, cp)
     check("  the teacher writing the notes gets no button", cp.get("teacherButtons") == 0, cp)
+    check("live: the button puts the code into the student's own editor, never the teacher's mirror",
+          cp.get("liveMine") is True and cp.get("liveMirror") is False, cp)
     check("web live: the bubble is in the student's own editor, never the teacher's",
           "<h2>Harvest</h2>" in (r.get("webLiveFirst") or "") and r.get("webLiveInMine") is True and r.get("webLiveInMirror") is False,
           (r.get("webLiveFirst"), r.get("webLiveInMine"), r.get("webLiveInMirror")))

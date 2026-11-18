@@ -914,6 +914,22 @@
      the slide, which is fine, but not the lesson the teacher wrote. */
   var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true }) : null;
   if (notesSlides && window.PyIDEEditorTip && mine) window.PyIDEEditorTip.attach(mine);
+  /* Copy to editor under an Easy or Medium box's code with blanks (notes.js
+     copyButtons), into the student's own editor, never the teacher's mirror:
+     the notes' exercise, not the teacher's code, which is still only ever
+     typed (or sent as a snippet). Into the file the step names when their
+     project has it, else the file open now. */
+  if (notesSlides && mine && window.PyIDENotes.setCopier && window.PyIDEEditorTip && window.PyIDEEditorTip.insertCode) {
+    window.PyIDENotes.setCopier({
+      copy: function (what) {
+        var name = what.file && docs[what.file] ? what.file : active;
+        if (!docs[name]) return false;
+        switchTo(name);
+        window.PyIDEEditorTip.insertCode(mine, what.code);
+        return true;
+      }
+    });
+  }
   var teacherSlide = null;           // the last "3/5" the teacher sent
   var teacherAt = -1;                // and that slide, from 0
 

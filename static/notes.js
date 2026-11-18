@@ -1476,11 +1476,12 @@ window.PyIDENotes = (function () {
   }
 
   /* Copy to editor (Nov 2026, the teacher's request, "especially in the web
-     design class"): under the code with blanks in an Easy box, a button that
-     puts that code, blanks and all, into the student's editor, so the
-     exercise is filling the blanks rather than retyping a dozen lines of
-     HTML around them. Easy only, and only code that HAS blanks: Medium and
-     Master are writing it, which a button would answer. Only where the page
+     design class"): under the code with blanks in an Easy or Medium box
+     (Medium added at the teacher's request), a button that puts that code,
+     blanks and all, into the student's editor, so the exercise is filling
+     the blanks rather than retyping a dozen lines of HTML around them. Only
+     code that HAS blanks, and never Master: Master writes it from the jobs
+     in words, which a button would answer. Only where the page
      registered a copier (setCopier: the student's own editor), so a lesson
      page, the library or a view-only link has no button that does nothing.
      The file is the one the box's direction names (`script.js`), if any. */
@@ -1488,7 +1489,7 @@ window.PyIDENotes = (function () {
   var FILE_NAME = /^[\w./-]+\.(py|html?|css|js|sql|php|txt|csv|json)$/i;
   function copyButtons(root) {
     if (!copier || !copier.on()) return;
-    Array.prototype.forEach.call((root || document).querySelectorAll('.level-part[data-level="easy"] pre > code'), function (code) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('.level-part[data-level="easy"] pre > code, .level-part[data-level="medium"] pre > code'), function (code) {
       var pre = code.parentNode;
       if (/language-(text|output|plain|tests|quiz)/.test(code.className || "")) return;
       if (code.textContent.indexOf("_____") < 0) return;
