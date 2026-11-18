@@ -116,6 +116,11 @@ page = teacher.get(GB).get_data(as_text=True)
 check("every student on the roster, and every assignment they can see",
       all(n in page for n in ("Ava Reyes", "Ben Cole", "Cy Dee", "Strings HW", "Strings Test", "Extra Practice")), page[:200])
 check("  a hidden assignment isn't in it", "Hidden Quiz" not in page)
+# html and body never scroll (style.css); a page's .sheet does. A <main>
+# without it held a long class list off the bottom with no way down.
+check("  the page scrolls (its main is a .sheet)", '<main class="sheet gradebook-page">' in page
+      and '<main class="sheet' in teacher.get("/teacher/class/%d/levels" % CID).get_data(as_text=True)
+      and '<main class="sheet' in ka.get("/class/%d/grades" % CID).get_data(as_text=True))
 check("  no weights yet: the average is total points (Ava 23 of 35 = 65.7%)", "65.7%" in page and "No weights set" in page)
 check("  missing work shows as missing (Ben's HW)", page.count("gb-missing") >= 4)
 book = None

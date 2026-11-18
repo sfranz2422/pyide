@@ -1755,6 +1755,9 @@ body:not(.is-authoring) .notes-body .snippet-guess,
 .levels-table .js-level.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .level-hint { margin-top: 4px; color: var(--accent); }
 /* The class's gradebook (gradebook.html) and a student's own grades. */
+/* .sheet is what scrolls (the page itself never does: html, body are
+   overflow: hidden); the gradebook is wide, so it gets the whole width. */
+.gradebook-page.sheet, .class-levels.sheet { max-width: none; }
 .gradebook-scroll { overflow-x: auto; }
 .gradebook { border-collapse: collapse; font-size: 14px; }
 .gradebook th, .gradebook td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
