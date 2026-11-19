@@ -62,7 +62,7 @@ try {
     if (n) window._party = n.textContent; }).observe(document.body, { childList: true });`;
   await a(keepParty);
   await b(keepParty);
-  out.handButtons = await a("document.querySelectorAll('.live-hands .live-hand').length");
+  out.handButtons = await a("[...document.querySelectorAll('button')].filter(x => /stuck|I'm done/i.test(x.textContent)).length");
   out.timerBefore = await a("document.querySelector('.live-timer').hidden");
 
   // Predictions: the first student gets it right, the second doesn't.
@@ -70,8 +70,6 @@ try {
     t.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('.snippet-predict .snippet-run').click(); })()`;
   await a(guess("MAPLE"));
   await b(guess("maple"));
-  // A hand up.
-  await a("[...document.querySelectorAll('.live-hand')].find(x => /stuck/.test(x.textContent)).click()");
 
   // The step: each types it and presses the card's Check my work.
   const pass = `(() => { document.getElementById('mine').nextElementSibling.CodeMirror.setValue('crop = "corn"\\n');
@@ -91,7 +89,7 @@ try {
   out.teacherCount = await tv("(document.querySelector('#class-notes .live-count') || document.querySelector('.live-count') || {}).textContent || ''");
   await until(tv, "/2 of 2/.test((document.querySelector('.live-guesses') || {}).textContent || '')", 8000);
   out.teacherGuesses = await tv("(document.querySelector('.live-guesses') || {}).textContent || ''");
-  out.teacherHands = await tv("(document.querySelector('.live-hands-count') || {}).textContent || ''");
+  out.teacherHands = await tv("/stuck/.test(document.body.innerText)");
   out.namesOnTeacher = await tv("/Ana|Ben|Ruiz|Ode/.test(document.body.innerText)");
 
   // The celebration, on both students' screens.
@@ -123,7 +121,7 @@ try {
     out.popCount = await pv("(document.querySelector('.live-count') || {}).textContent || ''");
     out.popGuesses = await pv("(document.querySelector('.live-guesses') || {}).textContent || ''");
     out.popTimer = await pv("document.querySelector('.live-timer').textContent");
-    out.popHands = await pv("(document.querySelector('.live-hands-count') || {}).textContent || ''");
+    out.popHands = await pv("/stuck/.test(document.body.innerText)");
   }
 } catch (e) {
   out.error = String(e && e.stack || e);

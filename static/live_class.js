@@ -3,13 +3,12 @@
  *
  *   student(...)  the class's live page (live.js, web/live.js). Says when
  *                 this student passes a step's check (and is told "You were
- *                 #5!"), what they first predicted, and "I'm stuck" / "I'm
- *                 done"; shows the teacher's countdown and the celebration
+ *                 #5!") and what they first predicted; shows the teacher's countdown and the celebration
  *                 when the whole class has passed a step.
  *   teacher(...)  the teacher's editor while live (app.js). Asks for the
  *                 class's side every few seconds (/api/live/<code>/class),
- *                 paints it on the notes, keeps the stuck/done count and the
- *                 countdown on the top bar, and calls the celebration.
+ *                 paints it on the notes, keeps the countdown on the top
+ *                 bar, and calls the celebration.
  *   paint(...)    what both the editor and its pop-out on the projector
  *                 (present.js) draw: "17 / 22 finished" on each step's card,
  *                 and a chart of the class's first guesses under each
@@ -136,7 +135,7 @@ window.PyIDELiveClass = (function () {
   function student(o) {
     var url = "/api/live/" + encodeURIComponent(o.code);
     var sentSteps = {}, passed = {}, guessed = {};
-    var lastSlide = null, partySeen = null, timerEnd = 0, timerTotal = 0, upUntil = 0;
+    var partySeen = null, timerEnd = 0, timerTotal = 0, upUntil = 0;
 
     function say(body) {
       if (!o.signedIn) return Promise.resolve(null);
@@ -177,33 +176,9 @@ window.PyIDELiveClass = (function () {
       }
     });
 
-    // I'm stuck / I'm done: one at a time, pressed again to take it down.
-    var hands = null, hand = "";
-    if (o.signedIn) {
-      hands = el("div", "live-hands");
-      var stuck = el("button", "btn live-hand", "🙋 I'm stuck");
-      var done = el("button", "btn live-hand", "✅ I'm done");
-      stuck.type = done.type = "button";
-      stuck.title = "Your teacher sees how many are stuck, never who";
-      done.title = "Your teacher sees how many are done with this slide, never who";
-      function paintHands() {
-        stuck.classList.toggle("is-on", hand === "stuck");
-        done.classList.toggle("is-on", hand === "done");
-        stuck.setAttribute("aria-pressed", hand === "stuck" ? "true" : "false");
-        done.setAttribute("aria-pressed", hand === "done" ? "true" : "false");
-      }
-      function setHand(v) {
-        hand = hand === v ? "" : v;
-        paintHands();
-        say({ kind: "hand", value: hand });
-      }
-      stuck.addEventListener("click", function () { setHand("stuck"); });
-      done.addEventListener("click", function () { setHand("done"); });
-      hands.appendChild(stuck);
-      hands.appendChild(done);
-      document.body.appendChild(hands);
-      paintHands();
-    }
+    // There were I'm stuck / I'm done buttons here (Nov 2026); the teacher
+    // had them taken off the students' pages, and the count off theirs.
+    // The server still takes a "hand" signal, but nothing sends one.
 
     // The countdown, counted by this page's own clock from what's left.
     var chip = el("div", "live-timer");
@@ -230,17 +205,7 @@ window.PyIDELiveClass = (function () {
       if (!d) return;
       if (d.ended) {
         timerEnd = 0;
-        if (hands) hands.hidden = true;
         return;
-      }
-      if (hands) hands.hidden = false;
-      // The teacher moved on: "done" was for that slide (the server agrees).
-      if (typeof d.slide === "string") {
-        if (lastSlide !== null && d.slide !== lastSlide && hand === "done") {
-          hand = "";
-          if (hands) Array.prototype.forEach.call(hands.children, function (b) { b.classList.remove("is-on"); });
-        }
-        lastSlide = d.slide;
       }
       if (typeof d.timer_left === "number") {
         if (d.timer_left > 0) {
@@ -281,9 +246,6 @@ window.PyIDELiveClass = (function () {
   function teacher(o) {
     var data = null, partied = {}, timerEnd = 0, timerTotal = 0;
 
-    var hands = el("span", "chip live-hands-count");
-    hands.hidden = true;
-    hands.title = "How many of the class pressed I'm stuck / I'm done (on this slide). Never who.";
     var tbtn = el("button", "chip live-timer-btn", "⏱ Timer");
     tbtn.type = "button";
     tbtn.hidden = true;
@@ -304,7 +266,6 @@ window.PyIDELiveClass = (function () {
     if (anchor) {
       anchor.parentNode.insertBefore(menu, anchor.nextSibling);
       anchor.parentNode.insertBefore(tbtn, anchor.nextSibling);
-      anchor.parentNode.insertBefore(hands, anchor.nextSibling);
     }
     tbtn.addEventListener("click", function (e) {
       e.stopPropagation();
@@ -344,12 +305,6 @@ window.PyIDELiveClass = (function () {
 
     function paintAll() {
       (o.roots() || []).forEach(function (r) { paint(r, data); });
-      hands.hidden = !(o.code() && data);
-      if (data) {
-        var text = "🙋 " + data.stuck + " stuck · ✅ " + data.done + " done";
-        if (hands.textContent !== text) hands.textContent = text;
-        hands.classList.toggle("has-stuck", data.stuck > 0);
-      }
     }
 
     // The whole class here has passed a step: the party, once a step. The

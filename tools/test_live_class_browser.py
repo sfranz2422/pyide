@@ -2,10 +2,10 @@
 
 Run: python3 tools/test_live_class_browser.py      (needs node and Chrome)
 
-Two students on a live lesson's page predict, pass a step's check and put
-a hand up; the teacher's editor, live on the same lesson, shows it — "2 / 2
+Two students on a live lesson's page predict and pass a step's check
+(no I'm stuck / I'm done any more); the teacher's editor, live on the same lesson, shows it — "2 / 2
 finished" on the card, the class's first guesses charted under the
-prediction, "1 stuck" on the bar — and its pop-out on the projector shows
+prediction — and its pop-out on the projector shows
 the same. The whole class having passed the step, the celebration reaches
 both students' screens (with +5 XP); the teacher's countdown reaches them
 too. tools/test_live_class.py pins the server; this, the pages.
@@ -118,7 +118,7 @@ else:
     except (ValueError, IndexError):
         r = {"error": out.stdout[-300:] + out.stderr[-300:]}
     check("the browser run finished", not r.get("error"), r.get("error", ""))
-    check("a student's page has I'm stuck and I'm done", r.get("handButtons") == 2, r.get("handButtons"))
+    check("a student's page has no I'm stuck / I'm done (the teacher had them taken off)", r.get("handButtons") == 0, r.get("handButtons"))
     check("  and no countdown before the teacher starts one", r.get("timerBefore") is True, r.get("timerBefore"))
     check("passing the step tells the first student they were first",
           "first" in (r.get("toast1") or ""), r.get("toast1"))
@@ -129,8 +129,7 @@ else:
           "2 of 2" in g and "✓ MAPLE" in g and "maple" in g, g)
     check("  and no student's name anywhere on the teacher's page",
           r.get("namesOnTeacher") is False, r.get("namesOnTeacher"))
-    check("the bar says 1 stuck, 0 done", "1 stuck" in (r.get("teacherHands") or "") and "0 done" in (r.get("teacherHands") or ""),
-          r.get("teacherHands"))
+    check("  and the teacher's page shows no stuck / done count", r.get("teacherHands") is False, r.get("teacherHands"))
     check("the whole class passed: both students get the celebration",
           "Everyone finished" in (r.get("party1") or "") and "Everyone finished" in (r.get("party2") or ""),
           (r.get("party1"), r.get("party2")))
@@ -140,7 +139,7 @@ else:
     check("  and so does the teacher's bar", (r.get("teacherTimer") or "").startswith("⏱ "), r.get("teacherTimer"))
     check("the pop-out on the projector shows the card's count and the guesses",
           r.get("popCount") == "2 / 2 finished" and "MAPLE" in (r.get("popGuesses") or ""), (r.get("popCount"), r.get("popGuesses")))
-    check("  and the countdown and the hands", (r.get("popTimer") or "").startswith("⏱ ") and "1 stuck" in (r.get("popHands") or ""),
+    check("  and the countdown, with no stuck / done count", (r.get("popTimer") or "").startswith("⏱ ") and r.get("popHands") is False,
           (r.get("popTimer"), r.get("popHands")))
     server.shutdown()
 
