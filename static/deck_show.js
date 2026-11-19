@@ -26,7 +26,15 @@
 
   //: Controls for the person presenting. On a student's screen they would be
   //: buttons that do nothing. `.nav` itself stays, for the slide counter.
-  var TEACHER_ONLY = "#setup, .hint, #pick, #prev, #next, #score button, #score .tk, #deck-show-pill";
+  var TEACHER_ONLY = "#setup, .hint, #pick, #prev, #next, #score button, #score .tk, #deck-show-pill, " +
+                     "#deck-show-laser, .laser-dot";
+  /* What is written where something is left out: an empty comment, not
+     nothing, so every node the slide keeps is at the same place among its
+     parent's children on the students' screens as on the teacher's. The
+     laser pointer (laser.js) says where it is as that path of child
+     numbers; with nodes simply dropped, a dot aimed at a word went to
+     whatever came next. */
+  var GAP = "<!---->";
   var DROPPED = { script: 1, noscript: 1, template: 1, base: 1, meta: 1 };
   var EMPTY = { area: 1, br: 1, col: 1, embed: 1, hr: 1, img: 1, input: 1, link: 1,
                 param: 1, source: 1, track: 1, wbr: 1 };
@@ -68,12 +76,12 @@
       var text = node.nodeValue;
       return esc(mask ? text.replace(/\S/g, "x") : text);
     }
-    if (node.nodeType !== 1) return "";
+    if (node.nodeType !== 1) return GAP;
     var tag = node.tagName.toLowerCase();
-    if (DROPPED[tag] || node.matches(TEACHER_ONLY)) return "";
+    if (DROPPED[tag] || node.matches(TEACHER_ONLY)) return GAP;
     var seen = win.getComputedStyle(node);
     // Every other slide leaves here, along with closed overlays.
-    if (seen.display === "none") return "";
+    if (seen.display === "none") return GAP;
     var hidesSteps = has(node, "reveal") || has(node, "stage");
     var unshown = hidesSteps && !has(node, "shown");
     var nowSecret = secret || unshown;
@@ -223,7 +231,11 @@
     for (var i = 0; i < records.length; i++) {
       var t = records[i].target;
       var el = t.nodeType === 1 ? t : t.parentNode;
-      if (!el || !pill.contains(el)) { changed(); return; }
+      if (!el || !(pill.contains(el) || (el.closest && el.closest(".laser-dot")))) {
+        dirty = true;
+        changed();
+        return;
+      }
     }
   }).observe(document.documentElement, {
     subtree: true, childList: true, attributes: true, characterData: true
@@ -243,7 +255,67 @@
     if (e.persisted && showing) { lastSent = ""; send(); }
   });
 
+  /* ------------------------------------------------ the laser pointer
+     Hold Alt (Option on a Mac) and point, as in a live lesson; every
+     student watching sees the red dot on the same word (laser.js has how).
+     The place is a path of child numbers from the body to a letter, which
+     leads to the same letter in the slide written out above, as nothing is
+     dropped from it without a GAP. Its "slide number" is a hash of that
+     written-out slide: a student's screen still on the slide before (a
+     reveal is a second away on their poll) has another hash, and shows no
+     dot rather than one on the wrong word. */
+  var dirty = true, slideNo = 0;
+  function hash(text) {
+    var h = 2166136261;
+    for (var i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0) % 10000;
+  }
+  root.PyIDEDeckShow.hash = hash;
+  function viewport() {
+    return { left: 0, top: 0, right: innerWidth, bottom: innerHeight,
+             width: innerWidth, height: innerHeight };
+  }
+  var pointSeq = 0;
+  if (root.LiveLaser) {
+    var css = document.createElement("style");
+    css.id = "deck-show-laser";
+    css.textContent =
+      ".laser-dot{position:fixed;left:0;top:0;z-index:2147483646;width:20px;height:20px;" +
+      "margin:-10px 0 0 -10px;border-radius:50%;background:rgba(255,38,38,.45);" +
+      "border:2px solid rgba(255,38,38,.95);box-sizing:border-box;" +
+      "box-shadow:0 0 8px 3px rgba(255,38,38,.6),0 0 26px 10px rgba(255,38,38,.3);" +
+      "pointer-events:none;opacity:0;transition:opacity .15s}.laser-dot.on{opacity:1}";
+    root.LiveLaser.teacher({
+      active: function () { return showing; },
+      surfaces: function () {
+        return [{
+          el: { isConnected: true, getBoundingClientRect: viewport },
+          point: function (x, y) {
+            if (dirty) {
+              slideNo = hash(snapshot(document, window).body);
+              dirty = false;
+            }
+            return root.LiveLaser.pointAtSlide(document.body, slideNo, x, y, {
+              bounds: viewport,
+              skip: function (n) { return !!(n.parentNode && n.parentNode.closest &&
+                                             n.parentNode.closest(TEACHER_ONLY)); }
+            });
+          }
+        }];
+      },
+      send: function (p, path) {
+        pointSeq = Math.max(pointSeq + 1, Date.now());
+        fetch(api + "/point", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seq: pointSeq, pointer: p, path: path })
+        }).catch(function () {});        // the next move, or the beat, sends again
+      }
+    });
+  }
+
   document.body.appendChild(pill);
+  if (root.LiveLaser) document.body.appendChild(css);
   drawPill();
   send();
 })(typeof window !== "undefined" ? window : globalThis);

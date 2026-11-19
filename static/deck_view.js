@@ -19,6 +19,8 @@
   var IDLE_MS = 2500;       // beside the live poll all lesson, so slower until it's needed
 
   var seq = 0, cover = null, frame = null, ready = false, current = null, waiting = null;
+  var LASER_MS = 250;       // while the teacher's laser is lit, as live.js asks
+  var pointed = 0, slideNo = -1;
   var quieted = [];
   var timer = null;
 
@@ -67,7 +69,8 @@
   function open(f) {
     cover = document.createElement("div");
     cover.id = "deck-view";
-    cover.setAttribute("style", "position:fixed;inset:0;z-index:2147483647;background:#000");
+    // One below the top, so the laser's dot (laser.js, above every page) is on it.
+    cover.setAttribute("style", "position:fixed;inset:0;z-index:2147483646;background:#000");
     frame = document.createElement("iframe");
     frame.title = "Your teacher's slides";
     frame.setAttribute("sandbox", "allow-same-origin");
@@ -85,6 +88,7 @@
   }
 
   function draw(f) {
+    slideNo = hash(f.body);
     if (!cover) { open(f); return; }
     if (!ready) { waiting = f; return; }
     if (f.head !== current.head) {
@@ -101,6 +105,8 @@
   }
 
   function close() {
+    slideNo = -1;
+    if (laser) laser.show("", "");
     if (!cover) return;
     cover.remove();
     cover = frame = current = waiting = null;
@@ -111,18 +117,48 @@
 
   function poll() {
     var asked = code;
-    fetch("/api/live/" + encodeURIComponent(asked) + "/deck?d=" + seq, { cache: "no-store" })
+    fetch("/api/live/" + encodeURIComponent(asked) + "/deck?d=" + seq +
+          (laser ? "&p=" + pointed : ""), { cache: "no-store" })
       .then(function (r) { return r.status === 200 ? r.json() : null; })
       .then(function (d) {
         if (!d || asked !== code) return;
-        if (d.showing) { seq = d.seq; draw(d.frame); }
+        if (d.showing) {
+          seq = d.seq;
+          if (!d.pointer_only) draw(d.frame);
+          if (laser && typeof d.pointer === "string") {
+            pointed = d.pointer_seq || 0;
+            laser.show(d.pointer, d.pointer_path || "");
+          }
+        }
         else { seq = 0; close(); }
       })
       .catch(function () {})     // school wifi drops polls; the next one catches up
       .finally(function () {
-        if (asked === code) timer = setTimeout(poll, cover ? SHOWING_MS : IDLE_MS);
+        if (asked === code) {
+          timer = setTimeout(poll, !cover ? IDLE_MS
+                                   : laser && laser.lit() ? LASER_MS : SHOWING_MS);
+        }
       });
   }
+
+  /* The teacher's laser pointer on the slide (deck_show.js has how). The
+     slide in the frame is the teacher's written out with every node in its
+     place, so laser.js's path finds the same letter; its "slide number" is
+     a hash of the slide, the same one the teacher's page sends. The frame
+     covers the window from its corner with no border, so its coordinates
+     are the page's and the dot is placed on the page, above the cover. */
+  function hash(text) {
+    var h = 2166136261;
+    for (var i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0) % 10000;
+  }
+  var laser = window.LiveLaser ? window.LiveLaser.student({
+    slides: {
+      get body() { return ready && frame && frame.contentDocument ? frame.contentDocument.body : null; },
+      at: function () { return slideNo; },
+      bounds: function () { return frame ? frame.getBoundingClientRect() : null; }
+    }
+  }) : null;
 
   /* It keeps watching after the slides stop, so a teacher's reload or a second
      go doesn't put the student back to finding the button. The cover is the only

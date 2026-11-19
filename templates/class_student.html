@@ -195,7 +195,8 @@
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
 <script src="{{ url_for('static', filename='embeds.js') }}"></script>
 <script src="{{ url_for('static', filename='calendar.js') }}"></script>
-{% if not visitor %}<script src="{{ url_for('static', filename='deck_view.js') }}"></script>{% endif %}
+{% if not visitor %}<script src="{{ url_for('static', filename='laser.js') }}"></script>
+<script src="{{ url_for('static', filename='deck_view.js') }}"></script>{% endif %}
 <script>
   document.querySelectorAll(".class-calendar").forEach(function (box) {
     var view = box.querySelector(".cal-view");

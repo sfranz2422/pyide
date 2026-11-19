@@ -54,7 +54,7 @@ failing one, so a red suite cannot scroll past unnoticed — a bare
 `test_export_runs.py`, `test_game_runtime.py`, `test_packages.py`, `test_pictures.py`,
 `test_quiz.py`, `test_requests.py`, `test_rescue.py`,
 `test_same_as_kaypy.py`, `test_sighint.py`, `test_syntax.py`,
-`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py`, `test_autograde.py`, `test_picker.py` (Chrome too), `test_editor_tips_browser.py` (Chrome too), `test_presmaker_insert.py` (Chrome too) `test_live_class_browser.py` (Chrome too), `test_quiz_mode.py`, `test_levels.py` and `test_levels_browser.py` (Chrome too), and `test_gradebook_browser.py` (Chrome too); `test_gradebook.py` needs no node. They run
+`test_tabstops.py`, `test_themes.py`, `test_xp.py`, `test_keep_place.py`, `test_predict.py`, `test_autograde.py`, `test_picker.py` (Chrome too), `test_editor_tips_browser.py` (Chrome too), `test_presmaker_insert.py` (Chrome too) `test_live_class_browser.py` (Chrome too), `test_quiz_mode.py`, `test_levels.py` and `test_levels_browser.py` (Chrome too), and `test_gradebook_browser.py` (Chrome too), and `test_deck_laser.py` (Chrome too); `test_gradebook.py` needs no node. They run
 this repo's own JavaScript — the sprite panel's inserts, the rescue's
 branches, the export — rather than describing it, which is the only way
 those get checked at all. `brew install node` if it is missing.
@@ -624,6 +624,7 @@ teacher's class page), apart from the live button. While the slides are up it co
 class page; otherwise pressing it does nothing, by the teacher's choice. It asks by
 slug (`/api/assignment/<slug>/showing`), so a hidden live link's code isn't in the
 page.
+**The laser pointer works on them too** (Nov 2026, the teacher's request): hold Alt over the deck, as in a live lesson, and the red dot lands on the same word on every student's slide. The written-out slide leaves an empty comment (`GAP`) wherever it takes something out, so every node it keeps is at the same place among its parent's children, and laser.js's path of child numbers leads to the same letter in the student's frame (`slideSpot` stops at a comment). Its "slide number" is a hash of the written-out slide, so a screen still a poll behind shows no dot rather than one on the wrong word; `pointAtSlide` takes the window as its bounds there (a deck's body can be 0 tall) and skips the deck's own controls. Pointing goes to `/api/live/<code>/deck/point` (`DeckPointer`, its own table) and comes back on the slide's poll with `p`, a quarter-second while lit. The dot is above everything (`z-index` max), the cover one below it. `test_deck_laser.py` (server, and Chrome: a 1400 deck, a 900 student).
 PyIDE only so far. `test_deck_show.py`.
 
 **An assignment's notes follow the teacher's edits** (`_current_notes`,

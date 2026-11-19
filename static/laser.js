@@ -86,7 +86,9 @@
 
   function charRect(node, i) {
     if (i < 0 || i >= node.length) return null;
-    var range = document.createRange();
+    // The node's own document's range: on a student's screen the teacher's
+    // slides (deck_view.js) are in a frame, another document.
+    var range = (node.ownerDocument || document).createRange();
     range.setStart(node, i);
     range.setEnd(node, i + 1);
     var rects = range.getClientRects();
@@ -147,11 +149,12 @@
      letter on it. Not the caret at (x, y) itself: in blank space that is
      the nearest place in whatever block the mouse happens to be over, which
      can be a long way from the nearest letter. */
-  function nearestChar(body, x, y) {
+  function nearestChar(body, x, y, skip) {
     var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     var best = null, bestD = Infinity, n;
     while ((n = walker.nextNode())) {
       if (!/\S/.test(n.data)) continue;
+      if (skip && skip(n)) continue;
       var range = document.createRange();
       range.selectNodeContents(n);
       var rects = range.getClientRects();
@@ -189,16 +192,22 @@
   }
 
   /* A place on a slide: `body` is the box the slide is rendered into,
-     `slide` which slide it is, from 0. "" when (x, y) is not on it. */
-  function pointAtSlide(body, slide, x, y) {
-    if (!inside(body.getBoundingClientRect(), x, y, 0)) return "";
+     `slide` which slide it is, from 0. "" when (x, y) is not on it.
+     `opt` is for the teacher's own slide decks (deck_show.js), whose body
+     can be 0 tall with every slide fixed over the window: `bounds()` the
+     box to be inside instead, and `skip(textNode)` text never to point at
+     (the deck's on-screen controls, which the class is not sent). */
+  function pointAtSlide(body, slide, x, y, opt) {
+    opt = opt || {};
+    var box = opt.bounds ? opt.bounds() : body.getBoundingClientRect();
+    if (!inside(box, x, y, 0)) return "";
     var head = "s:" + Math.max(0, Math.min(9999, slide | 0)) + ":";
     // A picture is pointed at as a picture: a spot on it, which no letter
     // near it says as well.
     var el = document.elementFromPoint(x, y);
     var media = el && el.closest && el.closest("img, svg, video, canvas, iframe");
     if (!media || !body.contains(media)) {
-      var c = nearestChar(body, x, y);
+      var c = nearestChar(body, x, y, opt.skip);
       var p = c ? pathTo(body, c.node) : null;
       if (p && p.length <= DEPTH) {
         var em = emOf(c.node);
@@ -394,14 +403,16 @@
 
   /* Where a slide place is on this screen, or null: not this slide, not on
      screen, or nothing there to point at. */
-  function slideSpot(body, onSlide, pointer) {
+  function slideSpot(body, onSlide, pointer, bounds) {
     var m = /^s:(\d+):([\d.]*):(?:t(\d+)(?::(-?\d+),(-?\d+))?|e(\d+),(\d+))$/.exec(pointer);
     if (!m || +m[1] !== onSlide) return null;
     var node = body, whole = true;
     var path = m[2] ? m[2].split(".") : [];
     for (var i = 0; i < path.length; i++) {
       var next = node.childNodes[+path[i]];
-      if (!next) { whole = false; break; }
+      // A comment is what deck_show.js leaves where it took something out:
+      // nothing to point at, so the deepest place before it.
+      if (!next || (next.nodeType !== 1 && next.nodeType !== 3)) { whole = false; break; }
       node = next;
     }
     var x, y;
@@ -414,7 +425,7 @@
     } else {
       var fx = 0.5, fy = 0.5;
       if (node.nodeType === 3) {
-        var range = document.createRange();
+        var range = (node.ownerDocument || document).createRange();
         range.selectNodeContents(node);
         r = range.getBoundingClientRect();
       } else {
@@ -425,7 +436,7 @@
       x = r.left + r.width * fx;
       y = r.top + r.height * fy;
     }
-    return inside(body.getBoundingClientRect(), x, y, 0) ? { x: x, y: y } : null;
+    return inside(bounds || body.getBoundingClientRect(), x, y, 0) ? { x: x, y: y } : null;
   }
 
   /* A code place read back: { line, ch, col, down }. The first version sent
@@ -470,8 +481,9 @@
        code    { cm, follow(pos) } — the mirror, and what to do when the
                teacher points at a line that is scrolled out of sight
                (the page decides: a student reading elsewhere is not yanked).
-       slides  { body, at() } — the slide box, and which slide the student
-               is on. A student who has read ahead sees no dot: the teacher
+       slides  { body, at(), bounds() } — the slide box, and which slide
+               the student is on; bounds, if given, the box a dot must be
+               inside (else body's). body may be read anew each frame. A student who has read ahead sees no dot: the teacher
                is pointing at a slide that is not in front of them.
 
      show(pointer, path) with each answer that carries one. Placed again on
@@ -509,7 +521,9 @@
       var s = null;
       if (pointer.charAt(0) === "c" && opts.code) s = codeSpot(opts.code.cm, pointer);
       if (pointer.charAt(0) === "s" && opts.slides) {
-        s = slideSpot(opts.slides.body, opts.slides.at(), pointer);
+        var sb = opts.slides.body;
+        s = sb ? slideSpot(sb, opts.slides.at(), pointer,
+                           opts.slides.bounds ? opts.slides.bounds() : null) : null;
       }
       if (!s) hide();
       else {

@@ -3461,7 +3461,7 @@ a:not([class]):hover { color: var(--accent-hover); }
    mouse, and elementFromPoint would otherwise find the dot itself). Red on
    every theme: it has to be the brightest thing on a projected screen. */
 .laser-dot {
-  position: fixed; left: 0; top: 0; z-index: 10000;
+  position: fixed; left: 0; top: 0; z-index: 2147483647;  /* above the teacher's slides too (deck_view.js) */
   width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%;
   /* See-through in the middle: it sits ON the letter pointed at, and a
      solid dot hid exactly the thing the teacher wanted read. */

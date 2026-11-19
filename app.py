@@ -516,6 +516,21 @@ class DeckShow(Base):
     frame = Column(Text, nullable=False, default="")
 
 
+class DeckPointer(Base):
+    """The teacher's laser pointer over the slides they are showing (DeckShow),
+    for one live lesson. A table of its own, as DeckShow is not LiveSession:
+    a column can't be added to a deployed table by create_all, and the pointer
+    moves several times a second while the slide row can be megabytes.
+    `pointer` / `path` are laser.js's slide places, as on LiveSession."""
+    __tablename__ = "deck_pointers"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(16), unique=True, index=True, nullable=False)
+    pointer = Column(String(80), nullable=False, default="")
+    path = Column(Text, nullable=False, default="")
+    seq = Column(BigInteger, nullable=False, default=0)
+
+
 class LiveSignal(Base):
     """What one student did in a live lesson that the class's screen counts
     ("The class, live" below): a step passed, a first prediction, a hand up.
@@ -9412,8 +9427,10 @@ def _with_deck_show(html, live):
     script has drawn the first slide."""
     config = json.dumps({"code": live.code,
                          "join": request.host + url_for("live_page", code=live.code)})
-    add = ('<script>window.DECK_SHOW=%s;</script><script src="%s"></script>'
-           % (config.replace("<", "\\u003c"), url_for("static", filename="deck_show.js")))
+    # laser.js first: deck_show.js points with it (Alt, as in a live lesson).
+    add = ('<script>window.DECK_SHOW=%s;</script><script src="%s"></script><script src="%s"></script>'
+           % (config.replace("<", "\\u003c"), url_for("static", filename="laser.js"),
+              url_for("static", filename="deck_show.js")))
     at = html.lower().rfind("</body>")
     return html + add if at < 0 else html[:at] + add + html[at:]
 
@@ -9512,6 +9529,51 @@ def live_deck_push(code):
         db.close()
 
 
+@app.post("/api/live/<code>/deck/point")
+def live_deck_point(code):
+    """Where the teacher's laser is on the slide they are showing, or "" when
+    they let go of Alt (deck_show.js). As live_point, but for the slides:
+    the same check of every place, kept in order by its own stamp, and it
+    moves neither the slide nor the lesson, so pointing doesn't send anyone a
+    slide again."""
+    db = SessionLocal()
+    try:
+        user = current_user(db)
+        live = _find_live(db, code)
+        if live is None or user is None or live.host_id != user.id:
+            return jsonify(error="This is not your live lesson."), 403
+        data = request.get_json(silent=True) or {}
+        try:
+            seq = int(data.get("seq", 0))
+        except (TypeError, ValueError):
+            return jsonify(error="Bad sequence number."), 400
+        pointer = data.get("pointer")
+        if not isinstance(pointer, str) or (pointer and not LASER.fullmatch(pointer)):
+            return jsonify(error="That isn't somewhere to point."), 400
+        path = data.get("path", "")
+        if not isinstance(path, str):
+            return jsonify(error="That isn't a path."), 400
+        items = path.split(";") if path else []
+        if len(items) > LASER_PATH or not all(
+                re.fullmatch(r"\d{1,9}@(.+)", it) and LASER.fullmatch(it.split("@", 1)[1])
+                for it in items):
+            return jsonify(error="That isn't a path."), 400
+        values = {"pointer": pointer, "seq": seq, "path": path if pointer else ""}
+        rows = db.query(DeckPointer).filter(DeckPointer.code == live.code)
+        if rows.first() is None:
+            db.add(DeckPointer(code=live.code, **values))
+            try:
+                db.commit()
+                return jsonify(ok=True, stale=False)
+            except IntegrityError:      # the other worker made it just now
+                db.rollback()
+        changed = rows.filter(DeckPointer.seq < seq).update(values, synchronize_session=False)
+        db.commit()
+        return jsonify(ok=True, stale=not changed)
+    finally:
+        db.close()
+
+
 @app.get("/api/live/<code>/deck")
 def live_deck_poll(code):
     """What each student's page asks, all lesson. 304 unless there is news, and
@@ -9528,10 +9590,26 @@ def live_deck_poll(code):
             seen = 0
         if not _deck_is_showing(row):
             return ("", 304) if not seen else jsonify(showing=False)
+        # The laser (live_deck_point): sent when the page's `p` is behind it,
+        # and only to a page that sends `p` — one from before the laser
+        # keeps its 304s. A slide sent again carries no stale pointer.
+        laser = {}
+        if "p" in request.args:
+            pt = (db.query(DeckPointer.seq, DeckPointer.pointer, DeckPointer.path)
+                    .filter(DeckPointer.code == name).first())
+            try:
+                pointed = int(request.args.get("p", 0))
+            except (TypeError, ValueError):
+                pointed = 0
+            if pt is not None and pt.seq != pointed:
+                laser = {"pointer": pt.pointer or "", "pointer_path": pt.path or "",
+                         "pointer_seq": pt.seq}
         if seen == row.seq:
-            return ("", 304)
+            if not laser:
+                return ("", 304)
+            return jsonify(showing=True, seq=row.seq, pointer_only=True, **laser)
         full = db.query(DeckShow.seq, DeckShow.frame).filter(DeckShow.code == name).first()
-        return jsonify(showing=True, seq=full.seq, frame=json.loads(full.frame))
+        return jsonify(showing=True, seq=full.seq, frame=json.loads(full.frame), **laser)
     finally:
         db.close()
 
