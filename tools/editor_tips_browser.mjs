@@ -188,6 +188,10 @@ try {
   await qz("document.querySelector('.quiz-send').click()");
   for (let k = 0; k < 60; k++) { await sleep(150); if (await qz("/saved|Correct|Not quite/.test(document.querySelector('.quiz-result').textContent)")) break; }
   out.quizStudent.answer = await qz("document.querySelector('.quiz-result').textContent");
+  out.quizStudent.copyButtons = await qz("document.querySelectorAll('.copy-to-editor-btn').length");
+  await qz("document.querySelector('.copy-to-editor-btn') && document.querySelector('.copy-to-editor-btn').click()");
+  await sleep(400);
+  out.quizStudent.copied = await qz(`${cm}.getValue().indexOf('total = _____') >= 0`);
   await qz.shot("4-quiz");
   // The teacher writing it: the card's own Check my work, marks shown.
   const qt = await open(cfg.teacher, cfg.quizTeacher);
@@ -246,6 +250,7 @@ try {
   copy.easyButtons = await cpg("document.querySelectorAll('.level-part[data-level=\"easy\"] .copy-to-editor-btn').length");
   copy.mediumButtons = await cpg("document.querySelectorAll('.level-part[data-level=medium] .copy-to-editor-btn').length");
   copy.masterButtons = await cpg("document.querySelectorAll('.level-part[data-level=master] .copy-to-editor-btn').length");
+  copy.allButtons = await cpg("document.querySelectorAll('.copy-to-editor-btn').length");
   const activeTab = "(document.querySelector('#file-tabs .active, #file-tabs [aria-selected=\"true\"]') || {}).textContent || ''";
   await cpg(`${c3}.getDoc() && document.querySelectorAll('.copy-to-editor-btn')[0].click()`);
   await sleep(300);

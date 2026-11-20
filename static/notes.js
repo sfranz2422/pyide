@@ -947,6 +947,7 @@ window.PyIDENotes = (function () {
         var wasLock = lockOn;
         lockOn = lockWanted() && head.locked && !head.quiz;
         quizOn = head.quiz;
+        quizCopy = !!head.quiz;
         if (window.IDENotesChecks && window.IDENotesChecks.setQuiz) window.IDENotesChecks.setQuiz(quizOn);
         if (lockOn && !wasLock) unlocked = loadUnlocked();
         var c = slides(md);
@@ -1487,15 +1488,28 @@ window.PyIDENotes = (function () {
      The file is the one the box's direction names (`script.js`), if any. */
   var copier = null;           // {copy({code, file}), on()} from the page
   var FILE_NAME = /^[\w./-]+\.(py|html?|css|js|sql|php|txt|csv|json)$/i;
+  /* In a quiz (`quiz: yes`) the coding question has no level boxes: it's
+     one Medium program for everyone (the teacher, Nov 2026: "if the coding
+     questions on exams are medium or easy level they should have that
+     button" — the Forms quiz's form, blanks and all, had to be retyped).
+     So there, code with blanks anywhere outside a box gets the button too.
+     A Master-style question is jobs in words with no blanks, so it still
+     gets none. Set by slideView's show(), which reads the header. */
+  var quizCopy = false;
   function copyButtons(root) {
     if (!copier || !copier.on()) return;
-    Array.prototype.forEach.call((root || document).querySelectorAll('.level-part[data-level="easy"] pre > code, .level-part[data-level="medium"] pre > code'), function (code) {
+    var sel = '.level-part[data-level="easy"] pre > code, .level-part[data-level="medium"] pre > code';
+    if (quizCopy) sel += ", pre > code";
+    Array.prototype.forEach.call((root || document).querySelectorAll(sel), function (code) {
       var pre = code.parentNode;
       if (/language-(text|output|plain|tests|quiz)/.test(code.className || "")) return;
       if (code.textContent.indexOf("_____") < 0) return;
+      var lv = pre.closest(".level-part");
+      if (lv && !/^(easy|medium)$/.test(lv.getAttribute("data-level") || "")) return;
+      if (pre.closest(".quiz, .snippet, .tests-card")) return;
       var next = pre.nextElementSibling;
       if (next && next.classList.contains("copy-to-editor")) return;
-      var box = pre.closest(".level-part"), file = "";
+      var box = lv || root || document, file = "";
       // The file named last BEFORE this code: "In `index.html` … Then in
       // `style.css`:" are two pieces for two files in one box.
       Array.prototype.forEach.call(box.querySelectorAll("code"), function (c) {

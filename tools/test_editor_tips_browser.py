@@ -207,6 +207,12 @@ Fall Fair
 <h4>_____</h4>
 ```
 :::end
+
+Code with blanks outside any box, in notes that aren't a quiz:
+
+```html
+<h5>_____</h5>
+```
 """
 
 # The same on the class's live page, in the student's own editor.
@@ -241,6 +247,12 @@ size == 4
 What does len("hi") return?
 - [ ] 1
 - [x] 2
+```
+
+✏ Then type this into `main.py`, and fill in the `_____`:
+
+```python
+total = _____
 ```
 """
 
@@ -368,6 +380,7 @@ else:
     check("copy to editor: a button under each piece of the Easy box's code with blanks",
           cp.get("easyButtons") == 2, cp)
     check("  and Medium's, but never Master's", cp.get("mediumButtons") == 1 and cp.get("masterButtons") == 0, cp)
+    check("  nor code with blanks outside a box, when the notes aren't a quiz", cp.get("allButtons") == 3, cp)
     check("  pressed: the code goes into the file the step names, inside <body>, indented, blanks and all",
           cp.get("htmlFile") == "index.html" and cp.get("htmlInBody") is True and cp.get("selected") == "_____", cp)
     check("  pressed again: not put in twice", cp.get("twice") == 1, cp)
@@ -388,6 +401,8 @@ else:
           q.get("marks") == "○" and "teacher will see" in (q.get("sum") or ""), q)
     check("  a right answer to a question says it was saved, not that it was right",
           "Answer saved" in (q.get("answer") or "") and "Correct" not in (q.get("answer") or ""), q.get("answer"))
+    check("quiz: its coding question's code with blanks (no level box) has Copy to editor, and it works",
+          q.get("copyButtons") == 1 and q.get("copied") is True, q)
     qt = r.get("quizTeacher") or {}
     check("  the teacher writing the quiz still sees the card's marks", qt.get("marks") == "✗", qt)
     server.shutdown()
