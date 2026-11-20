@@ -2981,9 +2981,11 @@ def tests_verify(slug):
 # exercise and the challenge, Easy until set (LevelSuggestion.level, by
 # roster row; its old `locked` column and LevelPick are no longer used).
 # Students are told nothing about levels. The exercise's tests count at
-# their level, scaled (LEVEL_FACTOR: easy 0.8, medium 0.88, master 1.0: "i
-# couldn't in good conscience give the same amount of points to a student
-# who always chose the easy"); the challenge's are a bonus — points on top,
+# their level, in FULL at every level (2026-11-20, the teacher: "all levels
+# count as 100% ... I'm not penalizing any points based on levels, I'm just
+# differentiating instruction" — Easy and Medium were scaled to 80% and 88%
+# when students chose their own level; scores kept from then are worked
+# out again once, RESCORE_LEVELS below); the challenge's are a bonus — points on top,
 # never part of what the work is out of — and passing it pays CHALLENGE_XP
 # once, more for a harder level. Kept results are scored again when the
 # teacher changes a level. Which test is which part and level comes from the
@@ -2991,7 +2993,6 @@ def tests_verify(slug):
 # --------------------------------------------------------------------------
 
 LEVELS = ("easy", "medium", "master")
-LEVEL_FACTOR = {"easy": 0.8, "medium": 0.88, "master": 1.0}
 CHALLENGE_XP = {"easy": 25, "medium": 40, "master": 60}
 LEVEL_BOX = re.compile(r"^ {0,3}:::\s*level(?:\s+(exercise|challenge))?\s+(easy|medium|master)\s*$", re.M | re.I)
 
@@ -3082,7 +3083,7 @@ def _scored(db, item, student_id, results):
         lines = dict(ex.get("", {}))
         lines.update(ex.get(level, {}))
         possible += sum(ex.get("", {}).values()) + max([sum(ex.get(lv, {}).values()) for lv in LEVELS] or [0])
-        earned += LEVEL_FACTOR.get(level, 1.0) * sum(p for lab, p in lines.items() if ok.get(lab))
+        earned += sum(p for lab, p in lines.items() if ok.get(lab))
     bonus = parts["bonus"]
     if bonus:
         lines = dict(bonus.get("", {}))
@@ -10518,6 +10519,46 @@ def not_found(_):
 @app.get("/healthz")
 def healthz():
     return "ok"
+
+
+# Every result kept for a levelled lesson, scored again once without the old
+# Easy 80% / Medium 88% scaling (2026-11-20). TestResult keeps its earned
+# points, and every total reads them (_earned), so changing the rule alone
+# left every Easy and Medium student's checks at the old, lower score.
+# Scoring again is idempotent (it's worked out from the results kept), so two
+# workers racing to do it, or doing it twice, changes nothing.
+def _rescore_levels():
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            if conn.execute(text("SELECT 1 FROM pyide_once_done WHERE name = :n"),
+                            {"n": "levels-full-points-2026-11-20"}).first():
+                return 0
+    except Exception:
+        return 0
+    db = SessionLocal()
+    n = 0
+    try:
+        items = {}
+        for row in db.query(accounts.TestResult).all():
+            item = items.get(row.assignment_id)
+            if item is None:
+                item = items[row.assignment_id] = db.query(accounts.Assignment).filter_by(id=row.assignment_id).first() or False
+            if not item or not any(LEVEL_BOX.search(v) for k, v in item.file_map().items()
+                                   if _is_notes(k) and isinstance(v, str)):
+                continue
+            earned, possible = _scored(db, item, row.student_id, json.loads(row.details or "[]"))
+            if (earned, possible) != (row.earned, row.possible):
+                row.earned, row.possible = earned, possible
+                n += 1
+        db.commit()
+    finally:
+        db.close()
+    _once("levels-full-points-2026-11-20", "SELECT 1")
+    return n
+
+
+_rescore_levels()
 
 
 if __name__ == "__main__":

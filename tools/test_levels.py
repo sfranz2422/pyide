@@ -7,8 +7,8 @@ The exercise and the challenge are written per level in `:::level` boxes,
 each with its own tests (```tests exercise easy …, ```tests bonus master …).
 The teacher sets each student's level in the gradebook (one level for both,
 Easy until set); students are never shown a choice or a suggestion ("let me
-just do this behind the scenes"). The exercise counts at their level, scaled
-80% / 88% / 100%; the challenge is a bonus — points on top, never part of
+just do this behind the scenes"). The exercise counts at their level, in
+full at every level (2026-11-20: no points taken off for a level); the challenge is a bonus — points on top, never part of
 what it's out of — and passing it pays CHALLENGE_XP once, more for a harder
 level.
 
@@ -272,7 +272,7 @@ check("a lesson with level boxes is a levelled one (no choice slide needed)",
       P._level_keys(item_of(LS)) == {"exercise", "challenge"}, P._level_keys(item_of(LS)))
 check("a student's level is Easy until the teacher sets one", k.get("/api/level/%s" % LS).get_json() == {"level": "easy"})
 r = k.post("/api/tests/self", json={"assignment": LS, "results": lines("easy")}).get_json()
-check("  Easy's tests count, at 80% (1 + 4 of 6)", r.get("earned") == 5.0 and r.get("possible") == 6.0, r)
+check("  Easy's tests count, in full (1 + 5 of 6)", r.get("earned") == 6.0 and r.get("possible") == 6.0, r)
 s_ = set_level("kid@example.org", "master").get_json()
 check("the teacher sets Master: the student's page is told so",
       s_.get("ok") and k.get("/api/level/%s" % LS).get_json()["level"] == "master", s_)
@@ -282,7 +282,7 @@ r = k.post("/api/tests/self", json={"assignment": LS, "results": lines("master")
 check("  Master's own tests passing: 6 of 6", r.get("earned") == 6.0 and r.get("possible") == 6.0, r)
 set_level("kid@example.org", "medium")
 r = k.post("/api/tests/self", json={"assignment": LS, "results": lines("medium")}).get_json()
-check("Medium: 1 + 0.88 x 5 = 5.4", r.get("earned") == 5.4, r)
+check("Medium: in full too, 1 + 5 = 6", r.get("earned") == 6.0, r)
 set_level("kid@example.org", "")
 check("cleared: back to Easy", k.get("/api/level/%s" % LS).get_json()["level"] == "easy")
 nope = k.post("/api/level", json={"assignment": LS, "key": "exercise", "level": "master"})
@@ -321,8 +321,8 @@ SHARED = "# Shared\n:::level easy\ne\n:::end\n:::level master\nm\n:::end\n```tes
 SS = make(SHARED, "Shared tests", CID)
 HI = [{"label": "Prints Hi", "ok": True, "points": 5}]
 r = k.post("/api/tests/self", json={"assignment": SS, "results": HI}).get_json()
-check("level boxes with one shared tests block: still scaled by level (Easy: 4 of 5)",
-      r.get("earned") == 4.0 and r.get("possible") == 5.0, r)
+check("level boxes with one shared tests block: counted in full at Easy (5 of 5)",
+      r.get("earned") == 5.0 and r.get("possible") == 5.0, r)
 
 # A web assignment is scored by the same rule (its own grammar's labels).
 WEB = "# W\n```tests\nhas h1\n```\n:::level easy\ne\n```tests exercise easy\nhas 2 li     (2 points)\n```\n:::end\n" \
@@ -339,7 +339,7 @@ wl = lambda n: [{"label": t["label"], "ok": True, "points": t["points"]} for t i
 r = k2.post("/api/tests/self", json={"assignment": wslug, "results": wl("master")}).get_json()
 check("a web lesson: the Master student's own tests count whole (1 + 2 of 3)", r.get("earned") == 3.0 and r.get("possible") == 3.0, r)
 r = k.post("/api/tests/self", json={"assignment": wslug, "results": wl("easy")}).get_json()
-check("  and Easy's at 80% (1 + 1.6)", r.get("earned") == 2.6, r)
+check("  and Easy's in full too (1 + 2)", r.get("earned") == 3.0, r)
 
 # A SQL lesson (FlaskIDE's grammar, Nov 2026: "make sure we can use difficulty
 # levels for the sql, flask and php lessons") is scored by the same rule.
@@ -359,7 +359,7 @@ sl = lambda n: [{"label": t["label"], "ok": True, "points": t["points"]} for t i
 r = k2.post("/api/tests/self", json={"assignment": sslug, "results": sl("master")}).get_json()
 check("a SQL lesson: the Master student's own tests count whole (1 + 2 of 3)", r.get("earned") == 3.0 and r.get("possible") == 3.0, r)
 r = k.post("/api/tests/self", json={"assignment": sslug, "results": sl("easy")}).get_json()
-check("  and Easy's at 80% (1 + 1.6)", r.get("earned") == 2.6, r)
+check("  and Easy's in full too (1 + 2)", r.get("earned") == 3.0, r)
 
 print("\nThe teacher's pages")
 db = P.SessionLocal()
@@ -389,6 +389,21 @@ print("\nNotes without levels, as always")
 OLD = make("# Old\n```tests\nprints Hi\n```\n", "Old lesson")
 r = k.post("/api/tests/self", json={"assignment": OLD, "results": [{"label": "Prints Hi", "ok": True, "points": 1}]}).get_json()
 check("an old lesson is untouched", r.get("earned") == 1.0 and r.get("possible") == 1.0, r)
+
+# Scores kept from the old Easy 80% / Medium 88% rule are worked out again,
+# once (2026-11-20): a stored row at the old scaled score comes back full.
+from sqlalchemy import text as _text
+db = P.SessionLocal()
+old = db.query(accounts.TestResult).filter_by(assignment_id=item_of(SS).id, student_id=kid).first()
+old.earned = 4.0                    # what the 80% rule had stored for 5 points
+db.commit()
+db.close()
+with P.engine.begin() as conn:
+    conn.execute(_text("DELETE FROM pyide_once_done WHERE name = 'levels-full-points-2026-11-20'"))
+changed = P._rescore_levels()
+check("kept scores from the old 80%/88% rule are scored again in full, once",
+      changed >= 1 and row(kid, SS).earned == 5.0, (changed, row(kid, SS).earned))
+check("  and not again on the next boot", P._rescore_levels() == 0)
 
 print()
 failed = results.count(False)
