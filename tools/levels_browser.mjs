@@ -110,6 +110,18 @@ try {
   for (let k = 0; k < 100; k++) { await sleep(200); if (await wb("!!(window.IDENotesChecks.results && window.IDENotesChecks.results())")) break; }
   await sleep(500);
   out.web = { shown: await wb(SHOWN), ran: await wb("Object.keys(window.IDENotesChecks.results() || {})") };
+  // ---- a SQL lesson (FlaskIDE's page), Easy then Master
+  const sqlRun = async (who) => {
+    const q = await open(who, cfg.sql, ".level-part:not([hidden])");
+    for (let k = 0; k < 100; k++) { await sleep(200); if (await q("!!document.querySelector('.tests-card .tests-run')")) break; }
+    await q("[...document.querySelectorAll('.tests-card')].find(c => c.offsetParent !== null).querySelector('.tests-run').click()");
+    for (let k = 0; k < 300; k++) { await sleep(300); if (await q("!!(window.IDENotesChecks.results && window.IDENotesChecks.results() && Object.keys(window.IDENotesChecks.results()).length)")) break; }
+    await sleep(500);
+    return { shown: await q(SHOWN), ran: await q("Object.keys(window.IDENotesChecks.results() || {})"),
+             passed: await q("Object.values(window.IDENotesChecks.results() || {}).filter(x => x && (x.ok === true || x === true)).length") };
+  };
+  const qe = await sqlRun(cfg.student), qm = await sqlRun(cfg.master);
+  out.sql = { shown: qe.shown, ran: qe.ran, passed: qe.passed, masterShown: qm.shown, masterRan: qm.ran };
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

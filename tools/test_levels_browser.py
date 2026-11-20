@@ -168,11 +168,20 @@ else:
                  ":::level master\nWEB-MASTER\n```tests exercise master\nhas h2\n```\n:::end\n")
     wslug = teacher.post("/api/assignment", json={"title": "Web levels", "ide": "webide", "code": "",
                                                   "files": dict(P.WEB_STARTER, **{"notes.md": WEB_NOTES})}).get_json()["slug"]
+    # A SQL lesson (FlaskIDE's page, Nov 2026): the same boxes, and its Check
+    # my work runs only the student's level's checks — any query's result.
+    SQL_NOTES = ("# SQL\n\n```tests\nreturns 2 rows\n```\n\n"
+                 ":::level easy\nSQL-EASY\n```tests exercise easy\nresult contains Ava\n```\n:::end\n"
+                 ":::level master\nSQL-MASTER\n```tests exercise master\nresult contains Cy\n```\n:::end\n")
+    qslug = teacher.post("/api/assignment", json={"title": "SQL levels", "ide": "flaskide", "code": "",
+                                                  "files": {"schema.sql": "CREATE TABLE t (n TEXT);\nINSERT INTO t VALUES ('Ava'), ('Cy');",
+                                                            "query.sql": "SELECT n FROM t WHERE n = 'Ava';\nSELECT n FROM t;",
+                                                            "notes.md": SQL_NOTES}}).get_json()["slug"]
     db = P.SessionLocal()
     course = accounts.Course(teacher_id=tid, name="100 Days", app="pyide")
     db.add(course)
     db.commit()
-    for s in (slug, slug2, wslug):
+    for s in (slug, slug2, wslug, qslug):
         it = db.query(accounts.Assignment).filter_by(slug=s).first()
         db.add(accounts.ClassItem(class_id=course.id, assignment_id=it.id))
     for email in ("kid@example.org", "master@example.org"):
@@ -189,7 +198,7 @@ else:
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
         json.dump({"base": base, "page": "/a/" + slug, "teacherPage": "/teacher/%s/edit" % slug,
-                   "slides": "/a/" + slug2, "web": "/a/" + wslug, "student": sign.dumps({"uid": sid}),
+                   "slides": "/a/" + slug2, "web": "/a/" + wslug, "sql": "/a/" + qslug, "student": sign.dumps({"uid": sid}),
                    "master": sign.dumps({"uid": mid}), "teacher": sign.dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "levels_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=300)
@@ -233,6 +242,12 @@ else:
     w = r.get("web") or {}
     check("a web lesson: Easy's box only, and its Check my work runs only Easy's tests",
           w.get("shown") == ["WEB-EASY"] and w.get("ran") == ["Has h1"], w)
+    q = r.get("sql") or {}
+    check("a SQL lesson: Easy's box only, and its Check my work runs only Easy's checks",
+          q.get("shown") == ["SQL-EASY"] and sorted(q.get("ran") or []) == ["The query returns 2 rows", "The query's result contains Ava"], q)
+    check("  each found in its own query, not only the last", q.get("passed") == 2, q)
+    check("  and the Master student gets Master's box and Master's check",
+          q.get("masterShown") == ["SQL-MASTER"] and sorted(q.get("masterRan") or []) == ["The query returns 2 rows", "The query's result contains Cy"], q)
 
 print()
 failed = results.count(False)

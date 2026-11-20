@@ -341,6 +341,26 @@ check("a web lesson: the Master student's own tests count whole (1 + 2 of 3)", r
 r = k.post("/api/tests/self", json={"assignment": wslug, "results": wl("easy")}).get_json()
 check("  and Easy's at 80% (1 + 1.6)", r.get("earned") == 2.6, r)
 
+# A SQL lesson (FlaskIDE's grammar, Nov 2026: "make sure we can use difficulty
+# levels for the sql, flask and php lessons") is scored by the same rule.
+SQLV = "# S\n```tests\nreturns 1 row\n```\n:::level easy\ne\n```tests exercise easy\nresult contains Ava     (2 points)\n```\n:::end\n" \
+       ":::level master\nm\n```tests exercise master\nresult contains Cy     (2 points)\n```\n:::end\n"
+sslug = teacher.post("/api/assignment", json={"title": "SQL v11", "ide": "flaskide", "code": "",
+                                              "files": {"schema.sql": "CREATE TABLE t (n TEXT);", "query.sql": "SELECT n FROM t;",
+                                                        "notes.md": SQLV}}).get_json()["slug"]
+db = P.SessionLocal()
+sitem = db.query(accounts.Assignment).filter_by(slug=sslug).first()
+db.add(accounts.ClassItem(class_id=CID, assignment_id=sitem.id))
+db.commit()
+db.close()
+import autograde_flask
+sl = lambda n: [{"label": t["label"], "ok": True, "points": t["points"]} for t in autograde_flask.parse(SQLV)[0]
+                if t.get("level") in ("", n)]
+r = k2.post("/api/tests/self", json={"assignment": sslug, "results": sl("master")}).get_json()
+check("a SQL lesson: the Master student's own tests count whole (1 + 2 of 3)", r.get("earned") == 3.0 and r.get("possible") == 3.0, r)
+r = k.post("/api/tests/self", json={"assignment": sslug, "results": sl("easy")}).get_json()
+check("  and Easy's at 80% (1 + 1.6)", r.get("earned") == 2.6, r)
+
 print("\nThe teacher's pages")
 db = P.SessionLocal()
 it = item_of(LS)

@@ -35,11 +35,27 @@ window.PyIDETests = (function () {
                 "else": "else", "elif": "elif", "try": "try / except",
                 "list": "a list", "dict": "a dictionary", "class": "a class" };
 
-  function blocks(md) {
+  /* v11 levels (Nov 2026), as autograde_flask.py: ```tests exercise
+     [level] counts at the student's level, ```tests bonus [level] adds
+     points out of nothing; only the student's level's are run (forLevels).
+     Before, "tests exercise easy" wasn't "tests", so a Flask, SQL or PHP
+     lesson's level checks silently weren't checks at all. */
+  var PARTS = ["exercise", "bonus"], LEVELS = ["easy", "medium", "master"];
+  function partOf(info) {
+    var words = String(info || "").trim().toLowerCase().split(/\s+/);
+    if (!words[0] || words[0] !== "tests") return null;
+    if (words.length === 1) return { part: "", level: "" };
+    if (words.length === 2 && PARTS.indexOf(words[1]) >= 0) return { part: words[1], level: "" };
+    if (words.length === 3 && PARTS.indexOf(words[1]) >= 0 && LEVELS.indexOf(words[2]) >= 0)
+      return { part: words[1], level: words[2] };
+    return null;
+  }
+  function blocksWithParts(md) {
     var out = [], lines = String(md || "").split("\n"), i = 0;
     while (i < lines.length) {
       var f = FENCE.exec(lines[i]);
-      if (f && f[2].trim().toLowerCase() === "tests") {
+      var part = f ? partOf(f[2]) : null;
+      if (part !== null) {
         var fence = f[1], body = [];
         i++;
         while (i < lines.length) {
@@ -48,11 +64,21 @@ window.PyIDETests = (function () {
           body.push(lines[i]);
           i++;
         }
-        out.push(body.join("\n"));
+        out.push({ part: part.part, level: part.level, body: body.join("\n") });
       }
       i++;
     }
     return out;
+  }
+  function blocks(md) { return blocksWithParts(md).map(function (b) { return b.body; }); }
+  function forLevels(tests) {
+    var N = window.PyIDENotes;
+    if (!N || !N.shownLevels) return tests;
+    var shown = N.shownLevels();
+    return tests.filter(function (t) {
+      if (!t.level) return true;
+      return shown[t.part === "bonus" ? "challenge" : "exercise"] === t.level;
+    });
   }
 
   function label(t) {
@@ -121,8 +147,9 @@ window.PyIDETests = (function () {
 
   function parse(md) {
     var tests = [], errors = [];
-    blocks(md).forEach(function (b) {
-      var got = parseBlock(b);
+    blocksWithParts(md).forEach(function (b) {
+      var got = parseBlock(b.body);
+      got.tests.forEach(function (t) { t.part = b.part; t.level = b.level; });
       tests = tests.concat(got.tests);
       errors = errors.concat(got.errors);
     });
@@ -337,8 +364,15 @@ window.PyIDETests = (function () {
     "            ran = {'ok': False, 'error': 'The query was still running after %d seconds.' % seconds}",
     "        except BaseException as e:",
     "            ran = {'ok': False, 'error': '%s: %s' % (type(e).__name__, e)}",
-    "        last = [r for r in ran.get('results', []) if r.get('columns') is not None]",
-    "        last = last[-1] if last else None",
+    "        # ANY query's result counts, not only the last (Nov 2026, v11): a",
+    "        # lesson's Try It, warm-up and exercise each add a query to one",
+    "        # query.sql, each with its own values and its own checks, and with",
+    "        # only the last query looked at, every earlier step's check failed",
+    "        # at Check all. The last result is still what a failure shows.",
+    "        sel = [r for r in ran.get('results', []) if r.get('columns') is not None]",
+    "        last = sel[-1] if sel else None",
+    "        def _ag_cells(r):",
+    "            return ' | '.join(str(v) for row in r['rows'] for v in row)",
     "        for i, t in enumerate(tests):",
     "            if t['kind'] not in ('rows', 'result'):",
     "                continue",
@@ -347,12 +381,12 @@ window.PyIDETests = (function () {
     "            elif last is None:",
     "                found[i] = (False, 'query.sql has no SELECT, so there is no result to check.')",
     "            elif t['kind'] == 'rows':",
+    "                ok = any(len(r['rows']) == t['count'] for r in sel)",
     "                n = len(last['rows'])",
-    "                found[i] = (n == t['count'], '' if n == t['count'] else 'It returned %d row%s.' % (n, '' if n == 1 else 's'))",
+    "                found[i] = (ok, '' if ok else 'No query returned %d row%s; the last returned %d.' % (t['count'], '' if t['count'] == 1 else 's', n))",
     "            else:",
-    "                cells = ' | '.join(str(v) for row in last['rows'] for v in row)",
-    "                ok = _ag_norm(t['expect']) in _ag_norm(cells)",
-    "                found[i] = (ok, '' if ok else 'It returned: ' + (_ag_short(cells) or '(no rows)'))",
+    "                ok = any(_ag_norm(t['expect']) in _ag_norm(_ag_cells(r)) for r in sel)",
+    "                found[i] = (ok, '' if ok else 'No query\\'s result has it. The last returned: ' + (_ag_short(_ag_cells(last)) or '(no rows)'))",
     "    results = []",
     "    for i, t in enumerate(tests):",
     "        ok, detail = False, ''",
@@ -411,20 +445,26 @@ window.PyIDETests = (function () {
   /* A ```tests block in rendered notes, as a list a student can read: what
      they will be checked on, in words. Left as code when it can't be read. */
   function renderBlocks(root) {
-    Array.prototype.forEach.call(root.querySelectorAll("pre > code.language-tests"), function (code) {
+    // notes.js's runFences joins `tests bonus` / `tests exercise` into one
+    // word, or the renderer would keep only "tests" and the card couldn't
+    // tell a bonus check from the rest (as in autograde.js).
+    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus']";
+    Array.prototype.forEach.call(root.querySelectorAll(sel), function (code) {
       var got = parseBlock(code.textContent);
       if (!got.tests.length) return;
+      var bonus = /\blanguage-tests-bonus/.test(code.className);
+      var heading = bonus ? "★ Bonus check — optional" : "✔ Tests your code will be checked against";
       // With checks_in_notes.js on the page, a card the student checks their
       // work from, results and all; without it, the list of what's checked.
       if (window.IDENotesChecks) {
-        code.parentNode.replaceWith(window.IDENotesChecks.card(got.tests, "✔ Tests your code will be checked against"));
+        code.parentNode.replaceWith(window.IDENotesChecks.card(got.tests, heading, bonus ? "bonus" : ""));
         return;
       }
       var box = document.createElement("div");
-      box.className = "tests-card";
+      box.className = "tests-card" + (bonus ? " tests-bonus" : "");
       var head = document.createElement("div");
       head.className = "tests-head";
-      head.textContent = "✔ Tests your code will be checked against";
+      head.textContent = heading;
       box.appendChild(head);
       var list = document.createElement("ul");
       got.tests.forEach(function (t) {
@@ -437,6 +477,6 @@ window.PyIDETests = (function () {
     });
   }
 
-  return { parse: parse, parseBlock: parseBlock, fromFiles: fromFiles, places: places, run: run,
+  return { parse: parse, parseBlock: parseBlock, fromFiles: fromFiles, places: places, run: run, forLevels: forLevels,
            renderBlocks: renderBlocks, HARNESS: HARNESS };
 })();

@@ -1430,7 +1430,10 @@
      assignment, and counts for nothing; Check all on what they turn in is
      what counts. */
   function liveTests() {
-    return window.PyIDETests && liveNotes ? window.PyIDETests.parse(liveNotes).tests : [];
+    if (!window.PyIDETests || !liveNotes) return [];
+    var all = window.PyIDETests.parse(liveNotes).tests;
+    // v11: a level's own tests only for the level the student is on.
+    return window.PyIDETests.forLevels ? window.PyIDETests.forLevels(all) : all;
   }
 
   /* The run itself, on THEIR app — never the mirror's, from the ✔ on the

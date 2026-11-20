@@ -113,6 +113,19 @@ check("SQL tests: rows and a result", [t["kind"] for t in sql] == ["rows", "resu
 _, errs = autograde.parse("```tests\nGET / -> maybe\nopen the page\n```")
 check("a line that isn't a test is an error, not skipped", len(errs) == 2, errs)
 check("possible points add up", autograde.possible({"notes.md": NOTES}) == 9)
+# v11 levels (Nov 2026): a Flask, SQL or PHP lesson's level blocks are tests
+# blocks, each test knows its part and level, and only one level's exercise
+# counts toward what it's out of; a bonus never does.
+LEVEL_NOTES = ("```tests\nreturns 1 row\n```\n\n"
+               "```tests exercise easy\nresult contains Ava (2 points)\n```\n\n"
+               "```tests exercise medium\nresult contains Ben (2 points)\n```\n\n"
+               "```tests exercise master\nresult contains Cy (2 points)\n```\n\n"
+               "```tests bonus easy\nreturns 4 rows\n```\n")
+lt, _ = autograde.parse(LEVEL_NOTES)
+check("levels: every level's block is read, each test with its part and level",
+      [(t.get("part"), t.get("level")) for t in lt] == [("", ""), ("exercise", "easy"), ("exercise", "medium"),
+                                                ("exercise", "master"), ("bonus", "easy")], lt)
+check("  and what it's out of is one level's exercise, no bonus", autograde.possible({"notes.md": LEVEL_NOTES}) == 3)
 
 # ------------------------------------------------- the same in JavaScript
 node = shutil.which("node")
@@ -121,7 +134,7 @@ if not node:
     sys.exit(1)
 samples = [NOTES, "```tests\nGET /a?b=1 -> contains x\nPOST / a=1 -> 302\nGET / -> contains  Hi there\n```",
            "```tests\nreturns 3 rows (2 points)\nresult contains Alice (1 point)\nuses import sqlite3\n```",
-           "```tests\nGET / -> maybe\nPOST /x -> 200\nnonsense\n```", "no block here"]
+           "```tests\nGET / -> maybe\nPOST /x -> 200\nnonsense\n```", "no block here", LEVEL_NOTES]
 script = ("global.window={};eval(require('fs').readFileSync(%s,'utf8'));"
           "process.stdout.write(JSON.stringify(%s.map(s=>window.PyIDETests.parse(s))))"
           % (json.dumps(AUTOGRADE), json.dumps(samples)))
@@ -231,6 +244,12 @@ for name, text in (("bridge.py", bridge), ("harness.py", harness), ("runner.py",
 jobs = {name: [files, tests] for name, files in APPS.items()}
 jobs["sql"] = [SQL_FILES, autograde.parse(SQL_NOTES)[0]]
 jobs["sql_broken"] = [dict(SQL_FILES, **{"query.sql": "SELEC name FROM p;"}), autograde.parse(SQL_NOTES)[0]]
+# A v11 SQL lesson: the Try It's query, then the exercise's, in one
+# query.sql. Each step's checks must find ITS query, not only the last.
+jobs["sql_steps"] = [dict(SQL_FILES, **{"query.sql": "SELECT name FROM p WHERE name = 'Bob';\n"
+                                                     "SELECT name FROM p ORDER BY name;"}),
+                     autograde.parse("```tests\nreturns 1 row\nresult contains Bob\nreturns 2 rows\n"
+                                     "returns 7 rows\nresult contains Zed\n```")[0]]
 # Operators: `uses +` once looked for a name called "+", and failed on code
 # that plainly used it (a student's print(3+4) in GameIDE found it).
 # A login (Flask's session) and a form that redirects, as Web 2's logins
@@ -336,12 +355,18 @@ check("avoids catches a name that is used", not lines("evil")["Doesn't use eval"
 check("a status test passes on the right status only", lines("right")["GET /nope answers 404"]["ok"]
       and not lines("no_about")["GET /about shows about &   US"]["ok"])
 L = lines("sql")
-check("SQL: the last query's rows are counted", L["The query returns 2 rows"]["ok"]
+check("SQL: the query's rows are counted", L["The query returns 2 rows"]["ok"]
       and not L["The query returns 5 rows"]["ok"]
-      and L["The query returns 5 rows"]["detail"] == "It returned 2 rows.", L.get("The query returns 5 rows"))
+      and "the last returned 2" in L["The query returns 5 rows"]["detail"], L.get("The query returns 5 rows"))
 check("  a value in them is found, and one not there isn't",
       L["The query's result contains Alice"]["ok"] and not L["The query's result contains Zed"]["ok"]
       and "Alice" in L["The query's result contains Zed"]["detail"])
+L = lines("sql_steps")
+check("SQL with several queries: each step's check finds its own query, not only the last",
+      L["The query returns 1 row"]["ok"] and L["The query's result contains Bob"]["ok"]
+      and L["The query returns 2 rows"]["ok"], L)
+check("  and a result no query gives still fails", not L["The query returns 7 rows"]["ok"]
+      and not L["The query's result contains Zed"]["ok"], L)
 L = lines("sql_broken")
 check("  a query that won't run fails, saying why",
       not L["The query returns 2 rows"]["ok"] and "SQL didn't run" in L["The query returns 2 rows"]["detail"])

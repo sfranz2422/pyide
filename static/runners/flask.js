@@ -186,7 +186,10 @@
     }
 
     function testsHere() {
-      return window.PyIDETests ? window.PyIDETests.fromFiles(allFiles()).tests : [];
+      if (!window.PyIDETests) return [];
+      var all = window.PyIDETests.fromFiles(allFiles()).tests;
+      // v11: a level's own tests only for the level the student is on.
+      return window.PyIDETests.forLevels ? window.PyIDETests.forLevels(all) : all;
     }
 
     /* Check my work: every test in the notes, on the project as it is now

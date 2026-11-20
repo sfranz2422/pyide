@@ -58,12 +58,38 @@ WORDS = {"for": "a for loop", "while": "a while loop", "if": "an if statement",
          "list": "a list", "dict": "a dictionary", "class": "a class"}
 
 
-def _blocks(md):
-    """The text of every ```tests block, in order."""
+#: v11 levels (Nov 2026, the teacher: "make sure we can use difficulty
+#: levels for the sql, flask and php lessons"), read exactly as autograde.py
+#: and autograde_web.py read them: ```tests exercise [easy|medium|master]
+#: counts at the student's level, ```tests bonus [...] adds points out of
+#: nothing (app.py, "Levels"). Before this a Flask lesson's level blocks
+#: weren't tests blocks at all: "tests exercise easy" wasn't "tests", so
+#: every check in them silently vanished from Check my work and Check all.
+PARTS = ("exercise", "bonus")
+LEVELS = ("easy", "medium", "master")
+
+
+def _part_of(info):
+    """(part, level) a fence's words name, or None for a fence that isn't a tests block."""
+    words = info.strip().lower().split()
+    if not words or words[0] != "tests":
+        return None
+    if len(words) == 1:
+        return "", ""
+    if len(words) == 2 and words[1] in PARTS:
+        return words[1], ""
+    if len(words) == 3 and words[1] in PARTS and words[2] in LEVELS:
+        return words[1], words[2]
+    return None
+
+
+def _blocks_with_parts(md):
+    """(part, level, text) for every ```tests block, in order."""
     out, lines, i = [], (md or "").split("\n"), 0
     while i < len(lines):
         f = FENCE.match(lines[i])
-        if f and f.group(2).strip().lower() == "tests":
+        part = _part_of(f.group(2)) if f else None
+        if part is not None:
             fence, body, i = f.group(1), [], i + 1
             while i < len(lines):
                 g = FENCE.match(lines[i])
@@ -72,9 +98,14 @@ def _blocks(md):
                     break
                 body.append(lines[i])
                 i += 1
-            out.append("\n".join(body))
+            out.append((part[0], part[1], "\n".join(body)))
         i += 1
     return out
+
+
+def _blocks(md):
+    """The text of every ```tests block, in order."""
+    return [body for _, _, body in _blocks_with_parts(md)]
 
 
 def _label(t):
@@ -166,8 +197,11 @@ def parse_block(body):
 def parse(md):
     """Every test in a notes file, and every line that isn't one."""
     tests, errors = [], []
-    for body in _blocks(md):
+    for part, level, body in _blocks_with_parts(md):
         got, bad = parse_block(body)
+        for t in got:
+            t["part"] = part
+            t["level"] = level
         tests += got
         errors += bad
     return tests, errors
@@ -185,4 +219,13 @@ def file_tests(files):
 
 
 def possible(files):
-    return round(sum(t["points"] for t in file_tests(files)[0]), 2)
+    """What the tests are worth toward a grade: a bonus test is not part of
+    it (it can only add), and of an exercise written once per level, one
+    level's worth (they're meant to be worth the same; the most, if not)."""
+    tests = file_tests(files)[0]
+    plain = sum(t["points"] for t in tests if t.get("part") != "bonus" and not t.get("level"))
+    by_level = {}
+    for t in tests:
+        if t.get("part") == "exercise" and t.get("level"):
+            by_level[t["level"]] = by_level.get(t["level"], 0) + t["points"]
+    return round(plain + max(by_level.values() or [0]), 2)
