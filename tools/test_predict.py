@@ -269,6 +269,10 @@ S.configure({ claim: function (code) { claims.push(code); } });
   pick(pg2, 0); pg2.check.click(); await tick();
   out.pageRight = { predicted: pg2.box.hasAttribute("data-predicted"), run: pg2.run.hidden, frame: pg2.frame.hidden,
                     claim: claims.slice(before), code: !!pg2.area };
+  // # ask: the box asks the teacher's question, and the line is out of the page.
+  var ak = pickBlock("<button>OK</button>\n# show: page\n# ask: What is wrong with these buttons?\n# choice: same words\n# answer: same words");
+  var ak2 = ak.box.querySelector(".snippet-ask");
+  out.ask = { ask: ak2 && ak2.textContent, src: ak.frame.srcdoc, n: ak.rows.length };
   out.split = ["<p>a</p>\n# choice: x\n  #ANSWER: y\n# hint: h\n#menu { color: red }\n\n", "# choice:\n<b>"].map(function (x) {
     var q = S._splitPick(x); return [q.code, q.choices, q.answer, q.hints]; });
   console.log(JSON.stringify(out));
@@ -312,6 +316,11 @@ if "error" not in pk:
           and "show:" not in pg["src"] and pg["n"] == 2, pg)
     check("  it asks which one this is, Check my answer, and still holds the slide",
           "Which one is this" in (pg["ask"] or "") and "Check my answer" in pg["check"] and pg["held"], pg)
+    ak = pk["ask"]
+    check("# ask: the box asks that question instead, and the line is out of the page and the choices",
+          ak["ask"] == "🤔 What is wrong with these buttons?" and ak["src"].startswith("<button>OK</button><script>") and "ask:" not in ak["src"] and ak["n"] == 1, ak)
+    check("  and xp.py takes the line out as the page does",
+          xp_pick_code("<button>OK</button>\n# ask: What is wrong?") == "<button>OK</button>")
     check("  a wrong pick: still held, the first hint, the page still there",
           pk["pageWrong"] == {"held": True, "hints": 1, "frame": False}, pk["pageWrong"])
     pr = pk["pageRight"]

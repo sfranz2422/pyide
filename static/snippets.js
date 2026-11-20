@@ -583,10 +583,18 @@ window.IDESnippets = (function () {
      was being asked to read <h3> and <button> to get to the question. The
      same rules otherwise: right to go on, hints, XP on the first try. It is
      taken out like the other lines, so the block's key (and a student's
-     saved state, and xp.py's claim) is the same with it or without. */
-  var PICK_LINE = /^\s*#\s*(choice|answer|hint|show)\s*:\s*(.*)$/i;
+     saved state, and xp.py's claim) is the same with it or without.
+
+     `# ask: What is wrong with these buttons?` (Nov 2026, the teacher's
+     catch) is the question the box asks, in place of "Which one is this?".
+     Without it, a shown page made every pick "describe what you see":
+     picks written to be predicted from the tags ("two buttons that both
+     say OK") were answered by looking, and the real question — what's
+     wrong with it, is it UI or UX — was never asked. Taken out like the
+     others, so it doesn't move the key either. */
+  var PICK_LINE = /^\s*#\s*(choice|answer|hint|show|ask)\s*:\s*(.*)$/i;
   function splitPick(text) {
-    var code = [], choices = [], hints = [], answer = "", show = false;
+    var code = [], choices = [], hints = [], answer = "", show = false, ask = "";
     String(text).split("\n").forEach(function (ln) {
       var m = ln.match(PICK_LINE);
       if (!m) { code.push(ln); return; }
@@ -595,10 +603,11 @@ window.IDESnippets = (function () {
       if (k === "choice") choices.push(v);
       else if (k === "hint") hints.push(v);
       else if (k === "show") show = show || /^page$/i.test(v);
+      else if (k === "ask") ask = v;
       else answer = v;
     });
     if (answer && choices.indexOf(answer) < 0) choices.push(answer);
-    return { code: code.join("\n").replace(/\s+$/, ""), choices: choices, answer: answer, hints: hints, page: show };
+    return { code: code.join("\n").replace(/\s+$/, ""), choices: choices, answer: answer, hints: hints, page: show, ask: ask };
   }
 
   var pickCount = 0;
@@ -635,8 +644,9 @@ window.IDESnippets = (function () {
       box.appendChild(win);
     } else box.appendChild(area);
 
-    box.appendChild(el("div", "snippet-ask small", asPage ? "🤔 Which one is this? Pick one."
-                                                          : "🤔 What will this page show? Pick one."));
+    box.appendChild(el("div", "snippet-ask small", parts.ask ? "🤔 " + parts.ask
+                                                   : asPage ? "🤔 Which one is this? Pick one."
+                                                   : "🤔 What will this page show? Pick one."));
     var list = el("div", "snippet-choices");
     var name = "pick" + (++pickCount), picked = -1, rows = [];
     choices.forEach(function (text, i) {

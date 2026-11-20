@@ -509,7 +509,7 @@ def avatars_for_page():
 _PREDICT_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*(py(?:thon)?|html|sql|php)[ \t]+predict[ \t]*$", re.I)
 _PREDICT_HINT = re.compile(r"^\s*#\s*hint\s*:", re.I)
 # `show` is snippets.js's `# show: page`: shown as a page, not code.
-_PICK_LINE = re.compile(r"^\s*#\s*(choice|answer|hint|show)\s*:", re.I)
+_PICK_LINE = re.compile(r"^\s*#\s*(choice|answer|hint|show|ask)\s*:", re.I)
 
 
 def predict_code(text):
@@ -523,7 +523,8 @@ def predict_code(text):
 
 def pick_code(text):
     """An ```html predict block's page as the student's page renders it
-    (snippets.js splitPick): its `# choice:`, `# answer:` and `# hint:`
+    (snippets.js splitPick): its `# choice:`, `# answer:`, `# hint:`, `# show:`
+    and `# ask:`
     lines out, trailing space off. test_predict.py holds the two together."""
     keep = [ln for ln in str(text).split("\n") if not _PICK_LINE.match(ln)]
     return "\n".join(keep).rstrip()
