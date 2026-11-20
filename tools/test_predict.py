@@ -592,6 +592,16 @@ paid = [a.source for a in _db.query(accounts.XpAward).filter_by(user_id=AMY).all
 _db.close()
 check("  paid as predict:<assignment>:<block>", len(paid) == 4 and all(s.startswith("predict:") for s in paid), paid)
 
+# A lesson's own pages draw its picks: the class's, and the teacher's that
+# presents it, which once showed a pick's raw HTML on the projector.
+for page in ("lesson.html", "lesson_teacher.html"):
+    with open(os.path.join(ROOT, "templates", page)) as f:
+        check("the lesson page %s loads snippets.js, so a pick is a screen and not its HTML" % page,
+              "filename='snippets.js'" in f.read())
+with open(os.path.join(ROOT, "static", "lesson_teacher.js")) as f:
+    check("  and the teacher's tells it they're the teacher (Show the answer, no XP claimed)",
+          "configure({ teacher: true })" in f.read())
+
 failed = results.count(False)
 print("\n" + ("ALL PASSED" if not failed else "SOME FAILED") + " (%d checks, %d failed)" % (len(results), failed))
 sys.exit(1 if failed else 0)

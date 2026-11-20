@@ -92,6 +92,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
 <script src="{{ url_for('static', filename='notes.js') }}"></script>
+{# Without it a pick (```html predict with # choice: lines; the Hardware
+   and Inf Sys lessons' "Look at this screen") was drawn as its raw HTML
+   here, on the very page the teacher presents from, while the class's
+   lesson.html showed the screen. #}
+<script src="{{ url_for('static', filename='snippets.js') }}"></script>
 <script src="{{ url_for('static', filename='pictures.js') }}"></script>
 <script src="{{ url_for('static', filename='laser.js') }}"></script>
 <script src="{{ url_for('static', filename='lesson_teacher.js') }}"></script>

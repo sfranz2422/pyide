@@ -21,6 +21,9 @@
   // No assignment here: the teacher's own copy, key and all, shows each
   // question as a preview with its answer behind a button (notes.js).
   N.setQuizContext({ assignment: "", signedIn: true });
+  // A prediction or pick here is the teacher's: Show the answer, and no XP
+  // claimed (the class's lesson.html configures its own).
+  if (window.IDESnippets) window.IDESnippets.configure({ teacher: true });
 
   function isDark() {
     var set = document.documentElement.getAttribute("data-theme");
