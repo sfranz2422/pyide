@@ -108,7 +108,8 @@
     rulesUrl: {{ url_for('discussion_set_rules', slug=item.slug)|tojson }},
     teacher: {{ is_teacher|tojson }},
     canPost: {{ can_post|tojson }},
-    minWords: {{ rules.min_words|tojson }}
+    minWords: {{ rules.min_words|tojson }},
+    stop: {{ stopwords|tojson }}
   });
   {% endif %}
 </script>

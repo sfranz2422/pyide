@@ -12,9 +12,9 @@
  * this browser until it is posted: a paragraph lost to a closed tab is the
  * failure worth guarding against here.
  *
- * substantial() is _substantial in app.py, the same rule (test_discussion.py
- * runs both on the same posts): the green/yellow mark shows while typing,
- * and the server's is the one kept. */
+ * measure() is _post_measure in app.py, the same rule (test_discussion.py
+ * runs both on the same posts): the green/yellow mark, and what's missing,
+ * show while typing, and the server's mark is the one kept. */
 window.PyIDEDiscussion = (function () {
   "use strict";
 
@@ -28,11 +28,44 @@ window.PyIDEDiscussion = (function () {
   function words(text) {
     return String(text || "").split(/\s+/).filter(Boolean).length;
   }
-  function substantial(text, minWords) {
-    var t = String(text || "").trim();
-    var sentences = (t.match(/[.!?]+(?=\s|$)/g) || []).length;
-    return words(t) >= Math.max(50, 2 * minWords) && sentences >= 3;
+
+  /* _post_measure in app.py, line for line: which of longer / variety /
+     reason / sentences a post is missing ([] is green). `stop` is the
+     server's own list (DISCUSSION_STOPWORDS, handed over by the page), so
+     the two can't differ; test_discussion.py runs both on the same posts. */
+  var REASON = /\b(because|since|so that|therefore|however|although|for example|for instance|such as|i think|i believe|i agree|i disagree|in my opinion|this means|which means|that means|the reason|but|if|should|would|could)\b|, so\b/;
+  function mtldPass(tokens, threshold) {
+    var factors = 0, types = {}, n = 0, count = 0, ttr = 1;
+    tokens.forEach(function (t) {
+      count += 1;
+      if (!types[t]) { types[t] = true; n += 1; }
+      ttr = n / count;
+      if (ttr <= threshold) { factors += 1; types = {}; n = 0; count = 0; }
+    });
+    if (count > 0) factors += (1 - ttr) / (1 - threshold);
+    return factors > 0 ? tokens.length / factors : tokens.length;
   }
+  function mtld(tokens) {
+    return tokens.length ? (mtldPass(tokens, 0.72) + mtldPass(tokens.slice().reverse(), 0.72)) / 2 : 0;
+  }
+  function measure(text, minWords, stop) {
+    text = String(text || "");
+    var low = text.toLowerCase(), tokens = low.match(/[a-z0-9']+/g) || [];
+    var skip = {}, seen = {}, unique = 0, missing = [];
+    (stop || []).forEach(function (w) { skip[w] = true; });
+    tokens.forEach(function (t) { if (!skip[t] && !seen[t]) { seen[t] = true; unique += 1; } });
+    var n = words(text);
+    if (n < 40 || 2 * n < 3 * minWords) missing.push("longer");
+    if (unique < 15 || mtld(tokens) < 30) missing.push("variety");
+    if (!(REASON.test(low) || text.indexOf("?") >= 0)) missing.push("reason");
+    if ((text.trim().match(/[.!?]+(?=\s|$)/g) || []).length < 2) missing.push("sentences");
+    return missing;
+  }
+  function substantial(text, minWords, stop) { return !measure(text, minWords, stop).length; }
+  // What to do about each, said to the student under their box.
+  var TIPS = { longer: "say more", variety: "use more of your own words",
+               reason: "give a reason (because…, for example…) or ask a question",
+               sentences: "write it in more than one sentence" };
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -109,12 +142,16 @@ window.PyIDEDiscussion = (function () {
       if (n < min && !opts.teacher) {
         meter.classList.add("is-short");
         meter.textContent = n + " / " + min + " words";
-      } else if (substantial(t, min)) {
-        meter.classList.add("is-green");
-        meter.textContent = "● Substantial · " + n + " words";
       } else {
-        meter.classList.add("is-yellow");
-        meter.textContent = "● Meets the minimum · " + n + " words. Add more detail or an example";
+        var miss = measure(t, min, opts.stop);
+        if (!miss.length) {
+          meter.classList.add("is-green");
+          meter.textContent = "● Substantial · " + n + " words";
+        } else {
+          meter.classList.add("is-yellow");
+          meter.textContent = "● Meets the minimum · " + n + " words. To make it substantial: " +
+            miss.map(function (k) { return TIPS[k]; }).join("; ") + ".";
+        }
       }
     }
     box.addEventListener("input", changed);
@@ -309,5 +346,6 @@ window.PyIDEDiscussion = (function () {
     });
   }
 
-  return { start: start, substantial: substantial, words: words };
+  return { start: start, substantial: substantial, measure: measure, words: words,
+           _mtld: function (text) { return mtld(String(text || "").toLowerCase().match(/[a-z0-9']+/g) || []); } };
 })();

@@ -118,6 +118,9 @@ check("typing: under the minimum it counts toward it, in red",
       "is-short" in (r.get("short") or "") and "/ 20 words" in (r.get("short") or ""), r.get("short"))
 check("  past the minimum, yellow", "is-yellow" in (r.get("yellow") or ""), r.get("yellow"))
 check("  long and in several sentences, green", "is-green" in (r.get("green") or ""), r.get("green"))
+rm = r.get("replyMeter") or ""
+check("a short reply: yellow, saying what would make it substantial (say more, more of their own words)",
+      "is-yellow" in rm and "To make it substantial: say more; use more of your own words." in rm, rm)
 af = r.get("after") or {}
 check("posted: the board opens, every post by first name and last initial",
       af.get("locked") is False and af.get("names") == ["Ana L.", "Ben R."], af)

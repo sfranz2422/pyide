@@ -10536,7 +10536,8 @@ def lab_state_save(slug):
 # edited or deleted, only added to; a post shorter than the minimum is
 # refused; and each post is marked green (substantial) or yellow (it meets
 # the minimum, and no more), for its author and the teacher, as Blackboard
-# does. Ours is a plain rule (words and sentences, _substantial), not a
+# does. Ours is a plain rule (_post_measure: length, word variety, a reason
+# or a question, sentences — the measures Blackboard's analytics names), not a
 # model: the server calls no service, and the same rule runs in the page
 # (discussion.js) so the mark shows while the student types.
 #
@@ -10598,20 +10599,83 @@ def _discussion_rules(item):
 
 
 _SENTENCE_END = re.compile(r"[.!?]+(?=\s|$)")
+_POST_TOKEN = re.compile(r"[a-z0-9']+")
+#: A stance or a reason: what Blackboard's analytics calls a post that
+#: "establishes or supports a position". A question counts too (inquiry).
+_POST_REASON = re.compile(r"\b(because|since|so that|therefore|however|although|for example|"
+                          r"for instance|such as|i think|i believe|i agree|i disagree|in my opinion|"
+                          r"this means|which means|that means|the reason|but|if|should|would|could)\b"
+                          r"|, so\b")      # "…, so people lose them": a reason; a bare "so bad" isn't
+#: Words that say little alone, left out of "how many different words".
+#: Handed to the page (discussion.html) so the two lists can't differ.
+DISCUSSION_STOPWORDS = sorted(set("""a about above after again against all am an and any are as at
+be been before being below between both but by can could did do does doing down during each few for
+from further had has have having he her here hers herself him himself his how i if in into is it its
+itself just me more most my myself no nor not now of off on once only or other our ours ourselves out
+over own same she should so some such than that the their theirs them themselves then there these
+they this those through to too under until up very was we were what when where which while who whom
+why will with would you your yours yourself yourselves also really thing things like get got lot lots
+yes ok okay""".split()))
+_STOP = frozenset(DISCUSSION_STOPWORDS)
 
 
 def _post_words(text):
     return len(text.split())
 
 
-def _substantial(text, min_words):
-    """Green or yellow: a post at least twice the minimum (and 50 words) in
-    three sentences or more is substantial; anything shorter that was still
-    accepted just meets the minimum. discussion.js's substantial() is the
-    same rule — test_discussion.py runs both on the same posts."""
+def _mtld_pass(tokens, threshold=0.72):
+    """One direction of MTLD (McCarthy & Jarvis): how many words, on
+    average, before the run's type-token ratio falls to the threshold. Less
+    tied to a post's length than a plain type-token ratio."""
+    factors, types, count, ttr = 0.0, set(), 0, 1.0
+    for t in tokens:
+        count += 1
+        types.add(t)
+        ttr = len(types) / count
+        if ttr <= threshold:
+            factors += 1
+            types, count = set(), 0
+    if count > 0:
+        factors += (1 - ttr) / (1 - threshold)
+    return len(tokens) / factors if factors > 0 else float(len(tokens))
+
+
+def _mtld(tokens):
+    return (_mtld_pass(tokens) + _mtld_pass(tokens[::-1])) / 2 if tokens else 0.0
+
+
+def _post_measure(text, min_words):
+    """What makes a post substantial, the measures Blackboard's discussion
+    analytics names — length, word variety, a position or a question, more
+    than one sentence — and which are missing: [] is green. A plain rule,
+    not a model (the server calls no service), and discussion.js's
+    measure() is the same one, so the meter a student watches while typing
+    is the mark they get; test_discussion.py runs both on the same posts.
+
+      longer     40 words, and half again the minimum
+      variety    15 different words that aren't stopwords, and MTLD 30+
+                 ("Bad bad bad…" or "I agree" over and over isn't)
+      reason     a reason or a stance (because, I think, for example, but,
+                 should…) or a question
+      sentences  two or more"""
+    low = text.lower()
+    tokens = _POST_TOKEN.findall(low)
     words = _post_words(text)
-    sentences = len(_SENTENCE_END.findall(text.strip()))
-    return words >= max(50, 2 * min_words) and sentences >= 3
+    missing = []
+    if words < 40 or 2 * words < 3 * min_words:
+        missing.append("longer")
+    if len({t for t in tokens if t not in _STOP}) < 15 or _mtld(tokens) < 30:
+        missing.append("variety")
+    if not (_POST_REASON.search(low) or "?" in text):
+        missing.append("reason")
+    if len(_SENTENCE_END.findall(text.strip())) < 2:
+        missing.append("sentences")
+    return missing
+
+
+def _substantial(text, min_words):
+    """Green (True) or yellow: nothing missing (_post_measure)."""
+    return not _post_measure(text, min_words)
 
 
 def _discussion_lines(item, posts_by, replies_by):
@@ -10678,6 +10742,7 @@ def _discussion_page(db, item, user):
     teacher = user is not None and user.id == item.teacher_id
     ctx.update(item=item, prompt=quiz.redact(item.file_map().get(_notes_name(item), "")),
                rules=_discussion_rules(item), is_teacher=teacher,
+               stopwords=DISCUSSION_STOPWORDS,
                can_post=_discussion_access(db, user, item) and not item.closed,
                signed_in=user is not None,
                attend_class=None if teacher else _attend_item(db, user, item),

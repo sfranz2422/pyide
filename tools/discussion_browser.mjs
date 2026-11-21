@@ -84,6 +84,7 @@ try {
   // Reply to Ben
   await a("[...document.querySelectorAll('.disc-post')].find(p => p.querySelector('strong').textContent === 'Ben R.').querySelector('.disc-reply').click()");
   await a(type(".disc-reply-box .disc-box", cfg.more + " " + cfg.short));
+  out.replyMeter = await a("document.querySelector('.disc-reply-box .disc-meter').className + '|' + document.querySelector('.disc-reply-box .disc-meter').textContent");
   await a.shot("2-ana-replying");
   await a("document.querySelector('.disc-reply-box .disc-foot .btn-primary').click()");
   await until(a, "document.querySelectorAll('.disc-replies .disc-post').length >= 1");

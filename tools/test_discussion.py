@@ -87,17 +87,80 @@ def words(n, sentences=1):
     return " ".join(out)
 
 
-SAMPLES = [words(10), words(25), words(49, 3), words(50, 3), words(50, 2), words(60, 4),
-           "One. Two. Three.", "", "Is it? Yes! Sure. " * 20, words(80, 1),
-           "e.g. this has dots.inside words " * 12]
+POSTS = {
+    "a position, with reasons": (
+        "Two OK buttons are bad. You cannot tell which one deletes the photos, so people will lose them "
+        "by accident. A good button says what it does. Delete and Keep would be clear. The design looks "
+        "finished, but it fails the usable pillar. I would test it with three people and watch where they "
+        "press first, then change the labels and test it again before shipping it."),
+    "a typical good post": (
+        "I think this is bad design because both buttons say OK, so you don't know which one keeps your "
+        "photos. If I was using it I would probably just guess and maybe lose everything. A better design "
+        "would say Delete in red and Cancel in grey so you can see the difference right away."),
+    "a reply that asks a question": (
+        "I agree with Ana that the labels are the main problem, but what about people who can't see red "
+        "very well? Maybe the Delete button should also have a trash can icon so color isn't the only clue. "
+        "That would help more users and it fits the accessible pillar we learned about."),
+    "the same word forty times": " ".join(["Bad"] * 40) + ".",
+    "long, describing, no reason": (
+        "The buttons are both OK. The box asks to delete photos. The photos are on the phone. The phone has "
+        "many photos of my dog and my family and our trip to the beach last summer with my cousins and my "
+        "aunt. The screen is white and the text is black and the buttons are grey."),
+    "I agree, over and over": "I agree with you. " * 8 + "I agree.",
+    "short but reasoned": "You cannot tell which one deletes the photos, so people will lose them. Two OK buttons are bad.",
+    "one long sentence": ("I think the design is bad because the two buttons both say OK and nobody can tell which "
+                          "one deletes their photos and which one keeps them safe on the phone for later when "
+                          "they want to look at their dog or their summer trip pictures again with family"),
+    "empty": "",
+}
+EXPECT = {"a position, with reasons": [], "a typical good post": [], "a reply that asks a question": [],
+          "the same word forty times": ["variety", "reason", "sentences"],
+          "long, describing, no reason": ["variety", "reason"],
+          "I agree, over and over": ["longer", "variety"],
+          "short but reasoned": ["longer", "variety"],
+          "one long sentence": ["sentences"]}
+CONTENT = ("apple river orange window garden planet rocket silver basket candle forest guitar "
+           "hammer island jacket kettle ladder magnet needle").split()
+
+
+def edge_posts():
+    """Posts that sit on each line the rule draws, so moving any line by a
+    step — in the page or the server alone — changes a result somewhere."""
+    import random
+    filler = "the and of to in it is was for on with as at by from this that".split()
+    out = []
+    for k in (14, 15):                      # different words: one short of the line, and on it
+        words = CONTENT[:k] + filler * 2
+        out.append(" ".join(words[:20]) + " should. " + " ".join(words[20:]) + ".")
+    rng = random.Random(7)                  # word variety (MTLD) either side of 30, and of 20
+    found = {}
+    for _ in range(4000):
+        vocab = CONTENT[:rng.randint(15, 19)] + filler[:rng.randint(2, 16)]
+        toks = [rng.choice(vocab) for _ in range(rng.randint(42, 70))]
+        text = " ".join(toks[:20]) + " because. " + " ".join(toks[20:]) + "."
+        m = P._mtld(P._POST_TOKEN.findall(text.lower()))
+        for lo, hi in ((15, 20), (20, 30), (30, 40)):
+            if lo <= m < hi and (lo, hi) not in found and len({t for t in toks if t not in P._STOP}) >= 15:
+                found[(lo, hi)] = text
+    out += list(found.values())
+    for marker in ("could", "would", "should", "but", "if", "since", "however", "for example"):
+        out.append(POSTS["long, describing, no reason"].replace("The screen", marker.capitalize() + " the screen"))
+    out.append(POSTS["long, describing, no reason"].replace("photos. The", "photos, so the"))
+    out.append(POSTS["long, describing, no reason"].replace("photos. The", "photos so the"))
+    return out
+
+
+SAMPLES = (list(POSTS.values()) + [p.upper() for p in POSTS.values()]
+           + ["e.g. this has dots.inside words " * 12] + edge_posts())
 
 NODE = r"""
 const fs = require("fs");
 const window = {};
 new Function("window", "document", fs.readFileSync(process.argv[1], "utf8"))(window, {});
 const D = window.PyIDEDiscussion;
-const samples = JSON.parse(process.argv[2]);
-console.log(JSON.stringify(samples.map(s => [D.words(s), D.substantial(s, 25)])));
+const samples = JSON.parse(process.argv[2]), stop = JSON.parse(process.argv[3]);
+console.log(JSON.stringify(samples.map(s => [D.words(s), +D._mtld(s).toFixed(9)].concat(
+  [10, 25, 40].map(m => [D.measure(s, m, stop), D.substantial(s, m, stop)])))));
 """
 
 
@@ -254,16 +317,34 @@ def main():
     sp = A.get("/class/%d" % cls).get_data(as_text=True)
     check("the student's: Open Discussion", "Open Discussion" in sp, sp[:0])
 
+    print("What makes a post substantial")
+    for name, want in EXPECT.items():
+        got = P._post_measure(POSTS[name], 25)
+        check("%s: %s" % (name, "green" if not want else "missing " + ", ".join(want)), got == want, got)
+    check("a raised minimum asks for more words of the same post",
+          P._post_measure(POSTS["a typical good post"], 40) == ["longer"], P._post_measure(POSTS["a typical good post"], 40))
+
     print("The page's rule and the server's")
-    run = subprocess.run(["node", "-e", NODE, os.path.join(ROOT, "static", "discussion.js"), json.dumps(SAMPLES)],
-                         capture_output=True, text=True, timeout=60)
+    run = subprocess.run(["node", "-e", NODE, os.path.join(ROOT, "static", "discussion.js"), json.dumps(SAMPLES),
+                          json.dumps(P.DISCUSSION_STOPWORDS)], capture_output=True, text=True, timeout=60)
     try:
         js = json.loads(run.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         js = None
-    py = [[P._post_words(s), P._substantial(s, 25)] for s in SAMPLES]
-    check("discussion.js and app.py agree on every sample's words and green/yellow", js == py, (js, py, run.stderr[-300:]))
-    check("…and the samples have both colors", any(x[1] for x in py) and not all(x[1] for x in py), py)
+    py = [[P._post_words(s), round(P._mtld(P._POST_TOKEN.findall(s.lower())), 9)]
+          + [[P._post_measure(s, m), P._substantial(s, m)] for m in (10, 25, 40)] for s in SAMPLES]
+    bad = [i for i, (a, b) in enumerate(zip(js or [], py)) if a != b]
+    check("discussion.js and app.py agree on every sample (%d, with the edge cases): words, MTLD, what's "
+          "missing, green/yellow, at minimums 10, 25 and 40" % len(SAMPLES), js is not None and not bad and len(js) == len(py),
+          ([(SAMPLES[i][:60], js[i], py[i]) for i in bad[:2]], run.stderr[-300:]))
+    colors = [x[3][1] for x in py]
+    check("…and the samples have both colors", any(colors) and not all(colors))
+    edges = edge_posts()
+    check("…and the edge cases really sit on the lines: 14 and 15 different words, MTLD 15-20, 20-30 and 30-40",
+          [len({t for t in P._POST_TOKEN.findall(e.lower()) if t not in P._STOP}) for e in edges[:2]] == [14, 15]
+          and len(edges) == 2 + 3 + 10, len(edges))
+    page = A.get("/a/" + slug).get_data(as_text=True)
+    check("the page is handed the server's own stopword list", json.dumps(P.DISCUSSION_STOPWORDS) in page)
 
     print("Delete")
     db = P.SessionLocal()
