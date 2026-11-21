@@ -106,6 +106,7 @@
               <td class="gb-cell {{ 'gb-missing' if c.missing }}">
                 {% if c.changed %}<button type="button" class="gb-changed js-updated" data-slug="{{ a.slug }}" data-student="{{ p.key }}"
                   title="Changed since it was sent to Skyward (sent: {{ c.was }}). Type the new score into Skyward, then click here to clear the △.">△</button>{% endif %}
+                {% if c.hints %}<span class="gb-hints" title="{{ c.hints }} paid hint{{ '' if c.hints == 1 else 's' }} opened: their cost is already taken off this score">💡{{ c.hints }}</span>{% endif %}
                 {% if c.unchecked %}<span class="gb-unchecked" title="Tests not checked yet: {{ '%g'|format(a.tests) }} points pending. Press Check all on this column.">⟳</span>{% endif %}
                 {% if p.uid %}<input class="gb-score js-score" type="text" inputmode="decimal" size="4"
                   value="{{ '' if c.missing else ('%g'|format(c.score)) }}" placeholder="missing"

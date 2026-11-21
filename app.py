@@ -41,6 +41,7 @@ import autograde
 import autograde_web
 import autograde_flask
 import lab_checks
+import hints
 import quiz
 import library
 import xp
@@ -621,6 +622,24 @@ class LabState(Base):
     updated_at = Column(DateTime, nullable=False,
                         default=lambda: datetime.now(timezone.utc))
     __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
+
+
+class HintTaken(Base):
+    """A hint a student opened for one test ("Hints" below): its level (1
+    the free hint, 2 the second, 3 the code), one row each, never removed —
+    a hint once seen can't be unseen, and the unique row is what stops a
+    double click or two workers charging twice. The test is the sha1 of its
+    label, as XP sources name tests. PyIDE's own table, no foreign keys."""
+    __tablename__ = "hints_taken"
+
+    id = Column(Integer, primary_key=True)
+    assignment_id = Column(Integer, index=True, nullable=False)
+    student_id = Column(Integer, index=True, nullable=False)
+    test_key = Column(String(12), nullable=False)
+    level = Column(Integer, nullable=False)
+    taken_at = Column(DateTime, nullable=False,
+                      default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (UniqueConstraint("assignment_id", "student_id", "test_key", "level"),)
 
 
 class DiscussionPost(Base):
@@ -3088,6 +3107,11 @@ def _scored(db, item, student_id, results):
     level, added only when all pass, never part of what it's out of. Notes
     with nothing written per level count every line whole, as before."""
     keys = _level_keys(item)
+    cost = _hint_costs(db, item, student_id)
+
+    def kept(label, points):
+        """A passing test's points, less what its hints cost (_hint_costs)."""
+        return points * (1 - cost.get(_hint_key(label), 0.0))
     if not keys:
         parts = _test_parts(item)
         earned = possible = 0.0
@@ -3095,28 +3119,162 @@ def _scored(db, item, student_id, results):
             if parts.get(r["label"], "") != "bonus":
                 possible += r["points"]
             if r["ok"]:
-                earned += r["points"]
+                earned += kept(r["label"], r["points"])
         return round(earned, 2), round(possible, 2)
     level = _student_level(db, item, student_id)
     plain, parts = _split_tests(item)
     ok = {}
     for r in results:
         ok[r["label"]] = ok.get(r["label"], False) or bool(r["ok"])
-    earned = sum(p for lab, p in plain.items() if ok.get(lab))
+    earned = sum(kept(lab, p) for lab, p in plain.items() if ok.get(lab))
     possible = sum(plain.values())
     ex = parts["exercise"]
     if ex:
         lines = dict(ex.get("", {}))
         lines.update(ex.get(level, {}))
         possible += sum(ex.get("", {}).values()) + max([sum(ex.get(lv, {}).values()) for lv in LEVELS] or [0])
-        earned += sum(p for lab, p in lines.items() if ok.get(lab))
+        earned += sum(kept(lab, p) for lab, p in lines.items() if ok.get(lab))
     bonus = parts["bonus"]
     if bonus:
         lines = dict(bonus.get("", {}))
         lines.update(bonus.get(level, {}))
         if lines and all(ok.get(lab) for lab in lines):
-            earned += sum(lines.values())
+            earned += sum(kept(lab, p) for lab, p in lines.items())
     return round(earned, 2), round(possible, 2)
+
+
+# --------------------------------------------------------------------------
+# Hints
+#
+# Under a test in a ```tests block, `hint:` lines and `code:` lines (hints.py
+# has the format). The teacher's request (Nov 2026): students ignored the
+# small grey reason under a failed test, so a failed check now brings up a
+# big hint panel in the editor (static/hints.js) — the first hint free, the
+# second for part of that test's points, then the code for more. The
+# teacher's choice, from the plan they agreed: points, not XP. Failing a
+# check costs nothing — charging for that would teach students to stop
+# checking, and a check runs in their browser anyway.
+#
+# The hints are taken out of the notes at every exit (quiz.redact), handed
+# out here one at a time in order, and each one recorded (HintTaken), so a
+# hint can't be had without its cost. The cost comes off the test's points
+# wherever a check is scored (_scored), so the teacher's Check all, the
+# gradebook and every total see it; taking one rescores what's kept.
+# None in a quiz (`quiz: yes`), where students aren't told what failed.
+# Signed out there's no grade to take points from: the hints are given and
+# nothing is recorded.
+# --------------------------------------------------------------------------
+
+#: What each hint costs, as a share of that test's points: the second hint
+#: and the code. The first is free. Cumulative — both cost 75%. Shares, not
+#: whole points (the plan said -1 point), because most tests are worth 1:
+#: a point would cost the whole test for the second hint, more than the code.
+HINT_COSTS = {1: 0.0, 2: 0.25, 3: 0.5}
+
+
+def _hint_key(label):
+    return hashlib.sha1(str(label).encode("utf-8")).hexdigest()[:12]
+
+
+def _hints_of(item):
+    """{label: {"hints": [...], "code": "..."}} from the assignment's notes."""
+    grader = _grader(item)
+    out = {}
+    for name, text in sorted(item.file_map().items()):
+        if _is_notes(name) and isinstance(text, str):
+            out.update(hints.collect(text, grader.parse_block))
+    return out
+
+
+def _hint_steps(entry):
+    """The levels a test has, in order: 1 and 2 for its hints, 3 for code."""
+    steps = [1, 2][:len(entry["hints"])]
+    return steps + ([3] if entry["code"] else [])
+
+
+def _hint_costs(db, item, student_id):
+    """{test key: share of its points lost to hints} for one student."""
+    out = {}
+    for key, level in db.query(HintTaken.test_key, HintTaken.level).filter_by(
+            assignment_id=item.id, student_id=student_id):
+        out[key] = min(1.0, out.get(key, 0.0) + HINT_COSTS.get(level, 0.0))
+    return out
+
+
+def _hint_text(entry, level):
+    return entry["code"] if level == 3 else entry["hints"][level - 1]
+
+
+@app.get("/api/hints/<slug>")
+def hints_list(slug):
+    """Which tests have hints (how many, and whether there's code — never
+    the text), what this student has opened, and what each costs."""
+    db = SessionLocal()
+    try:
+        item = _quiz_assignment(db, slug)
+        if item is None:
+            return jsonify(error="No such assignment."), 404
+        if _is_quiz(item):
+            return jsonify(tests={}, taken={}, costs=HINT_COSTS, quiz=True)
+        user = current_user(db)
+        tests = {label: {"steps": _hint_steps(e)} for label, e in _hints_of(item).items()}
+        taken = {}
+        if user is not None:
+            keys = {_hint_key(label): label for label in tests}
+            for key, level in db.query(HintTaken.test_key, HintTaken.level).filter_by(
+                    assignment_id=item.id, student_id=user.id):
+                if key in keys:
+                    taken.setdefault(keys[key], []).append(level)
+        return jsonify(tests=tests, taken={k: sorted(v) for k, v in taken.items()},
+                       costs=HINT_COSTS, quiz=False, signed_in=user is not None)
+    finally:
+        db.close()
+
+
+@app.post("/api/hints/<slug>")
+def hints_take(slug):
+    """Open a hint: {label, level}. In order — a level only after every one
+    before it that this test has — and once paid for, open again for free.
+    Recorded for a signed-in student (not the teacher), and what's kept is
+    scored again at once with its cost."""
+    db = SessionLocal()
+    try:
+        item = _quiz_assignment(db, slug)
+        if item is None:
+            return jsonify(error="No such assignment."), 404
+        if _is_quiz(item):
+            return jsonify(error="There are no hints in a quiz."), 403
+        data = request.get_json(silent=True) or {}
+        label = str(data.get("label") or "")[:200]
+        entry = _hints_of(item).get(label)
+        try:
+            level = int(data.get("level"))
+        except (TypeError, ValueError):
+            level = 0
+        if entry is None or level not in _hint_steps(entry):
+            return jsonify(error="No such hint."), 404
+        user = current_user(db)
+        record = user is not None and user.id != item.teacher_id and not accounts.is_teacher(user.email)
+        if record:
+            key = _hint_key(label)
+            have = {lv for (lv,) in db.query(HintTaken.level).filter_by(
+                assignment_id=item.id, student_id=user.id, test_key=key)}
+            earlier = [lv for lv in _hint_steps(entry) if lv < level]
+            if any(lv not in have for lv in earlier):
+                return jsonify(error="Open the hints before this one first."), 409
+            if level not in have:
+                db.add(HintTaken(assignment_id=item.id, student_id=user.id, test_key=key, level=level))
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()                 # the same click from another tab
+                if HINT_COSTS.get(level):
+                    _rescore(db, item, user.id)
+        return jsonify(ok=True, level=level, kind="code" if level == 3 else "hint",
+                       text=_hint_text(entry, level), cost=HINT_COSTS.get(level, 0.0),
+                       recorded=record)
+    finally:
+        db.close()
 
 
 def _rescore(db, item, student_id):
@@ -5693,6 +5851,15 @@ def _gradebook(db, course, only=None):
                 v = checked.get(p["uid"])
                 if v is None or _when_naive(v.checked_at) < _when_naive(sub.submitted_at):
                     unchecked.add((a["id"], p["uid"]))
+    # Paid hints (levels 2 and 3, "Hints"), per student and column: the cell
+    # says its score has their cost taken off, so a low one is explained.
+    paid_hints = {}
+    ids = [a["id"] for a in assignments]
+    if ids:
+        for aid, sid, n in (db.query(HintTaken.assignment_id, HintTaken.student_id, func.count(HintTaken.id))
+                              .filter(HintTaken.assignment_id.in_(ids), HintTaken.level > 1)
+                              .group_by(HintTaken.assignment_id, HintTaken.student_id)):
+            paid_hints[(aid, sid)] = n
     sent = {r.assignment_id: r for r in db.query(SkywardSent).filter_by(class_id=course.id)}
     for a in assignments:
         r = sent.get(a["id"])
@@ -5708,7 +5875,7 @@ def _gradebook(db, course, only=None):
         for a in assignments:
             got = scores.get((a["id"], p["uid"])) if p["uid"] else None
             cell = {"score": got, "missing": got is None, "unchecked": (a["id"], p["uid"]) in unchecked,
-                    "changed": False, "was": ""}
+                    "changed": False, "was": "", "hints": paid_hints.get((a["id"], p["uid"]), 0)}
             # Sent to Skyward already, and different now: the teacher types it
             # in there (Skyward's import would make a second assignment).
             if a["sent_scores"] is not None:

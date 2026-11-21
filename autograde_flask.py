@@ -42,6 +42,8 @@ autograde.py, different tests: PyIDE's run a console program.
 
 import re
 
+import hints
+
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 POINTS = re.compile(r"\s*\((\d{1,4}(?:\.\d{1,2})?)\s*points?\)\s*$", re.I)
 REQUEST = re.compile(r"^(GET|POST)\s+(/\S*)\s*(.*)$", re.I)
@@ -162,7 +164,7 @@ def parse_block(body):
     tests, errors = [], []
     for n, raw in enumerate((body or "").split("\n"), 1):
         line = raw.strip()
-        if not line or line.startswith("#"):
+        if not line or line.startswith("#") or hints.is_hint_line(line):
             continue
         points = 1.0
         m = POINTS.search(line)

@@ -94,7 +94,8 @@ window.PyIDETests = (function () {
     var tests = [], errors = [];
     String(body || "").split("\n").forEach(function (raw, idx) {
       var line = raw.trim();
-      if (!line || line.charAt(0) === "#") return;
+      // hint: / code: lines belong to the test above (hints.py), never a test.
+      if (!line || line.charAt(0) === "#" || /^(hint|code)\s*:/i.test(line)) return;
       var points = 1, m = POINTS.exec(line), t = null;
       if (m) {
         points = parseFloat(m[1]);

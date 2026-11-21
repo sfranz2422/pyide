@@ -92,7 +92,9 @@ def leaks(text):
     """What would give the key away: an [x], an answer: line, or the words
     that only appear in the key."""
     text = text if isinstance(text, str) else json.dumps(text)
-    found = [w for w in ("[x]", "[X]", "answer:", "ZEBRA") if w in text]
+    # OKAPI: the word in a test's hint and code (hints.py), which students
+    # pay for, so they mustn't be in any copy they're given either.
+    found = [w for w in ("[x]", "[X]", "answer:", "ZEBRA", "OKAPI") if w in text]
     return found
 
 
@@ -116,6 +118,12 @@ Then this.
 Which animal is the secret?
 answer: zebra
 answer: ZEBRA crossing
+```
+
+```tests
+prints hello
+hint: think of an OKAPI
+code: print("OKAPI")
 ```
 """
 

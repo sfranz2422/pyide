@@ -126,7 +126,7 @@ window.WebIDETests = (function () {
     var tests = [], errors = [];
     String(body || "").split("\n").forEach(function (raw, idx) {
       var line = raw.trim();
-      if (!line || COMMENT.test(line)) return;
+      if (!line || COMMENT.test(line) || /^(hint|code)\s*:/i.test(line)) return;
       var whole = line, points = 1, m = POINTS.exec(line), t = null, page = "";
       if (m) {
         points = parseFloat(m[1]);

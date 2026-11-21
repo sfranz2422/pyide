@@ -1466,6 +1466,12 @@
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(function () { return runLiveChecks(null); });
+  /* A failed check brings up the hint panel over the student's OWN editor
+     (hints.js), never the teacher's mirror. */
+  if (window.IDEHints && L.assignment) {
+    var mineWrap = document.getElementById("mine");
+    if (mineWrap && mineWrap.parentNode) window.IDEHints.attach({ slug: L.assignment, host: mineWrap.parentNode });
+  }
 
   /* XP for their own run working (xp.js), as in the editor. */
   function reportRun(files) {

@@ -132,6 +132,8 @@ exactly as `parse` does; test_quiz.py runs both on the same blocks.
 """
 import hashlib
 import re
+
+import hints
 from html import escape
 from html.parser import HTMLParser
 
@@ -427,7 +429,14 @@ def _points_text(points):
 
 
 def redact(md):
-    """The notes with every answer key taken out. Safe to run twice.
+    """The notes with every answer key taken out — the questions' keys, and
+    the tests' hints and code (hints.py: what a student pays for is not to
+    be free in the page's source). Safe to run twice."""
+    return hints.strip(_redact_quiz(md))
+
+
+def _redact_quiz(md):
+    """The questions' keys taken out. Safe to run twice.
 
     A block that already has an `id:` and no key is one this has redacted
     before, and is left exactly as it is — otherwise the second pass, finding

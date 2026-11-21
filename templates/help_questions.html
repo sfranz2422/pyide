@@ -96,6 +96,26 @@ defines area                          there is a def area
     "prints exactly" counts everything. A program that runs longer than 5
     seconds, or asks for more input than the test types, fails that test and says why.</p>
 
+  <h3 id="tests-hints">Hints under a test</h3>
+  <p>Lines starting <code>hint:</code> or <code>code:</code> under a test belong to it. When a
+    student's check fails, a panel comes up over their editor with the test and why, and
+    <strong>💡 Hint</strong>. The first hint is free, the second costs a quarter of that test's
+    points, and <strong>Show me the code</strong> costs half more. Each paid one asks to be pressed
+    twice. Checking never costs anything. Students never see the lines in the notes: they're
+    handed out one at a time and recorded, and the cost comes off when you Check all. The
+    gradebook marks a score that had paid hints 💡. There are no hints in a quiz. They work under
+    any kind of project's tests.</p>
+  <pre class="help-src" id="tests-hints-example">```tests
+prints Hello
+hint: Use print() with the words inside quotes.
+hint: It's one line: print, brackets, then "Hello" in quotes.
+code: print("Hello")
+uses for
+hint: A for loop repeats the lines indented under it.
+code: for n in range(3):
+code:     print(n)
+```</pre>
+
   {#  WebIDE's and FlaskIDE's, as their own help had them: those editors
       moved into this one (Nov 2026), and each kind of project keeps its own
       tests (autograde_web.py, autograde_flask.py). #}

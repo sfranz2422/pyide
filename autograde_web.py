@@ -47,6 +47,8 @@ it; test_autograde.py holds the two to each other.
 
 import re
 
+import hints
+
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 POINTS = re.compile(r"\s*\((\d{1,4}(?:\.\d{1,2})?)\s*points?\)\s*$", re.I)
 PAGE = re.compile(r"^([\w./-]+\.html?):\s+(.+)$", re.I)
@@ -176,8 +178,8 @@ def parse_block(body):
     tests, errors = [], []
     for n, raw in enumerate((body or "").split("\n"), 1):
         line = raw.strip()
-        if not line or COMMENT.match(line):
-            continue
+        if not line or COMMENT.match(line) or hints.is_hint_line(line):
+            continue                      # hint: / code: belong to the test above (hints.py)
         whole = line
         points = 1.0
         m = POINTS.search(line)

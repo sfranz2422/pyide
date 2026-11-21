@@ -695,6 +695,11 @@
   }
   // The notes' own ✔ Check my work, on each tests card.
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
+  /* A failed check brings up the hint panel over this editor (hints.js):
+     for a student working on an assignment, never the teacher writing it. */
+  if (window.IDEHints && window.PYIDE.assignmentSlug && !window.PYIDE.authoring && !window.PYIDE.readonly) {
+    window.IDEHints.attach({ slug: window.PYIDE.assignmentSlug, host: document.querySelector(".editor-wrap") });
+  }
   // A quiz (`quiz: yes`) keeps a check's marks from students; the teacher
   // looking at their own notes, or teaching them live, still sees them.
   if (window.IDENotesChecks && window.IDENotesChecks.reveal) {
