@@ -623,6 +623,27 @@ class LabState(Base):
     __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
 
 
+class DiscussionPost(Base):
+    """One post in a discussion assignment ("Discussions" below): a reply to
+    the teacher's prompt (parent_id NULL) or to another post. Never edited
+    and never deleted, by the teacher's choice — a student who wants to say
+    more adds a post — so a reply never ends up answering nothing.
+
+    PyIDE's own table, like lab_states, no foreign keys for the same reason.
+    `words` is kept so the grade and the green/yellow mark don't re-read
+    every body on every poll."""
+    __tablename__ = "discussion_posts"
+
+    id = Column(Integer, primary_key=True)
+    assignment_id = Column(Integer, index=True, nullable=False)
+    author_id = Column(Integer, index=True, nullable=False)
+    parent_id = Column(Integer, nullable=True)
+    body = Column(Text, nullable=False, default="")
+    words = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False,
+                        default=lambda: datetime.now(timezone.utc))
+
+
 class LevelPick(Base):
     """The level a student chose for an assignment's coding exercise or its
     challenge (v11, "Levels" below): easy, medium or master. One row per
@@ -2214,6 +2235,11 @@ def open_assignment(slug):
             abort(404)
 
         user = current_user(db)
+
+        # A discussion is the same page for everyone, its author included (who
+        # gets the requirements and the counts on it).
+        if _is_discussion(item):
+            return _discussion_page(db, item, user)
 
         # The author clicking their own handout link. Without this they get a
         # student's copy of their own assignment: it sits in their project list
@@ -3865,7 +3891,7 @@ def edit_assignment(slug):
             abort(404)
         if _is_lesson(item):
             return redirect(url_for("edit_lesson", slug=item.slug))
-        if _is_lab(item):                  # nothing to edit: its page is its results
+        if _own_page(item):                # nothing to edit: its page is its results
             return redirect(url_for("teacher_assignment", slug=item.slug))
 
         # Not the author's own draft, if one is lying about from before the
@@ -4052,6 +4078,8 @@ def delete_assignment(slug):
         (db.query(accounts.TestResult).filter_by(assignment_id=item.id)
            .delete(synchronize_session=False))
         (db.query(LabState).filter_by(assignment_id=item.id)
+           .delete(synchronize_session=False))
+        (db.query(DiscussionPost).filter_by(assignment_id=item.id)
            .delete(synchronize_session=False))
         # Off its class's page too, for the same reason — and the same for
         # its live lesson and its Classroom posts. Every assignment whose
@@ -4371,14 +4399,14 @@ def teacher_assignment(slug):
                                         and _classroom_link(db, user) is not None))
         # The lesson's link, under the handout link, for posting ahead —
         # except a lab's: labs are never taught live.
-        if lab is None:
+        if not _own_page(item):
             lesson = _lesson_for(db, user, item)
             ctx.update(live_url=url_for("live_page", code=lesson.code,
                                         _external=True, _scheme=_scheme()),
                        live_on=not lesson.ended,
                        live_waiting=_waiting(lesson))
         lab_points = sum(t["points"] for t in lab["tasks"]) if lab else 0
-        ctx.update(lab=lab, lab_points=lab_points)
+        ctx.update(lab=lab, lab_points=lab_points, discussion=_is_discussion(item))
         ctx.update(quiz_count=len(possible),
                    quiz_points=_score_text(sum(q["points"] for q in possible)))
         ctx.update(waiting=_ungraded(db, [item.id]).get(item.id, 0))
@@ -4462,7 +4490,7 @@ def teacher_deck(slug):
         # not coming back from the cache is _no_store_signed_in's doing.
         page = deck.html
         # Labs are never live (_assignment_for), so they have no class to show.
-        if request.args.get("show") and not _is_lab(item):
+        if request.args.get("show") and not _own_page(item):
             page = _with_deck_show(page, _lesson_for(db, user, item))
         resp = Response(page, mimetype="text/html")
         resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -5008,7 +5036,7 @@ def classroom_post(slug):
                                                  "that class.")), 502
 
         # A lab has no live link: it always posts its own page.
-        live = asked.get("link") == "live" and not _is_lab(item)
+        live = asked.get("link") == "live" and not _own_page(item)
         if live:
             link = url_for("live_page", code=_lesson_for(db, user, item).code,
                            _external=True, _scheme=_scheme())
@@ -6045,7 +6073,7 @@ def _place(db, course, item):
     row.class_id, row.position, row.hidden = course.id, top, 0
     db.commit()
     teacher = db.query(accounts.User).filter_by(id=course.teacher_id).first()
-    if not _is_lab(item):                  # a lab has no live link to make ahead
+    if not _own_page(item):                # a lab or discussion has no live link to make ahead
         _lesson_for(db, teacher, item)
     return row
 
@@ -6305,7 +6333,7 @@ def duplicate_class(class_id):
                 copied += 1
             db.add(row)
             db.commit()
-            if row.assignment_id and not _is_lab(copy):
+            if row.assignment_id and not _own_page(copy):
                 _lesson_for(db, user, copy)     # its live link, made ahead
         return jsonify(ok=True, id=new.id, assignments=copied,
                        url=url_for("teacher_class", class_id=new.id))
@@ -6345,10 +6373,12 @@ def class_new_assignment(class_id):
         world = data.get("kind") == "world"
         pi = data.get("kind") == "pi"
         lab = data.get("kind") == "lab"
+        discussion = data.get("kind") == "discussion"
         sc = lab_checks.scenario(str(data.get("scenario") or "")) if lab else None
         if lab and sc is None:
             return jsonify(error="No such lab."), 400
         title = clean(data.get("title"), 200) or (lab_checks.numbered(sc) if sc else "Untitled lesson" if lesson
+                                                  else "Untitled discussion" if discussion
                                                   else "Untitled assignment")
         if lab:
             # An A+ lab: graded on the server as the student works, so it is
@@ -6368,6 +6398,15 @@ def class_new_assignment(class_id):
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
                 teacher_id=user.id, title=title, kind="lesson", code="",
                 files=json.dumps({LESSON_FILE: LESSON_STARTER.format(title=title)}))
+        elif discussion:
+            # The post is its notes (a tutorial, adopted below, to write in
+            # the library); what's required starts at the defaults.
+            item = accounts.Assignment(
+                slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
+                teacher_id=user.id, title=title, kind="discussion", code="",
+                files=json.dumps({DISCUSSION_FILE: DISCUSSION_STARTER.format(title=title),
+                                  DISCUSSION_SETTINGS: json.dumps(DISCUSSION_DEFAULTS)}),
+                out_of=DISCUSSION_POINTS)
         elif world:
             item = accounts.Assignment(
                 slug=accounts.new_id(db, accounts.Assignment), app=APP_NAME,
@@ -6397,9 +6436,11 @@ def class_new_assignment(class_id):
         _store_quiz_keys(db, item.id, item.file_map().values())
         if lab and item.tutorial_id is None:
             library.adopt(db, item, lab_checks.numbered(sc))     # its own tutorial, to edit
+        if discussion:
+            library.adopt(db, item, title)     # its post, to write in the library
         _place(db, course, item)
         return jsonify(slug=item.slug, url=url_for(
-            "edit_lesson" if lesson else "teacher_assignment" if lab else "edit_assignment",
+            "edit_lesson" if lesson else "teacher_assignment" if lab or discussion else "edit_assignment",
             slug=item.slug))
     finally:
         db.close()
@@ -6767,8 +6808,8 @@ def _class_rows(db, course, user=None, student=False):
         # reaches a signed-in student when its lecture or live link is shown,
         # with only that button: no Open Assignment, no grade. The view-only
         # link (no user) has neither button, so it still gets nothing.
-        lecture_only = bool(r.show_deck) and bool(a.deck_id) and a.kind != "lab"
-        live_only = bool(r.show_live) and a.kind != "lab"
+        lecture_only = bool(r.show_deck) and bool(a.deck_id) and a.kind not in ("lab", "discussion")
+        live_only = bool(r.show_live) and a.kind not in ("lab", "discussion")
         if student and r.hidden and (user is None or not (lecture_only or live_only)):
             continue
         live = lessons.get(a.id)
@@ -6779,7 +6820,7 @@ def _class_rows(db, course, user=None, student=False):
                "live_code": live.code if live else "",
                "on_air": bool(live and not live.ended),
                # View teacher lesson. Labs are never live.
-               "has_deck": bool(a.deck_id) and a.kind != "lab",
+               "has_deck": bool(a.deck_id) and a.kind not in ("lab", "discussion"),
                "show_live": bool(r.show_live),
                "show_deck": bool(r.show_deck),
                "out_of": a.out_of or "", "count": counts.get(a.id, 0),
@@ -6941,6 +6982,13 @@ def class_view_item(token, slug):
             ctx.update(scenario=_lab_of(item), lab_item=item, lab_saves=False,
                        lab_notes=_lab_notes(item), attend_class=None)
             return render_template("lab_sandbox.html", **ctx)
+        if _is_discussion(item):
+            # The teacher's post only: the class's posts carry their names,
+            # and the view-only link is for people who aren't the class.
+            ctx.update(item=item, prompt=quiz.redact(item.file_map().get(_notes_name(item), "")),
+                       rules=_discussion_rules(item), is_teacher=False, can_post=False,
+                       signed_in=False, attend_class=None)
+            return render_template("discussion.html", **ctx)
         ctx.update(code=item.code, files=quiz.redact_files(item.file_map()),
                    title=item.title, author="", readonly=True, authoring=False,
                    slug=None, shared_at=None)
@@ -8654,7 +8702,7 @@ def live_assignments():
         rows = (db.query(accounts.Assignment)
                   .filter_by(teacher_id=user.id, app=ide,
                              archived=0, closed=0)
-                  .filter(accounts.Assignment.kind.notin_(("lesson", "lab")))
+                  .filter(accounts.Assignment.kind.notin_(("lesson", "lab", "discussion")))
                   .order_by(func.coalesce(accounts.Assignment.updated_at,
                                           accounts.Assignment.created_at).desc())
                   .limit(40).all())
@@ -8708,6 +8756,8 @@ def _assignment_for(db, user, slug):
                      "turned in to it."
     if _is_lab(item):
         return None, "A lab isn't taught live: students do it on its own page."
+    if _is_discussion(item):
+        return None, "A discussion isn't taught live: the class posts on its own page."
     return item, None
 
 
@@ -8838,6 +8888,8 @@ def teach_assignment_live(slug):
             return redirect(url_for("edit_lesson", slug=item.slug, go="live"))
         if _is_lab(item):                  # no live mode for labs
             return redirect(url_for("teacher_assignment", slug=item.slug))
+        if _is_discussion(item):           # nor for a discussion: its page
+            return redirect(url_for("open_assignment", slug=item.slug))
         live = _lesson_for(db, user, item)
         # In the assignment's own editor: a web lesson taught from the Python
         # one would push its page's text to a class running it as Python.
@@ -10463,6 +10515,342 @@ def lab_state_save(slug):
         _full_marks_xp(db, item, user.id)
         return jsonify(ok=True, saved=True, marks=marks,
                        earned=result.earned, possible=result.possible)
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
+# Discussions
+#
+# An assignment (kind "discussion") that is a teacher's post and the class's
+# replies, threaded, the way Blackboard's discussion boards work (the
+# teacher's request, Nov 2026). The post is the assignment's notes
+# (discussion.md, a library tutorial like any notes, so it is edited in the
+# library and only there); what is required is discussion.json — posts to
+# the prompt, replies to classmates, the minimum length — and Out of is the
+# assignment's own out_of.
+#
+# The teacher's choices: a student sees nobody's posts until they have posted
+# their own (or the later ones paraphrase the earlier); names are first name
+# and last initial (xp.board_name), as on the leaderboard; posts are never
+# edited or deleted, only added to; a post shorter than the minimum is
+# refused; and each post is marked green (substantial) or yellow (it meets
+# the minimum, and no more), for its author and the teacher, as Blackboard
+# does. Ours is a plain rule (words and sentences, _substantial), not a
+# model: the server calls no service, and the same rule runs in the page
+# (discussion.js) so the mark shows while the student types.
+#
+# The grade is a TestResult of kind "verified", one line per required post
+# ("Post 1", "Reply to a classmate 2", …), each its share of Out of — the way
+# a lab's marks are — so the gradebook, Classroom, Skyward, My work and the
+# class page add it with nothing new, and the teacher can still type over a
+# cell. It is worked out again from the posts on every new post and whenever
+# the requirements change, never claimed by a page.
+#
+# Never live: no live link is made (_own_page), as for a lab. The class
+# reads by polling, every few seconds while the page is open, for the
+# reason live lessons do (two workers, no sockets).
+# --------------------------------------------------------------------------
+
+DISCUSSION_FILE = "discussion.md"
+DISCUSSION_SETTINGS = "discussion.json"
+DISCUSSION_DEFAULTS = {"posts": 1, "replies": 2, "min_words": 25}
+DISCUSSION_POINTS = 10
+#: A post's longest, as HTML. A long essay is still well under it.
+MAX_DISCUSSION_POST = 20000
+#: How many posts one student may add to one discussion: far beyond any
+#: requirement, low enough that a stuck key can't fill the board.
+MAX_DISCUSSION_POSTS = 60
+DISCUSSION_STARTER = """# {title}
+
+Write the question you want the class to discuss here. Students reply to
+it, then reply to each other.
+
+They see nobody's replies until they have posted their own.
+"""
+
+
+def _is_discussion(item):
+    return item is not None and (item.kind or "code") == "discussion"
+
+
+def _own_page(item):
+    """A lab or a discussion: its page is the work itself — no draft, no
+    editor, nothing to edit but its notes, and never live (no live link
+    made, not in the Go-live chooser, Go live goes to its page)."""
+    return _is_lab(item) or _is_discussion(item)
+
+
+def _discussion_rules(item):
+    """The requirements: {posts, replies, min_words}, each a small whole
+    number, the defaults for anything missing or wrong."""
+    try:
+        got = json.loads(item.file_map().get(DISCUSSION_SETTINGS) or "{}")
+    except ValueError:
+        got = {}
+    out = dict(DISCUSSION_DEFAULTS)
+    for k, top in (("posts", 20), ("replies", 20), ("min_words", 500)):
+        try:
+            out[k] = max(0, min(int(got.get(k, out[k])), top))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+_SENTENCE_END = re.compile(r"[.!?]+(?=\s|$)")
+
+
+def _post_words(text):
+    return len(text.split())
+
+
+def _substantial(text, min_words):
+    """Green or yellow: a post at least twice the minimum (and 50 words) in
+    three sentences or more is substantial; anything shorter that was still
+    accepted just meets the minimum. discussion.js's substantial() is the
+    same rule — test_discussion.py runs both on the same posts."""
+    words = _post_words(text)
+    sentences = len(_SENTENCE_END.findall(text.strip()))
+    return words >= max(50, 2 * min_words) and sentences >= 3
+
+
+def _discussion_lines(item, posts_by, replies_by):
+    """The grade's lines for one student, from their counts."""
+    rules = _discussion_rules(item)
+    slots = [("Post %d" % (i + 1), posts_by > i) for i in range(rules["posts"])]
+    slots += [("Reply to a classmate %d" % (i + 1), replies_by > i) for i in range(rules["replies"])]
+    each = round((item.out_of or 0) / len(slots), 4) if slots else 0
+    return [{"label": label, "ok": ok, "points": each, "detail": ""} for label, ok in slots]
+
+
+def _discussion_counts(db, item):
+    """{student id: (posts to the prompt, replies to a classmate)} counting
+    only posts as long as the minimum is NOW (a raised minimum counts old
+    short posts out). A reply counts when the post it answers is another
+    student's — not their own, and not the teacher's."""
+    rules = _discussion_rules(item)
+    rows = db.query(DiscussionPost).filter_by(assignment_id=item.id).all()
+    author = {p.id: p.author_id for p in rows}
+    out = {}
+    for p in rows:
+        if p.author_id == item.teacher_id or p.words < rules["min_words"]:
+            continue
+        posts, replies = out.get(p.author_id, (0, 0))
+        if p.parent_id is None:
+            posts += 1
+        elif author.get(p.parent_id) not in (None, p.author_id, item.teacher_id):
+            replies += 1
+        out[p.author_id] = (posts, replies)
+    return out
+
+
+def _grade_discussion(db, item, student_ids=None):
+    """Write each student's grade (a verified TestResult) from their posts."""
+    counts = _discussion_counts(db, item)
+    for sid in (student_ids if student_ids is not None else counts):
+        posts, replies = counts.get(sid, (0, 0))
+        _keep_result(db, item, sid, "verified",
+                     {"results": _discussion_lines(item, posts, replies)})
+        _full_marks_xp(db, item, sid)
+
+
+def _discussion_access(db, user, item):
+    """May this person read and post? The teacher who set it; a student on
+    the roster of the class it is in; anyone signed in, for one in no class
+    (a link handed out by itself). Signed out, nobody: names are shown."""
+    if user is None:
+        return False
+    if user.id == item.teacher_id:
+        return True
+    _, course = _class_of(db, item)
+    if course is None:
+        return True
+    return db.query(accounts.Enrollment).filter(
+        accounts.Enrollment.class_id == course.id,
+        func.lower(accounts.Enrollment.email) == (user.email or "").lower()).first() is not None
+
+
+def _discussion_page(db, item, user):
+    """The discussion: the teacher's post, the box to reply, and the board.
+    The teacher gets the same page with everything visible, the
+    requirements to set, and each student's count."""
+    ctx = user_context(db)
+    teacher = user is not None and user.id == item.teacher_id
+    ctx.update(item=item, prompt=quiz.redact(item.file_map().get(_notes_name(item), "")),
+               rules=_discussion_rules(item), is_teacher=teacher,
+               can_post=_discussion_access(db, user, item) and not item.closed,
+               signed_in=user is not None,
+               attend_class=None if teacher else _attend_item(db, user, item),
+               tutorial=None)
+    if teacher:
+        # Its post is a tutorial, written in the library (and only there).
+        library.import_existing(db, user)
+        db.refresh(item)
+        ctx.update(library.tutorial_box(db, user, item))
+    return render_template("discussion.html", **ctx)
+
+
+def _discussion_for(db, slug):
+    """(user, item, error response) for the discussion API."""
+    user = current_user(db)
+    item = db.query(accounts.Assignment).filter(
+        accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
+    if item is None or not _is_discussion(item):
+        return None, None, (jsonify(error="No such discussion."), 404)
+    if user is None:
+        return None, None, (jsonify(error="Sign in to join the discussion."), 401)
+    if not _discussion_access(db, user, item):
+        return None, None, (jsonify(error="This discussion is for its class."), 403)
+    return user, item, None
+
+
+@app.get("/api/discussion/<slug>")
+def discussion_posts(slug):
+    """The board as this person may see it. A student who hasn't posted to
+    the prompt yet gets no posts at all — not even their classmates' names —
+    only that there are some. The green/yellow mark goes only to a post's
+    author and the teacher."""
+    db = SessionLocal()
+    try:
+        user, item, bad = _discussion_for(db, slug)
+        if bad:
+            return bad
+        teacher = user.id == item.teacher_id
+        rules = _discussion_rules(item)
+        rows = (db.query(DiscussionPost).filter_by(assignment_id=item.id)
+                  .order_by(DiscussionPost.id).all())
+        posted = any(p.author_id == user.id and p.parent_id is None for p in rows)
+        see_all = teacher or posted
+        people = {u.id: u for u in db.query(accounts.User).filter(
+            accounts.User.id.in_({p.author_id for p in rows} or {0}))}
+        posts = []
+        for p in rows if see_all else []:
+            who = people.get(p.author_id)
+            one = {"id": p.id, "parent": p.parent_id, "mine": p.author_id == user.id,
+                   "teacher": p.author_id == item.teacher_id,
+                   "name": xp.board_name(who) if who is not None else "Student",
+                   "html": quiz.clean_html(p.body), "at": _utc_iso(p.created_at)}
+            if teacher or p.author_id == user.id:
+                one["mark"] = ("green" if _substantial(quiz.plain_text(p.body), rules["min_words"])
+                               else "yellow")
+            posts.append(one)
+        out = {"posts": posts, "posted": posted, "see_all": see_all,
+               "hidden": 0 if see_all else len(rows), "rules": rules,
+               "out_of": item.out_of or 0, "closed": bool(item.closed)}
+        if teacher:
+            counts = _discussion_counts(db, item)
+            names = {}
+            _, course = _class_of(db, item)
+            if course is not None:
+                for e, u in _class_students(db, course):
+                    if u is not None:
+                        names[u.id] = xp.board_name(u)
+            for sid in counts:
+                if sid not in names and sid in people:
+                    names[sid] = xp.board_name(people[sid])
+            earned = _earned(db, item.id)
+            out["students"] = sorted(
+                [{"id": sid, "name": nm, "posts": counts.get(sid, (0, 0))[0],
+                  "replies": counts.get(sid, (0, 0))[1],
+                  "earned": _score_text(earned.get(sid)) if sid in earned else ""}
+                 for sid, nm in names.items()], key=lambda s: s["name"].lower())
+        else:
+            mine = _discussion_counts(db, item).get(user.id, (0, 0))
+            out["mine"] = {"posts": mine[0], "replies": mine[1]}
+        return jsonify(out)
+    finally:
+        db.close()
+
+
+@app.post("/api/discussion/<slug>")
+def discussion_post(slug):
+    """Add a post: {html, parent}. Refused under the minimum length, as a
+    reply before the student's own post to the prompt (they can't see what
+    they'd be replying to), on a closed discussion, and past
+    MAX_DISCUSSION_POSTS. Then turned in for them, and graded."""
+    db = SessionLocal()
+    try:
+        user, item, bad = _discussion_for(db, slug)
+        if bad:
+            return bad
+        if item.closed:
+            return jsonify(error="This discussion is closed."), 403
+        data = request.get_json(silent=True) or {}
+        raw = data.get("html")
+        if not isinstance(raw, str) or len(raw) > MAX_DISCUSSION_POST:
+            return jsonify(error="That's too long to post."), 400
+        body = quiz.clean_html(raw)
+        text = quiz.plain_text(body)
+        words = _post_words(text)
+        teacher = user.id == item.teacher_id
+        rules = _discussion_rules(item)
+        if not text:
+            return jsonify(error="Write something first."), 400
+        if not teacher and words < rules["min_words"]:
+            return jsonify(error="A post needs at least %d words. This one has %d."
+                                 % (rules["min_words"], words)), 400
+        parent = data.get("parent")
+        if parent is not None:
+            try:
+                parent = int(parent)
+            except (TypeError, ValueError):
+                return jsonify(error="No such post."), 400
+            if db.query(DiscussionPost).filter_by(id=parent, assignment_id=item.id).first() is None:
+                return jsonify(error="No such post."), 400
+            if not teacher and db.query(DiscussionPost).filter_by(
+                    assignment_id=item.id, author_id=user.id, parent_id=None).first() is None:
+                return jsonify(error="Post your own reply to the question first."), 403
+        mine = db.query(func.count(DiscussionPost.id)).filter_by(
+            assignment_id=item.id, author_id=user.id).scalar() or 0
+        if mine >= MAX_DISCUSSION_POSTS:
+            return jsonify(error="That's as many posts as one discussion takes."), 429
+        post = DiscussionPost(assignment_id=item.id, author_id=user.id,
+                              parent_id=parent, body=body, words=words)
+        db.add(post)
+        db.commit()
+        if not teacher:
+            _auto_turn_in(db, item, user)
+            _grade_discussion(db, item, [user.id])
+        return jsonify(ok=True, id=post.id,
+                       mark="green" if _substantial(text, rules["min_words"]) else "yellow")
+    finally:
+        db.close()
+
+
+@app.post("/api/discussion/<slug>/rules")
+def discussion_set_rules(slug):
+    """The teacher sets what is required ({posts, replies, min_words,
+    out_of}); every student is graded again by it at once."""
+    db = SessionLocal()
+    try:
+        user, item, bad = _own_assignment(db, slug)
+        if bad:
+            return bad
+        if not _is_discussion(item):
+            return jsonify(error="That isn't a discussion."), 400
+        data = request.get_json(silent=True) or {}
+        rules = _discussion_rules(item)
+        for k, top in (("posts", 20), ("replies", 20), ("min_words", 500)):
+            if k in data:
+                try:
+                    rules[k] = max(0, min(int(data[k]), top))
+                except (TypeError, ValueError):
+                    return jsonify(error="Use whole numbers."), 400
+        if rules["posts"] + rules["replies"] == 0:
+            return jsonify(error="Ask for at least one post or reply."), 400
+        if "out_of" in data:
+            try:
+                item.out_of = max(0.0, min(float(data["out_of"]), 1000.0))
+            except (TypeError, ValueError):
+                return jsonify(error="Points must be a number."), 400
+        files = item.file_map()
+        files[DISCUSSION_SETTINGS] = json.dumps(rules)
+        item.files = json.dumps(files)
+        db.commit()
+        everyone = {sid for (sid,) in db.query(accounts.Submission.student_id)
+                    .filter_by(assignment_id=item.id)}
+        _grade_discussion(db, item, everyone | set(_discussion_counts(db, item)))
+        return jsonify(ok=True, rules=rules, out_of=item.out_of)
     finally:
         db.close()
 

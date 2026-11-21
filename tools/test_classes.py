@@ -255,9 +255,9 @@ check("  with Describe on an assignment's row and a heading's",
 # HTML/CSS/JS, Flask app, SQL, PHP site: WebIDE's and FlaskIDE's kinds, since
 # they moved in (Nov 2026) — one class page holds every kind of project.
 _kinds = re.findall(r'<option value="(\w+)">', page)
-check("the Add form's kinds: Python's three, the web four, then Lab, Lesson and Material",
-      _kinds[:10] == ["code", "world", "pi", "web", "flask", "sql", "php", "lab", "lesson", "material"]
-      and '<option value="code">Python</option>' in page, _kinds[:10])
+check("the Add form's kinds: Python's three, the web four, then Lab, Lesson, Discussion and Material",
+      _kinds[:11] == ["code", "world", "pi", "web", "flask", "sql", "php", "lab", "lesson", "discussion", "material"]
+      and '<option value="code">Python</option>' in page, _kinds[:11])
 import json as _json                                        # noqa: E402
 _made = {}
 # In a class of their own: the checks below count this class's cards.

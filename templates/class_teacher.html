@@ -178,7 +178,7 @@
       <input id="new-title" class="field" type="text" maxlength="200"
              placeholder="Name of the new assignment or material" aria-label="New item's name">
       <select id="new-kind" class="field" aria-label="Kind"
-              title="Python: a program students write in the editor. Block world: a Raspberry Pi Minecraft project (mcpi) that builds in a 3D world. Raspberry Pi: a gpiozero project on a simulated Pi with a breadboard students wire. HTML / CSS / JS: a web page, shown as they type. Flask app, SQL, PHP site: a site or a database, run in the browser. Lab (A+): a PC to build or fix, graded as they work — you pick the ticket next. Lesson: slides and questions. Material: text, links and pictures, nothing to open.">
+              title="Python: a program students write in the editor. Block world: a Raspberry Pi Minecraft project (mcpi) that builds in a 3D world. Raspberry Pi: a gpiozero project on a simulated Pi with a breadboard students wire. HTML / CSS / JS: a web page, shown as they type. Flask app, SQL, PHP site: a site or a database, run in the browser. Lab (A+): a PC to build or fix, graded as they work — you pick the ticket next. Lesson: slides and questions. Discussion: your post, and students reply to it and to each other, graded by how many they post. Material: text, links and pictures, nothing to open.">
         {#  Every kind of project the editor has (EDITOR_IDES), each from its
             own starter — the web and Flask ones are WebIDE's and FlaskIDE's,
             which moved in (Nov 2026). #}
@@ -196,6 +196,7 @@
         <optgroup label="Other">
           <option value="lab">Lab (A+)</option>
           <option value="lesson">Lesson</option>
+          <option value="discussion">Discussion</option>
           <option value="material">Material</option>
         </optgroup>
       </select>
@@ -260,7 +261,7 @@
                    title="{{ r.waiting }} long response{{ '' if r.waiting == 1 else 's' }} waiting for your points">Needs grading · {{ r.waiting }}</a>{% endif %}
                 {#  What it is — the three kinds the Add form makes — and whether
                     it was posted to Google Classroom (and to which, on hover). #}
-                <span class="kind-tag">{{ r.kind if r.kind in ('lesson', 'lab') else "code" }}</span>
+                <span class="kind-tag">{{ r.kind if r.kind in ('lesson', 'lab', 'discussion') else "code" }}</span>
                 {% if r.quest_xp %}<span class="kind-tag kind-quest" title="Full marks earn {{ r.quest_xp }} XP">⚔️ quest +{{ r.quest_xp }}</span>{% endif %}
                 {% if r.posted %}
                   <span class="kind-tag tag-classroom" title="Posted to {{ r.posted | join(', ') }}">✓ Classroom</span>
@@ -268,7 +269,7 @@
                   <span class="kind-tag tag-not-posted" title="Not posted to Google Classroom — post it from its page">not in Classroom</span>
                 {% endif %}
                 {% if r.hidden %}<span class="kind-tag" title="Not in students' list or the gradebook — Assign puts it there">not assigned</span>{% endif %}
-                {% if not r.show_live and r.kind != 'lab' %}<span class="kind-tag" title="Students don't see its live link — unless you're live on it">live link hidden</span>{% endif %}
+                {% if not r.show_live and r.kind not in ('lab', 'discussion') %}<span class="kind-tag" title="Students don't see its live link — unless you're live on it">live link hidden</span>{% endif %}
                 {% if r.has_deck and not r.show_deck %}<span class="kind-tag" title="Students don't see Watch Teacher Lecture for it">lecture hidden</span>{% endif %}
                 {% if r.closed %}<span class="dim small"> · closed</span>{% endif %}
                 {% if r.on_air %}<span class="live-pill">● Live now</span>{% endif %}
@@ -286,10 +287,11 @@
               <td class="right rowactions">
                 {#  A lab is never taught live (no live link), and has nothing to
                     edit: its page is its ticket and its results. #}
-                {% if r.kind != 'lab' %}
+                {% if r.kind not in ('lab', 'discussion') %}
                 <a class="linkbtn" href="{{ url_for('teach_assignment_live', slug=r.slug) }}">{{ "Back to the lesson" if r.on_air else "Go live" }}</a>
                 {% endif %}
-                <a class="linkbtn" href="{{ url_for('edit_lesson' if r.kind == 'lesson' else 'teacher_assignment' if r.kind == 'lab' else 'edit_assignment', slug=r.slug) }}">{{ "Results" if r.kind == 'lab' else "Edit" }}</a>
+                {% if r.kind == 'discussion' %}<a class="linkbtn" href="{{ url_for('open_assignment', slug=r.slug) }}">Open</a>{% endif %}
+                <a class="linkbtn" href="{{ url_for('edit_lesson' if r.kind == 'lesson' else 'teacher_assignment' if r.kind in ('lab', 'discussion') else 'edit_assignment', slug=r.slug) }}">{{ "Results" if r.kind in ('lab', 'discussion') else "Edit" }}</a>
                 <button class="linkbtn js-describe">Describe</button>
                 {#  Assign is the old Show (the teacher: "that is what it does,
                     puts it in the gradebook"). Its lecture and live link are
@@ -298,7 +300,7 @@
                 <button class="linkbtn js-hide" title="{{ 'Students get Open Assignment, and it goes in the gradebook (due today)' if r.hidden else 'Take Open Assignment away and it out of the gradebook' }}">{{ "Assign" if r.hidden else "Unassign" }}</button>
                 {#  The live link is always made; this is whether students see
                     it. They do anyway while it is on the air. #}
-                {% if r.kind != 'lab' %}<button class="linkbtn js-live" data-show="{{ 1 if r.show_live else 0 }}"
+                {% if r.kind not in ('lab', 'discussion') %}<button class="linkbtn js-live" data-show="{{ 1 if r.show_live else 0 }}"
                         title="Whether students see this assignment's live link, assigned or not (an assigned one's shows anyway while you're live on it)">{{ "Hide live link" if r.show_live else "Show live link" }}</button>{% endif %}
                 {#  Whether students see Watch Teacher Lecture (its slides). New
                     assignments start with it hidden, like the live link. #}

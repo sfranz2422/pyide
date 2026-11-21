@@ -1,0 +1,55 @@
+/* A discussion assignment's page (discussion.html, discussion.js). Colors
+   are the theme's own variables only, so a student's bought theme paints
+   this page as it does every other. */
+.discussion-page { background: var(--bg); color: var(--text); }
+.disc-wrap { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; display: flex;
+             flex-direction: column; gap: 22px; }
+.disc-wrap h2 { font-size: 17px; margin: 0 0 10px; }
+.disc-prompt, .disc-teacher, .disc-compose { border: 1px solid var(--line); border-radius: 10px;
+                                             background: var(--bg-panel); padding: 16px 18px; }
+.disc-prompt { border-left: 4px solid var(--accent); }
+.disc-prompt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.disc-prompt-body { font-size: 16px; line-height: 1.55; }
+.disc-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+              background: var(--accent); color: var(--on-accent); }
+.disc-badge.disc-you { background: var(--bg-head); color: var(--text); border: 1px solid var(--line); }
+.disc-needs { font-size: 13px; color: var(--muted); }
+.disc-needs.is-done { color: var(--green); font-weight: 600; }
+.disc-note, .disc-locked { padding: 12px 14px; border: 1px dashed var(--line); border-radius: 8px;
+                           color: var(--muted); margin: 0; }
+.disc-locked { font-weight: 500; }
+.disc-locked[hidden] { display: none; }
+
+.disc-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.disc-meter { font-size: 13px; color: var(--muted); margin-right: auto; }
+.disc-meter.is-short { color: var(--red); }
+.disc-meter.is-yellow { color: var(--amber); font-weight: 500; }
+.disc-meter.is-green { color: var(--green); font-weight: 600; }
+.disc-box { min-height: 110px; }
+
+.disc-board #disc-posts { display: flex; flex-direction: column; gap: 14px; }
+.disc-post { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg-panel); }
+.disc-post.is-teacher { border-left: 4px solid var(--accent); }
+.disc-post.is-mine { border-left: 4px solid var(--purple); }
+.disc-post-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.disc-post-body { line-height: 1.5; overflow-wrap: anywhere; }
+.disc-post-body ul, .disc-post-body ol { margin: .3em 0; padding-left: 1.6em; }
+.disc-mark { font-size: 12px; font-weight: 600; }
+.disc-mark.is-green { color: var(--green); }
+.disc-mark.is-yellow { color: var(--amber); }
+.disc-reply { margin-top: 6px; }
+.disc-reply[hidden] { display: none; }
+.disc-reply-box:not(:empty) { margin-top: 8px; }
+.disc-replies { margin-top: 12px; padding-left: 16px; border-left: 2px solid var(--line);
+                display: flex; flex-direction: column; gap: 10px; }
+/* Deep threads stop indenting, or a phone's column shrinks to nothing. */
+.disc-replies.is-flat { padding-left: 0; border-left: none; }
+.disc-replies .disc-post { background: var(--bg); }
+
+.disc-rules { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.disc-rules label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.disc-rules input { width: 110px; }
+.disc-counts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.disc-counts th, .disc-counts td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.disc-counts td.is-met { color: var(--green); font-weight: 600; }
+.disc-counts[hidden] { display: none; }

@@ -314,13 +314,20 @@ _vt = re.search(r'/view/([A-Za-z0-9_-]+)"',
 # An A+ lab's notes (its tutorial), on its page beside the lab (_lab_notes).
 _vb = teacher.post("/api/class/%d/new" % _vc, json={"kind": "lab", "scenario": "overheat"}).get_json()["slug"]
 set_notes(teacher, _vb, NOTES)
-for _what, _slug in (("an assignment", _va), ("a lesson", _vl), ("an A+ lab", _vb)):
+# A discussion's post (its notes) is on its page, to everyone it's shown to.
+_vd = teacher.post("/api/class/%d/new" % _vc, json={"kind": "discussion", "title": "Viewed talk"}).get_json()["slug"]
+set_notes(teacher, _vd, NOTES)
+for _what, _slug in (("an assignment", _va), ("a lesson", _vl), ("an A+ lab", _vb), ("a discussion", _vd)):
     page = stranger.get("/view/%s/a/%s" % (_vt, _slug)).get_data(as_text=True)
     check("a class's view-only link, %s" % _what, not leaks(page) and "len(" in page,
           leaks(page) or ("" if "len(" in page else "the question is not there at all"))
 page = kid.get("/a/" + _vb).get_data(as_text=True)
 check("an A+ lab's page, its notes beside it", not leaks(page) and "len(" in page,
       leaks(page) or ("" if "len(" in page else "the question is not there at all"))
+for _who, _c in (("a student's", kid), ("its teacher's", teacher)):
+    page = _c.get("/a/" + _vd).get_data(as_text=True)
+    check("a discussion's page, %s, the post on it" % _who, not leaks(page) and "len(" in page,
+          leaks(page) or ("" if "len(" in page else "the question is not there at all"))
 
 # ---------------------------------------------------------------- answering
 print("\nAnswering")

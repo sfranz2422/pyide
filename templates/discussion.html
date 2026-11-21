@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ item.title }} — Online IDE</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='discussion.css') }}">
+<script>
+  (function () {
+    try {
+      var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) { /* storage blocked; the CSS default still applies */ }
+  })();
+</script>
+</head>
+<body class="discussion-page">
+
+{#  A discussion assignment ("Discussions" in app.py): the teacher's post,
+    the box to reply, and the board, read by polling (discussion.js). The
+    teacher gets the same page with every post visible, the requirements to
+    set and each student's count. #}
+<header class="bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
+  <div class="meta"><span class="pagetitle">💬 {{ item.title }}</span></div>
+  <div class="actions">
+    {% if is_teacher %}
+      {% if tutorial %}<a class="btn" href="{{ url_for('library.library_edit_page', slug=tutorial.slug) }}"
+         title="The post is a tutorial: write it in the library">Edit post in library</a>{% endif %}
+      <a class="btn" href="{{ url_for('teacher_assignment', slug=item.slug) }}">Results</a>
+    {% elif not signed_in and login_enabled %}
+      <a class="btn btn-primary" href="{{ url_for('login', next=request.path) }}">Sign in to join</a>
+    {% endif %}
+  </div>
+</header>
+
+<main class="disc-wrap">
+  <article class="disc-prompt">
+    <div class="disc-prompt-head">
+      <span class="disc-badge">Teacher's post</span>
+      {% if rules.posts or rules.replies %}
+      <span class="disc-needs" id="disc-needs">
+        To finish: {{ rules.posts }} post{{ '' if rules.posts == 1 else 's' }} of your own
+        and {{ rules.replies }} repl{{ 'y' if rules.replies == 1 else 'ies' }} to classmates,
+        each at least {{ rules.min_words }} words.
+      </span>
+      {% endif %}
+    </div>
+    <div id="disc-prompt" class="prose disc-prompt-body" data-md="{{ prompt }}">{{ prompt }}</div>
+  </article>
+
+  {% if is_teacher %}
+  <section class="disc-teacher" aria-label="What's required">
+    <h2>What's required</h2>
+    <form id="disc-rules" class="disc-rules">
+      <label>Posts to the question <input class="field" type="number" min="0" max="20" name="posts" value="{{ rules.posts }}"></label>
+      <label>Replies to classmates <input class="field" type="number" min="0" max="20" name="replies" value="{{ rules.replies }}"></label>
+      <label>Fewest words a post <input class="field" type="number" min="0" max="500" name="min_words" value="{{ rules.min_words }}"></label>
+      <label>Points <input class="field" type="number" min="0" max="1000" step="any" name="out_of" value="{{ '%g' % (item.out_of or 0) }}"></label>
+      <button class="btn btn-primary" type="submit">Save</button>
+      <span id="disc-rules-said" class="small dim" role="status"></span>
+    </form>
+    <p class="small dim">Each required post is worth its share of the points. Only posts as long as the
+      minimum count, and a reply counts when it answers another student. Changing this grades
+      everyone again. You can still type over any score in the gradebook.</p>
+    <table class="disc-counts" id="disc-counts" hidden>
+      <thead><tr><th>Student</th><th>Posts</th><th>Replies</th><th>Points</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if can_post %}
+  <section class="disc-compose" id="disc-compose" aria-label="Your post">
+    <h2 id="disc-compose-title">Your reply to the question</h2>
+    <div class="disc-editor" data-parent=""></div>
+  </section>
+  {% elif not signed_in %}
+  <p class="disc-note">Sign in with your school account to read the class's posts and add your own.</p>
+  {% elif item.closed %}
+  <p class="disc-note">This discussion is closed.</p>
+  {% elif not is_teacher %}
+  <p class="disc-note">This discussion is for its class.</p>
+  {% endif %}
+
+  {% if signed_in and (can_post or is_teacher) %}
+  <section class="disc-board" aria-label="The class's posts">
+    <h2>The class's posts</h2>
+    <p id="disc-locked" class="disc-locked" hidden>🔒 Post your own reply to see what your classmates wrote.</p>
+    <div id="disc-posts"></div>
+  </section>
+  {% endif %}
+</main>
+
+<script src="{{ url_for('static', filename='notes.js') }}"></script>
+<script src="{{ url_for('static', filename='discussion.js') }}"></script>
+<script>
+  window.PyIDENotes.render(document.getElementById("disc-prompt"),
+                           document.getElementById("disc-prompt").dataset.md);
+  {% if signed_in and (can_post or is_teacher) %}
+  window.PyIDEDiscussion.start({
+    url: {{ url_for('discussion_posts', slug=item.slug)|tojson }},
+    rulesUrl: {{ url_for('discussion_set_rules', slug=item.slug)|tojson }},
+    teacher: {{ is_teacher|tojson }},
+    canPost: {{ can_post|tojson }},
+    minWords: {{ rules.min_words|tojson }}
+  });
+  {% endif %}
+</script>
+{% include "_idle.html" %}
+</body>
+</html>

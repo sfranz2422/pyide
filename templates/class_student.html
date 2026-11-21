@@ -144,10 +144,10 @@
               {% endif %}
               {% if visitor %}
                 <a class="btn btn-primary" href="{{ url_for('class_view_item', token=visitor, slug=r.slug) }}"
-                   title="A preview: nothing is saved or turned in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Assignment" }}</a>
+                   title="A preview: nothing is saved or turned in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Discussion" if r.kind == "discussion" else "Open Assignment" }}</a>
               {% elif r.assigned %}
                 <a class="btn btn-primary" href="{{ url_for('open_assignment', slug=r.slug) }}"
-                   title="Your own copy, to work in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Assignment" }}</a>
+                   title="Your own copy, to work in">{{ "Open Lesson" if r.kind == "lesson" else "Open Lab" if r.kind == "lab" else "Open Discussion" if r.kind == "discussion" else "Open Assignment" }}</a>
               {% endif %}
             </div>
           </article>

@@ -40,6 +40,11 @@
       {#  A lab has no code: Try it is the student's page, kept in this browser. #}
       <a class="btn btn-primary" id="lab-try" href="{{ url_for('open_assignment', slug=assignment.slug, preview=1) }}"
          target="_blank" rel="noopener" title="The lab as a student sees it; nothing you do there is saved">Try it ↗</a>
+    {% elif discussion %}
+      {#  A discussion has no code: its page is the board, where the
+          requirements are set and each student's count is. #}
+      <a class="btn btn-primary" id="discussion-open" href="{{ url_for('open_assignment', slug=assignment.slug) }}"
+         title="The board, with what's required and each student's count">Open the discussion</a>
     {% elif assignment.kind != 'lesson' %}
       <a class="btn btn-primary" id="edit-project" href="{{ url_for('edit_assignment', slug=assignment.slug) }}"
          title="Open the code, files and notes in the editor">Edit project</a>
@@ -55,7 +60,7 @@
        title="Change these slides in PresMaker" {% if not deck_edit %}hidden{% endif %}>Edit teacher slides</a>
     {#  The same slides, shown on the screen of everyone on the lesson's live
         link and moved by the teacher (deck_show.js). Labs are never live. #}
-    {% if assignment.kind != 'lab' %}
+    {% if assignment.kind not in ('lab', 'discussion') %}
     <a class="btn" id="deck-show" target="_blank" rel="noopener"
        href="{{ url_for('teacher_deck', slug=assignment.slug, show=1) }}"
        title="Your slides on the screen of every student on this lesson's live link. You move them; they watch."
@@ -152,7 +157,7 @@
       (_lesson_for), so it can be posted in Google Classroom the day before.
       It is the same link every time: students who open it early are told
       the lesson hasn't started, and their page picks it up when it does. #}
-  {% if not lab %}
+  {% if not lab and not discussion %}
   <section class="handout">
     <h2>The live lesson link</h2>
     <div class="linkrow">
