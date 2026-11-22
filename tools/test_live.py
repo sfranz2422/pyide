@@ -1350,8 +1350,11 @@ check("  which tell its editor and its game when a size changes",
 # Rules for what is INSIDE it (.split > .pane-editor) are the editor's own
 # handles and fine; a rule that styles .split itself is the editor's or a bug.
 _split_rules = re.findall(r"(?m)^[^/*\n]*\.split\b(?!-)\s*[,{][^\n]*", css)
+# The editor's own: .split, the banner's, Student preview's column (the
+# preview bar on top of the editor page, a975f2a) and the narrow screen's.
 check("  without touching the editor, whose <main> is .split",
-      len(_split_rules) == 3
+      len(_split_rules) == 4
+      and any(r.startswith("body.is-student-preview > .split") for r in _split_rules)
       and '<main class="split">' in open(os.path.join(
           PYIDE, "templates", "index.html")).read(),
       _split_rules)
