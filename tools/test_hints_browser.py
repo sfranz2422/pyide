@@ -63,6 +63,30 @@ uses for
 ```
 """
 
+# A Try It slide: two steps, each a `:::pop editor` box and its card.
+TRY = """# Try it
+
+:::pop editor
+Type `print("Hey")`.
+:::
+
+```tests
+prints Hey
+hint: Type what's in the box.
+```
+
+:::pop editor
+Type `print("Pumpkin")`.
+:::
+
+```tests
+prints Pumpkin
+hint: Pumpkin, in quotes.
+hint: print, brackets, "Pumpkin".
+code: print("Pumpkin")
+```
+"""
+
 chrome = find_chrome()
 if not chrome or not shutil.which("node"):
     print("Chrome and node are needed.")
@@ -74,13 +98,14 @@ s = accounts.User(google_sub="s", email="kid@example.org", name="Kid Student")
 db.add_all([t, s])
 db.commit()
 tid, sid = t.id, s.id
-slugs = {}
-for key, notes in (("page", NOTES), ("quiz", "quiz: yes\n" + NOTES)):
+slugs, ids = {}, {}
+for key, notes in (("page", NOTES), ("quiz", "quiz: yes\n" + NOTES), ("try", TRY)):
     a = accounts.Assignment(slug="hint" + key[:4], app="pyide", teacher_id=tid, title="Hello " + key,
                             code="# hello\n", files=json.dumps({"notes.md": notes}))
     db.add(a)
     db.commit()
     slugs[key] = a.slug
+    ids[key] = a.id
 db.close()
 
 server = make_server("127.0.0.1", 0, P.app, threaded=True)
@@ -89,7 +114,7 @@ sign = P.app.session_interface.get_signing_serializer(P.app)
 setup = os.path.join(TMP, "setup.json")
 with open(setup, "w") as f:
     json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/" + slugs["page"],
-               "quiz": "/a/" + slugs["quiz"], "slug": slugs["page"], "student": sign.dumps({"uid": sid})}, f)
+               "quiz": "/a/" + slugs["quiz"], "tryit": "/a/" + slugs["try"], "slug": slugs["page"], "student": sign.dumps({"uid": sid})}, f)
 run = subprocess.run(["node", os.path.join(HERE, "hints_browser.mjs"), setup, chrome],
                      cwd=ROOT, capture_output=True, text=True, timeout=300)
 try:
@@ -117,31 +142,39 @@ h1 = r.get("hint1") or {}
 check("Hint: the first hint, and the second offered with its cost",
       h1.get("hints") == ["💡 Use print() with the words inside quotes."]
       and h1.get("button") == "💡 Another hint · costs a quarter of this test's points", h1)
-a = r.get("armed") or {}
-check("pressed once, the paid hint only asks to be pressed again — nothing spent",
-      a.get("button") == "Press again to spend a quarter of this test's points" and len(a.get("hints") or []) == 1
-      and r.get("armedRecorded") == [1], (a, r.get("armedRecorded")))
 h2 = r.get("hint2") or {}
-check("pressed again: the second hint, and then the code offered at its cost",
-      len(h2.get("hints") or []) == 2 and h2.get("button") == "👀 Show me the code · costs half of this test's points", h2)
+check("one press opens the paid hint (twice looked broken), then the code offered at its cost",
+      len(h2.get("hints") or []) == 2 and h2.get("button") == "👀 Show me the code · costs half of this test's points"
+      and r.get("hint2Recorded") == [1, 2], (h2, r.get("hint2Recorded")))
 c = r.get("code") or {}
-check("the code, after its own second press — and then it says that was every hint, not a dead end",
+check("the code, after one press — and then it says that was every hint, not a dead end",
       c.get("code") == 'print("Hello")' and c.get("button") == ""
       and c.get("end") == "That's every hint for this one.", c)
 db = P.SessionLocal()
-taken = sorted(lv for (lv,) in db.query(P.HintTaken.level).filter_by(student_id=sid))
+taken = sorted(lv for (lv,) in db.query(P.HintTaken.level).filter_by(student_id=sid, assignment_id=ids["page"]))
 db.close()
 check("…and the server recorded each, once", taken == [1, 2, 3], taken)
 check("✕ hides it", r.get("closed") is True)
 check("the next failed check brings it back, with what was opened", len((r.get("back") or {}).get("hints") or []) == 2
       and (r.get("back") or {}).get("code") == 'print("Hello")', r.get("back"))
 p = r.get("passed") or {}
-check("fixed: it says that one passes now", p.get("pass") and "passes now" in (p.get("title") or ""), p)
+check("fixed: the pass card, with what passes", p.get("pass") and p.get("title") == "✓ It passes!"
+      and p.get("button") == "" and "✓ It should print Hello" in (p.get("why") or ""), p)
+check("a program asking for input after the check: the card waits until it's done",
+      r.get("heldWhileRunning") is True and ((r.get("afterRun") or {}).get("title") or "").startswith("✗ Not yet"),
+      (r.get("heldWhileRunning"), r.get("afterRun")))
+fs_ = r.get("firstStep") or {}
+check("a Try It slide: passing step 1 says it passes — not that step 2 (not typed yet) fails",
+      fs_.get("pass") is True and "Hey" in (fs_.get("why") or ""), fs_)
+t1, t2 = r.get("tryHint1") or {}, r.get("tryHint2") or {}
+check("a Try It step's hints are free: no cost named, one press each, the code too",
+      t1.get("button") == "💡 Another hint (free)" and len(t2.get("hints") or []) == 2
+      and t2.get("button") == "👀 Show me the code (free)", (t1, t2))
 rl = r.get("reloaded") or {}
 check("after a reload, what was paid for is shown again on the next failed check",
       len(rl.get("hints") or []) == 2 and rl.get("code") == 'print("Hello")', rl)
 db = P.SessionLocal()
-again = db.query(P.HintTaken).filter_by(student_id=sid).count()
+again = db.query(P.HintTaken).filter_by(student_id=sid, assignment_id=ids["page"]).count()
 db.close()
 check("…without being charged again", again == 3, again)
 check("a quiz: no panel at all", r.get("quiz") is True, r.get("quiz"))

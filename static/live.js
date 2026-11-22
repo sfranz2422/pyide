@@ -1569,7 +1569,11 @@
          (the teacher, Nov 2026: the checks ran it out of sight and kids
          passed without ever seeing their code run). After setBusy(false),
          or run() would think something was still running; not awaited. */
-      if (got) setTimeout(function () { Promise.resolve(run()).catch(function () {}); }, 0);
+      if (got) setTimeout(function () {
+        var ran = Promise.resolve(run()).catch(function () {});
+        // A program asking for input(): the hint card waits for it (hints.js wait).
+        if (window.IDEHints && window.IDEHints.wait && /\binput\s*\(/.test(mainSource())) window.IDEHints.wait(ran);
+      }, 0);
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);

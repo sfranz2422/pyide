@@ -186,6 +186,10 @@ S.configure({ claim: function (code) { claims.push(code); } });
   pc2.onReveal();
   var pc3 = pcards[pcards.length - 1];
   out.pcard2 = { reveal: pc2.canReveal, shown: pc3.shown, answer: pc3.answer, held: !pc.box.hasAttribute("data-predicted") };
+  // Right at last: the card says so, as a passing check does.
+  type(pc, "ACORN"); pc.check.click(); await settle();
+  var pc4 = pcards[pcards.length - 1];
+  out.pcardPass = { pass: pc4.pass, title: pc4.title, n: pcards.length };
   delete window.IDEHints;
   // An example that stops with an error: shown, and it holds nobody.
   var e = block('print("half")\nraise ValueError("no")');
@@ -296,6 +300,9 @@ S.configure({ claim: function (code) { claims.push(code); } });
   out.card2 = { reveal: c2.canReveal, shown: c2.shown };
   c2.onReveal(); var c3 = cards[cards.length - 1];
   out.card3 = { shown: c3.shown, answer: c3.answer, held: !hc.box.hasAttribute("data-predicted") };
+  pick(hc, 0); hc.check.click(); await tick();
+  var c4 = cards[cards.length - 1];
+  out.cardPass = { pass: c4.pass, title: c4.title };
   delete window.IDEHints;
   // # ask: the box asks the teacher's question, and the line is out of the page.
   var ak = pickBlock("<button>OK</button>\n# show: page\n# ask: What is wrong with these buttons?\n# choice: same words\n# answer: same words");
@@ -351,6 +358,8 @@ if "error" not in pk:
     check("  wrong again, with every hint out: Show me the answer is offered", c2.get("reveal") is True and not c2.get("shown"), c2)
     check("  pressed, it shows the answer — and the box still waits for the right pick",
           c3.get("shown") is True and c3.get("answer") == "a bold Hay" and c3.get("held") is True, c3)
+    cp = pk.get("cardPass") or {}
+    check("  picked right: the big card says so", cp.get("pass") is True and cp.get("title") == "Right!", cp)
     ak = pk["ask"]
     check("# ask: the box asks that question instead, and the line is out of the page and the choices",
           ak["ask"] == "🤔 What is wrong with these buttons?" and ak["src"].startswith("<button>OK</button><script>") and "ask:" not in ak["src"] and ak["n"] == 1, ak)
@@ -530,6 +539,8 @@ if "error" not in got:
           and p1.get("inline") is False, p1)
     check("  wrong again with every hint out: Show me the answer, showing what it prints; still to be typed",
           p2.get("reveal") is True and p2.get("shown") is True and p2.get("answer") == "ACORN" and p2.get("held") is True, p2)
+    pp = got.get("pcardPass") or {}
+    check("  typed right: the big card says so (✓, not a hint)", pp.get("pass") is True and pp.get("title") == "Right!", pp)
     er = got["erred"]
     check("an example that stops with an error shows it and holds nobody",
           er["predicted"] and not er["hidden"] and "ValueError" in er["out"], er)

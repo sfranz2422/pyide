@@ -3234,11 +3234,29 @@ def _hint_steps(entry):
     return steps + ([3] if entry["code"] else [])
 
 
+def _free_keys(item):
+    """The keys of tests whose hints cost nothing: a Try It step's, under a
+    `:::pop editor` box that says what to type (hints.collect, `free`)."""
+    return {_hint_key(label) for label, e in _hints_of(item).items() if e.get("free")}
+
+
+def _hint_cost(entry, level):
+    """What opening `level` of this test's hints costs: nothing on a Try It
+    step (the teacher, Nov 2026), HINT_COSTS everywhere else."""
+    return 0.0 if entry.get("free") else HINT_COSTS.get(level, 0.0)
+
+
 def _hint_costs(db, item, student_id):
     """{test key: share of its points lost to hints} for one student."""
-    out = {}
+    out, free = {}, None
     for key, level in db.query(HintTaken.test_key, HintTaken.level).filter_by(
             assignment_id=item.id, student_id=student_id):
+        if not HINT_COSTS.get(level):
+            continue
+        if free is None:
+            free = _free_keys(item)
+        if key in free:
+            continue
         out[key] = min(1.0, out.get(key, 0.0) + HINT_COSTS.get(level, 0.0))
     return out
 
@@ -3259,7 +3277,8 @@ def hints_list(slug):
         if _is_quiz(item):
             return jsonify(tests={}, taken={}, costs=HINT_COSTS, quiz=True)
         user = current_user(db)
-        tests = {label: {"steps": _hint_steps(e)} for label, e in _hints_of(item).items()}
+        tests = {label: {"steps": _hint_steps(e), "free": bool(e.get("free"))}
+                 for label, e in _hints_of(item).items()}
         taken = {}
         if user is not None:
             keys = {_hint_key(label): label for label in tests}
@@ -3310,10 +3329,10 @@ def hints_take(slug):
                     db.commit()
                 except Exception:
                     db.rollback()                 # the same click from another tab
-                if HINT_COSTS.get(level):
+                if _hint_cost(entry, level):
                     _rescore(db, item, user.id)
         return jsonify(ok=True, level=level, kind="code" if level == 3 else "hint",
-                       text=_hint_text(entry, level), cost=HINT_COSTS.get(level, 0.0),
+                       text=_hint_text(entry, level), cost=_hint_cost(entry, level),
                        recorded=record)
     finally:
         db.close()
@@ -5895,13 +5914,18 @@ def _gradebook(db, course, only=None):
                     unchecked.add((a["id"], p["uid"]))
     # Paid hints (levels 2 and 3, "Hints"), per student and column: the cell
     # says its score has their cost taken off, so a low one is explained.
+    # A Try It step's hints are free (_free_keys), so they're not counted.
     paid_hints = {}
     ids = [a["id"] for a in assignments]
     if ids:
-        for aid, sid, n in (db.query(HintTaken.assignment_id, HintTaken.student_id, func.count(HintTaken.id))
-                              .filter(HintTaken.assignment_id.in_(ids), HintTaken.level > 1)
-                              .group_by(HintTaken.assignment_id, HintTaken.student_id)):
-            paid_hints[(aid, sid)] = n
+        free = {}
+        for aid, sid, key in (db.query(HintTaken.assignment_id, HintTaken.student_id, HintTaken.test_key)
+                                .filter(HintTaken.assignment_id.in_(ids), HintTaken.level > 1)):
+            if aid not in free:
+                row = db.get(accounts.Assignment, aid)
+                free[aid] = _free_keys(row) if row is not None else set()
+            if key not in free[aid]:
+                paid_hints[(aid, sid)] = paid_hints.get((aid, sid), 0) + 1
     sent = {r.assignment_id: r for r in db.query(SkywardSent).filter_by(class_id=course.id)}
     for a in assignments:
         r = sent.get(a["id"])

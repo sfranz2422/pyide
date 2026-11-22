@@ -677,7 +677,17 @@
     return got;
   }
   function runAfterCheck() {
-    setTimeout(function () { Promise.resolve(runner.run()).catch(function () {}); }, 0);
+    setTimeout(function () {
+      var ran = Promise.resolve(runner.run()).catch(function () {});
+      /* A program that asks for input() waits in the console for an
+         answer: the hint card waits for it to finish, or it came up over
+         the console before the student could type (the teacher, Nov 2026,
+         on a warm-up). Started before the card's 50 ms wait, so it's heard. */
+      if (window.IDEHints && window.IDEHints.wait && asksInput()) window.IDEHints.wait(ran);
+    }, 0);
+  }
+  function asksInput() {
+    try { return /\binput\s*\(/.test(mainSource()); } catch (e) { return false; }
   }
 
   function keepSelfCheck(got) {

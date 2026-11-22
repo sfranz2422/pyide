@@ -385,7 +385,16 @@ window.PyIDESigHint = (function () {
     return mcpiLoading || Promise.resolve();
   }
 
+  /* Off (Nov 2026, the teacher: "can we get rid of these boxes? ... they
+     are redundant in our current setup"): the lessons now say what to type
+     in the editor's own step bubble, and the hint card covers the rest, so
+     a third box above the line was one more thing to read. The pages still
+     attach it and the tables are still tested, so turning it back on is
+     this one line. */
+  var ON = false;
+
   function attach(cm, opts) {
+    if (!ON) return;
     opts = opts || {};
     var box = null, dismissed = null, own = { functions: {}, methods: {} }, ownFrom = null;
     var KAYPY = /^\s*(from\s+kaypy\s+import|import\s+kaypy)\b/m;

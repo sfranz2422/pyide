@@ -9,8 +9,19 @@
  *
  * The hints aren't on the page (quiz.redact takes them out of the notes):
  * each is asked for here, and the server records it and takes its cost off
- * the test's points. A paid one asks to be pressed a second time before it
- * spends anything — no browser dialog (they block the page).
+ * the test's points. One press opens one: a paid hint once asked to be
+ * pressed twice, and the teacher found that looked like the button didn't
+ * work (Nov 2026); the button already says what it costs. A Try It step's
+ * hints cost nothing (`free`, hints.py: the box in the editor already says
+ * what to type), so its buttons name no cost.
+ *
+ * Every check of a card says how it went: ✗ with the hints, or ✓ when the
+ * card passes (the teacher liked the pass box and wanted it every time, not
+ * only after a hint). Only the card whose ✔ was pressed is talked about —
+ * a Try It slide holds four steps' cards, and passing the first isn't
+ * failing the second. A program that asks for input() runs after the
+ * check (app.js), and the card waits until it's done (wait()): it came up
+ * over the console before a student could type their answer.
  *
  * attach({slug, host}) on a page with a student's editor: app.js (their
  * own editor) and live.js (the class's page, their own editor, never the
@@ -23,8 +34,8 @@ window.IDEHints = (function () {
   "use strict";
 
   var cfg = null, info = { tests: {}, taken: {}, costs: {}, quiz: false, signed_in: false };
-  var panel = null, backdrop = null, current = null, opened = {}, armed = null, lastPassed = {};
-  var pending = null;
+  var panel = null, backdrop = null, current = null, opened = {};
+  var pending = null, waiting = null;
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -60,12 +71,14 @@ window.IDEHints = (function () {
   function hide() {
     if (panel) panel.hidden = true;
     if (backdrop) backdrop.hidden = true;
-    armed = null;
   }
 
   function steps(label) { return (info.tests[label] || { steps: [] }).steps; }
   function takenOf(label) { return info.taken[label] || []; }
-  function costOf(level) { return (info.costs && info.costs[level]) || 0; }
+  function costOf(label, level) {
+    if ((info.tests[label] || {}).free) return 0;
+    return (info.costs && info.costs[level]) || 0;
+  }
 
   /* What a test asks for, in a student's words. The label is the checker's
      ("With input apple, sun, flower, prints hayride"): the inputs are the
@@ -150,11 +163,13 @@ window.IDEHints = (function () {
     back.addEventListener("click", hide);
     if (current.passed) {
       panel.classList.add("is-pass");
-      panel.appendChild(el("div", "hint-title", "✓ That one passes now!"));
-      panel.appendChild(el("div", "hint-why", goal(current.label)));
+      panel.appendChild(el("div", "hint-title", "✓ It passes!"));
+      (current.labels || []).forEach(function (lab) { panel.appendChild(el("div", "hint-why", "✓ " + goal(lab))); });
+      back.textContent = "Keep going";
       var r0 = el("div", "hint-actions");
       r0.appendChild(back);
       panel.appendChild(r0);
+      try { back.focus({ preventScroll: true }); } catch (e) { /* old browser */ }
       return;
     }
     panel.appendChild(el("div", "hint-title", "✗ Not yet: " + goal(current.label)));
@@ -188,22 +203,14 @@ window.IDEHints = (function () {
       panel.appendChild(row);
       return;
     }
-    var cost = costOf(next), paid = cost > 0 && info.signed_in;
-    var words = next === 3 ? "👀 Show me the code" : next === 1 ? "💡 Hint (free)" : "💡 Another hint";
+    var cost = costOf(label, next), paid = cost > 0 && info.signed_in;
+    var words = next === 3 ? "👀 Show me the code" : next === 1 ? "💡 Hint" : "💡 Another hint";
     var already = have.indexOf(next) >= 0;
     if (paid && !already) words += " · costs " + share(cost) + " of this test's points";
+    else if (next === 1 || (steps(label).length && (info.tests[label] || {}).free)) words += " (free)";
     var b = el("button", "btn hint-go" + (paid && !already ? " is-paid" : ""), words);
     b.type = "button";
-    if (armed === label + "|" + next) {
-      b.textContent = "Press again to spend " + share(cost) + " of this test's points";
-      b.classList.add("is-armed");
-    }
-    b.addEventListener("click", function () {
-      var k = label + "|" + next;
-      if (paid && !already && armed !== k) { armed = k; draw(); return; }
-      armed = null;
-      take(label, next);
-    });
+    b.addEventListener("click", function () { take(label, next); });
     row.appendChild(b);
     row.appendChild(back);
     panel.appendChild(row);
@@ -221,14 +228,14 @@ window.IDEHints = (function () {
     panel.innerHTML = "";
     panel.hidden = false;
     backdrop.hidden = false;
-    panel.classList.remove("is-pass");
+    panel.classList.toggle("is-pass", !!o.pass);
     var close = el("button", "hint-close", "✕");
     close.type = "button";
     close.title = "Back to the question";
     close.setAttribute("aria-label", "Close");
     close.addEventListener("click", hide);
     panel.appendChild(close);
-    panel.appendChild(el("div", "hint-title", "✗ " + (o.title || "Not yet")));
+    panel.appendChild(el("div", "hint-title", (o.pass ? "✓ " : "✗ ") + (o.title || (o.pass ? "Right!" : "Not yet"))));
     if (o.why) panel.appendChild(el("div", "hint-why", o.why));
     (o.hints || []).forEach(function (h) { panel.appendChild(el("div", "hint-text", "💡 " + h)); });
     if (o.shown) {
@@ -244,7 +251,7 @@ window.IDEHints = (function () {
     } else if (o.more) {
       panel.appendChild(el("div", "hint-end", o.more));
     }
-    var back = el("button", "btn hint-back", "Back to the question");
+    var back = el("button", "btn hint-back", o.pass ? "Keep going" : "Back to the question");
     back.type = "button";
     back.addEventListener("click", hide);
     row.appendChild(back);
@@ -290,6 +297,38 @@ window.IDEHints = (function () {
     }, function () { /* the panel still has what it had */ });
   }
 
+  /* What to say after a check: about the card whose ✔ was pressed (or
+     the editor bubble's), its first failing test, or that it all passes.
+     A check from nowhere in particular (no card known) falls back to the
+     first failing test on the slide in view. */
+  function judge(results) {
+    var box = window.IDENotesChecks && window.IDENotesChecks.pressed && window.IDENotesChecks.pressed();
+    if (box && box.isConnected) {
+      var labels = Array.prototype.map.call(box.querySelectorAll(".test-line"), function (li) {
+        return li.getAttribute("data-label");
+      }).filter(function (lab) { return results[lab]; });
+      if (labels.length) {
+        for (var i = 0; i < labels.length; i++) {
+          if (!results[labels[i]].ok) return { label: labels[i], detail: results[labels[i]].detail || "" };
+        }
+        return { passed: true, labels: labels };
+      }
+    }
+    return pick(results);
+  }
+
+  /* Shown now, or once the program that asks for input has finished. */
+  function show(c) {
+    current = c;
+    function go() {
+      if (current !== c) return;
+      draw();
+      if (!c.passed) reopen(c.label);
+    }
+    if (waiting) { hide(); waiting.then(go, go); }
+    else go();
+  }
+
   var timer = null;
   function onChecks() {
     // One event per card: answer once, when they've all gone by.
@@ -298,25 +337,17 @@ window.IDEHints = (function () {
       timer = null;
       var results = window.IDENotesChecks && window.IDENotesChecks.results();
       if (!results || info.quiz) return;
-      var was = current && !current.passed ? current.label : null;
-      var fail = pick(results);
-      if (!fail) {
-        if (was && results[was] && results[was].ok) { current = { label: was, passed: true }; draw(); }
-        else hide();
-        return;
-      }
-      if (was && was !== fail.label && results[was] && results[was].ok) {
-        // The one they were stuck on passes: say so, then the next one.
-        current = { label: was, passed: true };
-        draw();
-        setTimeout(function () { current = fail; draw(); reopen(fail.label); }, 1600);
-        return;
-      }
-      current = fail;
-      armed = null;
-      draw();
-      reopen(fail.label);
+      var said = judge(results);
+      if (!said) { current = null; hide(); return; }
+      show(said);
     }, 50);
+  }
+
+  /* The page's run after a check (app.js, live.js), when the program asks
+     for input(): the card waits for it, so the console can be typed in. */
+  function wait(p) {
+    var w = waiting = Promise.resolve(p).then(function () {}, function () {});
+    w.then(function () { if (waiting === w) waiting = null; });
   }
 
   function attach(o) {
@@ -328,7 +359,7 @@ window.IDEHints = (function () {
     });
   }
 
-  return { attach: attach, _pick: pick, _goal: goal, _why: why, predictCard: predictCard, hide: hide,
+  return { attach: attach, _pick: pick, _goal: goal, _why: why, predictCard: predictCard, hide: hide, wait: wait,
            // editor_tip.js: the hint card says why a check failed, so the bubble doesn't too.
            active: function () { return !!cfg && !info.quiz; } };
 })();

@@ -19,6 +19,7 @@
   * the gradebook cell says how many paid hints a score has had
 """
 import json
+import re as _re_mod
 import os
 import shutil
 import subprocess
@@ -65,6 +66,45 @@ defines area
 """
 STRAY = "```tests\nhint: under nothing\nprints Hi\n```\n"
 WEB = "```tests\nhas h1\nhint: An h1 is the biggest heading.\ncode: <h1>Hi</h1>\n```\n"
+# A Try It step: a `:::pop editor` box says what to type, its card under
+# it. Its hints are free (the teacher, Nov 2026); the warm-up after it,
+# with its directions on the slide, keeps the costs. "Prints Hi" is in
+# both a free and a paid block: paid, so the free one can't be a way round.
+TRY = """:::pop editor
+Type `print("Hey")`.
+:::
+
+^
+
+```tests
+prints Hey
+hint: Type what's in the box.
+hint: print, brackets, "Hey".
+code: print("Hey")
+```
+
+## Warm-Up
+
+Print Yo, then Hi.
+
+```tests
+prints Yo
+hint: Use print.
+hint: print("Yo")
+code: print("Yo")
+prints Hi
+hint: paid here
+```
+
+:::pop editor
+Type `print("Hi")`.
+:::
+
+```tests
+prints Hi
+hint: free here
+```
+"""
 FLASK = "```tests\nreturns 2 rows\nhint: WHERE keeps some rows.\ncode: SELECT * FROM t WHERE x > 1;\n```\n"
 
 NODE = r"""
@@ -129,8 +169,9 @@ def main():
     got = hints.collect(PY, autograde.parse_block)
     check("each test's hints and code, by its label",
           got == {"Prints Hello": {"hints": ["Use print() with the words in quotes.", "It's one line: print(\"Hello\")"],
-                                   "code": 'print("Hello")'},
-                  "Uses a for loop": {"hints": ["A for loop repeats."], "code": "for i in range(3):\n    print(i)"}}, got)
+                                   "code": 'print("Hello")', "free": False},
+                  "Uses a for loop": {"hints": ["A for loop repeats."], "code": "for i in range(3):\n    print(i)",
+                                      "free": False}}, got)
     check("…code keeps its indentation; a test with none (defines area) isn't listed", "Defines area()" not in got)
     check("a hint under no test is dropped", hints.collect(STRAY, autograde.parse_block) == {},
           hints.collect(STRAY, autograde.parse_block))
@@ -185,7 +226,7 @@ def main():
     print("The API")
     lst = kid.get("/api/hints/" + slug).get_json()
     check("which tests have hints, and their steps — never the text",
-          lst["tests"] == {"Prints Hello": {"steps": [1, 2, 3]}, "Uses a for loop": {"steps": [1, 3]}}
+          lst["tests"] == {"Prints Hello": {"steps": [1, 2, 3], "free": False}, "Uses a for loop": {"steps": [1, 3], "free": False}}
           and "print(" not in json.dumps(lst) and lst["quiz"] is False, lst)
     check("…the costs: first free, second a quarter, code half", lst["costs"] == {"1": 0.0, "2": 0.25, "3": 0.5}, lst["costs"])
     take = lambda c, label, level: c.post("/api/hints/" + slug, json={"label": label, "level": level})
@@ -197,6 +238,11 @@ def main():
     check("the first hint: its text, free", r.get("text") == "Use print() with the words in quotes." and r["cost"] == 0, r)
     check("a hint that doesn't exist (level 2 of a test with one hint): 404", take(kid, "Uses a for loop", 2).status_code == 404)
     check("…nor a test that isn't there", take(kid, "Prints Goodbye", 1).status_code == 404)
+
+    tr = hints.collect(TRY, autograde.parse_block)
+    check("a test under a `:::pop editor` box (a Try It step) is free; the warm-up's isn't",
+          tr["Prints Hey"]["free"] is True and tr["Prints Yo"]["free"] is False, tr)
+    check("…a test in both a free and a paid block is paid", tr["Prints Hi"]["free"] is False, tr["Prints Hi"])
 
     print("The cost")
     # The teacher's Check all on the kid's work: both tests pass (3 of 4 points; area fails).
@@ -266,10 +312,35 @@ def main():
     e = P._earned(P.SessionLocal(), litem.id).get(sid)
     check("an Easy exercise's test with its second hint taken: 0.75", e == 0.75, e)
 
+    print("A Try It step")
+    tslug = make(teacher, TRY, cls)
+    titem = item_of(tslug)
+    lst = kid.get("/api/hints/" + tslug).get_json()
+    check("the page is told which tests' hints are free",
+          lst["tests"]["Prints Hey"]["free"] is True and lst["tests"]["Prints Yo"]["free"] is False, lst["tests"])
+    db = P.SessionLocal()
+    db.add(accounts.Submission(assignment_id=titem.id, student_id=sid, snippet_slug="", times_submitted=1))
+    db.commit()
+    P._keep_result(db, titem, sid, "verified", {"results": [{"label": "Prints Hey", "ok": True, "points": 1},
+                                                            {"label": "Prints Yo", "ok": True, "points": 1}]})
+    db.close()
+    tk = lambda label, lv: kid.post("/api/hints/" + tslug, json={"label": label, "level": lv}).get_json()
+    got = [tk("Prints Hey", lv) for lv in (1, 2, 3)]
+    e = P._earned(P.SessionLocal(), titem.id).get(sid)
+    check("every hint and the code on a Try It step: recorded, costing nothing, 2 of 2 kept",
+          [g.get("cost") for g in got] == [0, 0, 0] and all(g.get("recorded") for g in got) and e == 2, (got, e))
+    tk("Prints Yo", 1)
+    r = tk("Prints Yo", 2)
+    e = P._earned(P.SessionLocal(), titem.id).get(sid)
+    check("the warm-up's second hint still costs a quarter: 1.75", r.get("cost") == 0.25 and e == 1.75, (r, e))
+
     print("The gradebook")
     page = teacher.get("/teacher/class/%d/gradebook" % cls).get_data(as_text=True)
     check("the cell says how many paid hints its score has had (💡3 for Hinted: hint 2 and the code, the loop's code)", "💡3" in page and "gb-hints" in page,
           page[page.find("gb-hints") - 200: page.find("gb-hints") + 200] if "gb-hints" in page else "no gb-hints")
+    marks = sorted(_re_mod.findall(r"💡(\d+)</span>", page))
+    check("…a Try It step's hints aren't counted (💡1 there: the warm-up's second hint, not the step's two)",
+          marks == ["1", "1", "3"], marks)
 
     print("The help")
     import html as _html
@@ -289,6 +360,11 @@ def main():
     ed = kid.get("/a/" + slug, follow_redirects=True).get_data(as_text=True)
     check("the student's editor loads hints.js, and the notes in it have no hint text",
           "hints.js" in ed and "Use print() with the words" not in ed and "code: print" not in ed)
+
+    for js in ("static/app.js", "static/live.js"):
+        src = open(os.path.join(ROOT, js)).read()
+        check("%s: a program asking for input() after a check holds the card (IDEHints.wait)" % js,
+              "IDEHints.wait(ran)" in src and "input\\s*\\(" in src)
 
     print()
     failed = results.count(False)

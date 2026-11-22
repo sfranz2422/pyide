@@ -551,6 +551,9 @@ window.IDESnippets = (function () {
           status.textContent = first ? "✓ Right on the first try!" : "✓ Right!";
           paint();
           tellLock(box);
+          // The big card says so too, as a passing check does (the teacher, Nov 2026).
+          openHintCard({ pass: true, title: first ? "Right on the first try!" : "Right!",
+                         why: "That's exactly what it prints." });
           if (first && page.claim) { try { page.claim(original); } catch (e) { /* XP is a bonus */ } }
           return;
         }
@@ -760,6 +763,7 @@ window.IDESnippets = (function () {
         paint();
         if (!asPage) showPage(original);
         tellLock(box);
+        openHintCard({ pass: true, title: first ? "Right on the first try!" : "Right!", why: "That's the one." });
         if (first && page.claim) { try { page.claim(original); } catch (e) { /* XP is a bonus */ } }
         return;
       }

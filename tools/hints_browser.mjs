@@ -67,14 +67,12 @@ try {
   await s(go);
   await until(s, "document.querySelectorAll('.hint-panel .hint-text').length === 1");
   out.hint1 = await s(PANEL);
-  await s(go);                                           // the paid one: armed, not spent
-  out.armed = await s(PANEL);
-  out.armedRecorded = await s(`fetch('/api/hints/${cfg.slug}').then(r=>r.json()).then(d=>d.taken['Prints Hello']||[])`);
-  await s(go);                                           // pressed again: spent
+  await s(go);                                           // the paid one: one press opens it
   await until(s, "document.querySelectorAll('.hint-panel .hint-text').length === 2");
   out.hint2 = await s(PANEL);
+  out.hint2Recorded = await s(`fetch('/api/hints/${cfg.slug}').then(r=>r.json()).then(d=>d.taken['Prints Hello']||[])`);
   await s.shot("2-hint2");
-  await s(go); await sleep(100); await s(go);
+  await s(go);
   await until(s, "!!document.querySelector('.hint-panel .hint-code')");
   out.code = await s(PANEL);
   await s.shot("3-code");
@@ -96,6 +94,34 @@ try {
   await s(press);
   await until(s, "document.querySelector('.hint-panel').classList.contains('is-pass')");
   out.passed = await s(PANEL);
+
+  // A program that asks for input() runs after the check (app.js): the card
+  // waits until it's finished, so the console can be typed in first.
+  await s("document.querySelector('.hint-close').click(); window.__done = null; window.IDEHints.wait(new Promise(function (r) { window.__done = r; })); true");
+  await s(answer([{ label: "Prints Hello", ok: false, detail: "It printed: Hi" }, { label: "Uses a for loop", ok: true, detail: "" }]));
+  await s(press);
+  await sleep(600);
+  out.heldWhileRunning = await s("document.querySelector('.hint-panel').hidden");
+  await s("window.__done(); true");
+  await until(s, "!document.querySelector('.hint-panel').hidden");
+  out.afterRun = await s(PANEL);
+
+  // A Try It page: free hints, and only the card pressed is talked about.
+  const t = await open(cfg.student, cfg.tryit);
+  await t(answer([{ label: "Prints Hey", ok: true, detail: "" }, { label: "Prints Pumpkin", ok: false, detail: "It printed: (nothing)" }]));
+  await t("document.querySelectorAll('.tests-card .tests-run')[0].click(); true");
+  await until(t, "!!document.querySelector('.hint-panel:not([hidden])')");
+  out.firstStep = await t(PANEL);
+  await t("document.querySelector('.hint-close').click(); true");
+  await t("document.querySelectorAll('.tests-card .tests-run')[1].click(); true");
+  await until(t, "!!document.querySelector('.hint-panel:not([hidden]) .hint-go')");
+  await t(go);
+  await until(t, "document.querySelectorAll('.hint-panel .hint-text').length === 1");
+  out.tryHint1 = await t(PANEL);
+  await t(go);
+  await until(t, "document.querySelectorAll('.hint-panel .hint-text').length === 2");
+  out.tryHint2 = await t(PANEL);
+  await t.shot("4-tryit");
 
   // A reload: what was paid for is shown again, free, on the next failed check.
   const r = await open(cfg.student, cfg.page);

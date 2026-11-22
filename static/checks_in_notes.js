@@ -38,6 +38,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
 
   var runner = null;      // the page's: () => Promise<{results}>, or null
   var latest = null;      // label -> {ok, detail}, from the last check
+  var pressed = null;     // the card whose ✔ ran the last check (hints.js)
   var busy = false;
   var revealFn = null;    // the page's: () => true where the teacher is looking
   var quizNotes = false;  // notes.js: the notes on this page say `quiz: yes`
@@ -149,6 +150,8 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   function check(box) {
     if (!runner || busy) return Promise.resolve(null);
     if (box && box.setAttribute) box.setAttribute("data-checked", "");
+    // hints.js talks about this card only: a Try It slide has a card per step.
+    pressed = box && box.querySelectorAll ? box : null;
     busy = true;
     paintAll(false);
     return Promise.resolve().then(runner).then(function (got) {
@@ -192,5 +195,5 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   }
 
   return { card: card, check: check, setRunner: setRunner, forget: forget, reveal: reveal, setQuiz: setQuiz,
-           results: function () { return latest; } };
+           results: function () { return latest; }, pressed: function () { return pressed; } };
 })();

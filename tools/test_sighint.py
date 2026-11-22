@@ -332,6 +332,8 @@ check("mcpi's hints are only for a program that imports mcpi",
       and "mcpiOn ? mcpiSigs : null" in sighint)
 check("the editor tells it where mcpi's are",
       'mcpiUrl: "/static/py/mcpi_sigs.json"' in open(os.path.join(ROOT, "static", "runners", "python.js")).read())
+check("the box is OFF (the teacher, Nov 2026: 'redundant in our current setup'): attach returns at once",
+      "var ON = false;" in sighint and "if (!ON) return;" in sighint)
 
 failed = results.count(False)
 print("\n%s (%d checks, %d failed)" % ("ALL PASSED" if not failed else "SOME FAILED",
