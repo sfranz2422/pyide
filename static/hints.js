@@ -23,7 +23,7 @@ window.IDEHints = (function () {
   "use strict";
 
   var cfg = null, info = { tests: {}, taken: {}, costs: {}, quiz: false, signed_in: false };
-  var panel = null, current = null, opened = {}, armed = null, lastPassed = {};
+  var panel = null, backdrop = null, current = null, opened = {}, armed = null, lastPassed = {};
   var pending = null;
 
   function el(tag, cls, text) {
@@ -56,8 +56,10 @@ window.IDEHints = (function () {
     return null;
   }
 
+  /* Closed (✕, Back to my code, Esc, a click outside): until the next check. */
   function hide() {
     if (panel) panel.hidden = true;
+    if (backdrop) backdrop.hidden = true;
     armed = null;
   }
 
@@ -65,29 +67,99 @@ window.IDEHints = (function () {
   function takenOf(label) { return info.taken[label] || []; }
   function costOf(level) { return (info.costs && info.costs[level]) || 0; }
 
-  function draw() {
-    if (!panel) {
-      panel = el("aside", "hint-panel");
-      panel.setAttribute("role", "status");
-      panel.setAttribute("aria-live", "polite");
-      cfg.host.appendChild(panel);
+  /* What a test asks for, in a student's words. The label is the checker's
+     ("With input apple, sun, flower, prints hayride"): the inputs are the
+     whole program's answers typed in for the check, which says nothing to
+     a kid on a step that has no input() at all (the teacher, Nov 2026). */
+  function goal(label) {
+    var m;
+    if ((m = /^(?:With input .*?, )?prints exactly (.*)$/i.exec(label))) return "It should print exactly " + m[1];
+    if ((m = /^(?:With input .*?, )?prints (.*)$/i.exec(label))) return "It should print " + m[1];
+    if ((m = /^Uses (.*)$/.exec(label))) return "Your code should use " + m[1];
+    if ((m = /^Doesn't use (.*)$/.exec(label))) return "Your code shouldn't use " + m[1];
+    if ((m = /^Defines (.*)$/.exec(label))) return "Your code should have def " + m[1];
+    if ((m = /^(\w+) is made with (.*)$/.exec(label))) return "The line that makes " + m[1] + " should use " + m[2];
+    if ((m = /^(.*) gives (.*)$/.exec(label))) return m[1] + " should give " + m[2];
+    return label;
+  }
+
+  /* Why it failed, in a student's words. The checker says what Python
+     said ("NameError: name 'hay' is not defined"); a syntax error gets the
+     Run button's own plain words (syntax.js), the line read from their
+     editor. Anything not known here is shown as Python said it. */
+  function lineOf(n) {
+    var cm = cfg.host && cfg.host.querySelector(".CodeMirror");
+    try { return cm && cm.CodeMirror ? cm.CodeMirror.getLine(n - 1) || "" : ""; } catch (e) { return ""; }
+  }
+  function why(detail) {
+    var m, d = String(detail || "");
+    if (!d) return "";
+    if ((m = /^(\S+) can't be read: line (\d+): (.*)$/.exec(d))) {
+      if (window.PyIDESyntax && window.PyIDESyntax.explain) {
+        return window.PyIDESyntax.explain({ file: m[1], line: +m[2], msg: m[3], kind: "SyntaxError",
+                                           text: m[1] === "main.py" ? lineOf(+m[2]) : "" }).friendly;
+      }
+      return "Python can't read line " + m[2] + ". Look for a missing quote, bracket or symbol there.";
     }
+    if ((m = /NameError: name '(\w+)' is not defined/.exec(d))) {
+      return "Python doesn't know " + m[1] + ". If " + m[1] + " is a word to print, it needs quotes: \"" + m[1]
+        + "\". If it's a variable, check it's spelled exactly as where you made it.";
+    }
+    if (/can only concatenate str \(not "(int|float)"\) to str/.test(d)) {
+      return "+ can only glue text to text. A number needs str( ) around it first.";
+    }
+    if ((m = /^It printed: \(nothing\)$/.exec(d))) return "Your program didn't print anything.";
+    if ((m = /^It printed: ([\s\S]*)$/.exec(d))) return "Your program printed: " + m[1];
+    if (/^It isn't in the code yet\.$/.test(d)) return "It isn't in your code yet.";
+    return d;
+  }
+
+  function ensurePanel() {
+    if (!panel) {
+      // A card in the middle of the screen, over the page dimmed behind it:
+      // at the bottom of the editor it was under the fold on a Chromebook,
+      // where nobody scrolls to look (the teacher, Nov 2026).
+      backdrop = el("div", "hint-backdrop");
+      backdrop.addEventListener("click", hide);
+      panel = el("aside", "hint-panel");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-live", "polite");
+      panel.setAttribute("aria-label", "Hint");
+      document.body.appendChild(backdrop);
+      document.body.appendChild(panel);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && panel && !panel.hidden) hide();
+      });
+    }
+  }
+
+  function draw() {
+    ensurePanel();
     panel.innerHTML = "";
     panel.hidden = false;
+    backdrop.hidden = false;
     panel.classList.remove("is-pass");
     var close = el("button", "hint-close", "✕");
     close.type = "button";
-    close.title = "Hide this until your next check";
-    close.setAttribute("aria-label", "Hide");
+    close.title = "Back to my code";
+    close.setAttribute("aria-label", "Close");
     close.addEventListener("click", hide);
     panel.appendChild(close);
+    var back = el("button", "btn hint-back", "Back to my code");
+    back.type = "button";
+    back.addEventListener("click", hide);
     if (current.passed) {
       panel.classList.add("is-pass");
-      panel.appendChild(el("div", "hint-title", "✓ " + current.label + ": that one passes now!"));
+      panel.appendChild(el("div", "hint-title", "✓ That one passes now!"));
+      panel.appendChild(el("div", "hint-why", goal(current.label)));
+      var r0 = el("div", "hint-actions");
+      r0.appendChild(back);
+      panel.appendChild(r0);
       return;
     }
-    panel.appendChild(el("div", "hint-title", "✗ Not yet: " + current.label));
-    if (current.detail) panel.appendChild(el("div", "hint-why", current.detail));
+    panel.appendChild(el("div", "hint-title", "✗ Not yet: " + goal(current.label)));
+    var said = why(current.detail);
+    if (said) panel.appendChild(el("div", "hint-why", said));
 
     var label = current.label, have = takenOf(label), all = steps(label);
     // What's been opened already, in order: shown again, free.
@@ -101,8 +173,21 @@ window.IDEHints = (function () {
         panel.appendChild(el("div", "hint-text", "💡 " + text));
       }
     });
+    var row = el("div", "hint-actions");
     var next = all.filter(function (lv) { return have.indexOf(lv) < 0 || !opened[label + "|" + lv]; })[0];
-    if (next == null) return;
+    if (next == null) {
+      // Nothing more to give: say so, or it looks stuck (the teacher pressed
+      // Check three times on a Try It step waiting for the next one). A Try
+      // It step has its one hint and no code: the code is in its box.
+      if (all.length) {
+        panel.appendChild(el("div", "hint-end", all.indexOf(3) < 0
+          ? "That's the only hint for this step. The line to type is in the box in your editor."
+          : "That's every hint for this one."));
+      }
+      row.appendChild(back);
+      panel.appendChild(row);
+      return;
+    }
     var cost = costOf(next), paid = cost > 0 && info.signed_in;
     var words = next === 3 ? "👀 Show me the code" : next === 1 ? "💡 Hint (free)" : "💡 Another hint";
     var already = have.indexOf(next) >= 0;
@@ -119,10 +204,52 @@ window.IDEHints = (function () {
       armed = null;
       take(label, next);
     });
-    var row = el("div", "hint-actions");
     row.appendChild(b);
+    row.appendChild(back);
     panel.appendChild(row);
-    if (!all.length) row.hidden = true;
+    try { b.focus({ preventScroll: true }); } catch (e) { /* old browser */ }
+  }
+
+  /* The same card for a prediction's wrong guess (snippets.js): what was
+     wrong, the hints so far — each wrong guess adds the next, free, as
+     before — and once they're all out, 👀 Show me the answer. A prediction
+     is worth no points, so the answer costs nothing; it's shown, never
+     filled in, and they still type (or pick) it to go on. The teacher
+     (Nov 2026): "expand the hint system to the code prediction questions". */
+  function predictCard(o) {
+    ensurePanel();
+    panel.innerHTML = "";
+    panel.hidden = false;
+    backdrop.hidden = false;
+    panel.classList.remove("is-pass");
+    var close = el("button", "hint-close", "✕");
+    close.type = "button";
+    close.title = "Back to the question";
+    close.setAttribute("aria-label", "Close");
+    close.addEventListener("click", hide);
+    panel.appendChild(close);
+    panel.appendChild(el("div", "hint-title", "✗ " + (o.title || "Not yet")));
+    if (o.why) panel.appendChild(el("div", "hint-why", o.why));
+    (o.hints || []).forEach(function (h) { panel.appendChild(el("div", "hint-text", "💡 " + h)); });
+    if (o.shown) {
+      panel.appendChild(el("div", "hint-head", "👀 " + (o.answerLabel || "The answer")));
+      panel.appendChild(el("pre", "hint-code", o.answer));
+    }
+    var row = el("div", "hint-actions");
+    if (o.canReveal && !o.shown) {
+      var b = el("button", "btn hint-go", "👀 Show me the answer");
+      b.type = "button";
+      b.addEventListener("click", function () { if (o.onReveal) o.onReveal(); });
+      row.appendChild(b);
+    } else if (o.more) {
+      panel.appendChild(el("div", "hint-end", o.more));
+    }
+    var back = el("button", "btn hint-back", "Back to the question");
+    back.type = "button";
+    back.addEventListener("click", hide);
+    row.appendChild(back);
+    panel.appendChild(row);
+    try { (row.querySelector(".hint-go") || back).focus({ preventScroll: true }); } catch (e) { /* old browser */ }
   }
 
   /* One hint's text from the server, kept in `opened`. A level already
@@ -201,5 +328,7 @@ window.IDEHints = (function () {
     });
   }
 
-  return { attach: attach, _pick: pick };
+  return { attach: attach, _pick: pick, _goal: goal, _why: why, predictCard: predictCard, hide: hide,
+           // editor_tip.js: the hint card says why a check failed, so the bubble doesn't too.
+           active: function () { return !!cfg && !info.quiz; } };
 })();

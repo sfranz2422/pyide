@@ -173,6 +173,20 @@ S.configure({ claim: function (code) { claims.push(code); } });
   var c2 = block(c2code); type(c2, "x"); c2.check.click(); await settle();
   var key = Object.keys(store).filter(function (k) { return k.indexOf("pyide-predict:/a/demo:") === 0; });
   out.stored = key.length;
+  // The hint card (hints.js predictCard) for a Python prediction: a wrong
+  // guess opens it with the hints so far; out of hints, the answer.
+  var pcards = [];
+  window.IDEHints = { predictCard: function (o) { pcards.push(o); } };
+  var pc = block('print("ACORN")\n# hint: capitals count');
+  type(pc, "acorn"); pc.check.click(); await settle();
+  out.pcard1 = { n: pcards.length, hints: pcards[0] && pcards[0].hints, reveal: pcards[0] && pcards[0].canReveal,
+                 inline: !pc.hints.hidden };
+  type(pc, "Acorn"); pc.check.click(); await settle();
+  var pc2 = pcards[pcards.length - 1];
+  pc2.onReveal();
+  var pc3 = pcards[pcards.length - 1];
+  out.pcard2 = { reveal: pc2.canReveal, shown: pc3.shown, answer: pc3.answer, held: !pc.box.hasAttribute("data-predicted") };
+  delete window.IDEHints;
   // An example that stops with an error: shown, and it holds nobody.
   var e = block('print("half")\nraise ValueError("no")');
   type(e, "anything"); e.check.click(); await settle();
@@ -269,6 +283,20 @@ S.configure({ claim: function (code) { claims.push(code); } });
   pick(pg2, 0); pg2.check.click(); await tick();
   out.pageRight = { predicted: pg2.box.hasAttribute("data-predicted"), run: pg2.run.hidden, frame: pg2.frame.hidden,
                     claim: claims.slice(before), code: !!pg2.area };
+  // The hint card (hints.js predictCard), where the page has it: a wrong
+  // pick opens it with the hints so far, and once they're out, the answer.
+  var cards = [];
+  window.IDEHints = { predictCard: function (o) { cards.push(o); } };
+  var hc = pickBlock("<b>Hay</b>\n# show: page\n# choice: a bold Hay\n# choice: a plain Hay\n# choice: a red Hay\n# answer: a bold Hay\n# hint: b makes text bold");
+  pick(hc, 1); hc.check.click(); await tick();
+  out.card1 = { n: cards.length, title: cards[0] && cards[0].title, hints: cards[0] && cards[0].hints,
+                reveal: cards[0] && cards[0].canReveal, inline: !hc.hints.hidden };
+  pick(hc, 2); hc.check.click(); await tick();
+  var c2 = cards[cards.length - 1];
+  out.card2 = { reveal: c2.canReveal, shown: c2.shown };
+  c2.onReveal(); var c3 = cards[cards.length - 1];
+  out.card3 = { shown: c3.shown, answer: c3.answer, held: !hc.box.hasAttribute("data-predicted") };
+  delete window.IDEHints;
   // # ask: the box asks the teacher's question, and the line is out of the page.
   var ak = pickBlock("<button>OK</button>\n# show: page\n# ask: What is wrong with these buttons?\n# choice: same words\n# answer: same words");
   var ak2 = ak.box.querySelector(".snippet-ask");
@@ -316,6 +344,13 @@ if "error" not in pk:
           and "show:" not in pg["src"] and pg["n"] == 2, pg)
     check("  it asks which one this is, Check my answer, and still holds the slide",
           "Which one is this" in (pg["ask"] or "") and "Check my answer" in pg["check"] and pg["held"], pg)
+    c1, c2, c3 = pk.get("card1") or {}, pk.get("card2") or {}, pk.get("card3") or {}
+    check("a wrong pick opens the hint card with the hints so far, and not the little list under the box",
+          c1.get("n") == 1 and c1.get("title") == "Not that one" and c1.get("hints") == ["b makes text bold"]
+          and c1.get("reveal") is False and c1.get("inline") is False, c1)
+    check("  wrong again, with every hint out: Show me the answer is offered", c2.get("reveal") is True and not c2.get("shown"), c2)
+    check("  pressed, it shows the answer — and the box still waits for the right pick",
+          c3.get("shown") is True and c3.get("answer") == "a bold Hay" and c3.get("held") is True, c3)
     ak = pk["ask"]
     check("# ask: the box asks that question instead, and the line is out of the page and the choices",
           ak["ask"] == "🤔 What is wrong with these buttons?" and ak["src"].startswith("<button>OK</button><script>") and "ask:" not in ak["src"] and ak["n"] == 1, ak)
@@ -489,6 +524,12 @@ if "error" not in got:
     check("right on the first try: claimed once, the code without its hints",
           fi["claims"] == ['print("A")'] and "first try" in fi["status"], fi)
     check("  how many tries is kept in the browser, so a reload can't make a first try", got["stored"] >= 3, got["stored"])
+    p1, p2 = got.get("pcard1") or {}, got.get("pcard2") or {}
+    check("a wrong Python prediction opens the hint card with the hint, not the little list under the box",
+          p1.get("n") == 1 and p1.get("hints") == ["capitals count"] and p1.get("reveal") is False
+          and p1.get("inline") is False, p1)
+    check("  wrong again with every hint out: Show me the answer, showing what it prints; still to be typed",
+          p2.get("reveal") is True and p2.get("shown") is True and p2.get("answer") == "ACORN" and p2.get("held") is True, p2)
     er = got["erred"]
     check("an example that stops with an error shows it and holds nobody",
           er["predicted"] and not er["hidden"] and "ValueError" in er["out"], er)

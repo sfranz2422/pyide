@@ -337,6 +337,21 @@ window.IDESnippets = (function () {
   // teacher's page without asking; its page is generated, not ours to edit.
   function teacher() { return page.teacher || !!window.PM; }
 
+  /* A wrong guess opens the big hint card (hints.js predictCard) where the
+     page has it — the editor and the class's live page — instead of the
+     small list under the box: the same card the tests' hints use (the
+     teacher, Nov 2026). The hints so far, each wrong guess adding one as
+     before, and once they're all out and it's still wrong, Show me the
+     answer. Not for the teacher (Show the output is theirs), and a page
+     without hints.js (a lesson's slides) keeps the list. */
+  function hintCard() {
+    return !!(window.IDEHints && window.IDEHints.predictCard) && !teacher();
+  }
+  function openHintCard(o) {
+    if (!hintCard()) return;
+    window.IDEHints.predictCard(o);
+  }
+
   function buildPredict(codeEl, lang) {
     var sql = lang === "sql", php = lang === "php";
     var parts = splitHints(codeEl.textContent.replace(/\n$/, ""));
@@ -401,7 +416,20 @@ window.IDESnippets = (function () {
       hintList.textContent = "";
       var n = Math.min(st.right ? 0 : st.tries, hints.length);
       for (var i = 0; i < n; i++) hintList.appendChild(el("li", "", "💡 " + hints[i]));
-      hintList.hidden = n === 0;
+      hintList.hidden = n === 0 || hintCard();          // the card has them
+    }
+    var lastWant = "";
+    function showCard() {
+      var n = Math.min(st.tries, hints.length);
+      openHintCard({
+        title: "Not yet: some lines aren't right",
+        why: "The lines marked ✗ under the box are the ones to fix. Capitals count; spaces don't.",
+        hints: hints.slice(0, n),
+        canReveal: st.tries > hints.length,
+        shown: !!st.shown, answer: lastWant, answerLabel: "What it prints",
+        more: hints.length > n ? "Guess again for the next hint." : "",
+        onReveal: function () { st.shown = true; saveState(original, st); showCard(); }
+      });
     }
     // Locked until right: the code is read only, and there is only Check.
     function paint() {
@@ -531,6 +559,8 @@ window.IDESnippets = (function () {
         status.className = "snippet-status small is-wrong";
         status.textContent = "Not yet. Fix the lines marked ✗ and check again.";
         paint();
+        lastWant = String(text).replace(/\s+$/, "");
+        showCard();
       });
     });
 
@@ -711,6 +741,7 @@ window.IDESnippets = (function () {
       hintList.textContent = "";
       var n = st.right ? 0 : Math.min(st.tries, hints.length);
       for (var i = 0; i < n; i++) hintList.appendChild(el("li", "", "💡 " + hints[i]));
+      if (hintCard()) n = 0;                             // the card has them
       hintList.hidden = n === 0;
     }
 
@@ -738,7 +769,20 @@ window.IDESnippets = (function () {
       status.className = "snippet-status small is-wrong";
       status.textContent = hints.length ? "Not that one. Read the hint, then pick again." : "Not that one. Pick again.";
       paint();
+      showPickCard();
     });
+    function showPickCard() {
+      var n = Math.min(st.tries, hints.length);
+      openHintCard({
+        title: "Not that one",
+        why: "Pick again: the one you picked is crossed out.",
+        hints: hints.slice(0, n),
+        canReveal: st.tries > hints.length,
+        shown: !!st.shown, answer: parts.answer, answerLabel: "The answer",
+        more: hints.length > n ? "Pick again for the next hint." : "",
+        onReveal: function () { st.shown = true; saveState(original, st); showPickCard(); }
+      });
+    }
     run.addEventListener("click", function () { if (st.right) showPage(area.value); });
     reset.addEventListener("click", function () { area.value = original; });
     show.addEventListener("click", function () {

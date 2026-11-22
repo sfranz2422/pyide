@@ -101,9 +101,18 @@ print("The hint panel")
 check("the browser run finished", not r.get("error"), r.get("error", ""))
 check("nothing before a check", r.get("before") is True, r.get("before"))
 f = r.get("failed") or {}
-check("a failed check: the panel, over the editor — the test, why, and a free hint",
-      f.get("inEditor") and f.get("title") == "✗ Not yet: Prints Hello" and f.get("why") == "It printed: Hi"
+check("a failed check: a big card in the middle of the screen, the page dimmed behind it",
+      f.get("centered") is True and f.get("dimmed") is True, f)
+check("  in a student's words: what it should do, what it did, and a free hint",
+      f.get("title") == "✗ Not yet: It should print Hello" and f.get("why") == "Your program printed: Hi"
       and f.get("button") == "💡 Hint (free)", f)
+w = r.get("words") or []
+check("  a NameError says the word needs quotes; a syntax error gets the Run button's plain words",
+      len(w) == 5 and "Python doesn't know hay" in w[0] and 'quotes: "hay"' in w[0]
+      and "NameError" not in w[0] and "invalid syntax" not in w[1] and w[1], w)
+check("  nothing printed, the checker's own input list gone, and 'is made with' said plainly",
+      w[2:] == ["Your program didn't print anything.", "It should print hayride",
+                "The line that makes crop should use +"], w)
 h1 = r.get("hint1") or {}
 check("Hint: the first hint, and the second offered with its cost",
       h1.get("hints") == ["💡 Use print() with the words inside quotes."]
@@ -116,7 +125,9 @@ h2 = r.get("hint2") or {}
 check("pressed again: the second hint, and then the code offered at its cost",
       len(h2.get("hints") or []) == 2 and h2.get("button") == "👀 Show me the code · costs half of this test's points", h2)
 c = r.get("code") or {}
-check("the code, after its own second press", c.get("code") == 'print("Hello")' and not c.get("button"), c)
+check("the code, after its own second press — and then it says that was every hint, not a dead end",
+      c.get("code") == 'print("Hello")' and c.get("button") == ""
+      and c.get("end") == "That's every hint for this one.", c)
 db = P.SessionLocal()
 taken = sorted(lv for (lv,) in db.query(P.HintTaken.level).filter_by(student_id=sid))
 db.close()

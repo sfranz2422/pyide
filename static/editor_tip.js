@@ -197,7 +197,10 @@ window.PyIDEEditorTip = (function () {
               var nope = document.createElement("div");
               nope.className = "editor-tip-nope";
               var why = [];
-              if (t.card) {
+              // The hint card (hints.js) says why, in a student's words: said
+              // in both places it was twice the reading (the teacher, Nov 2026).
+              var hinted = window.IDEHints && window.IDEHints.active && window.IDEHints.active();
+              if (t.card && !hinted) {
                 Array.prototype.forEach.call(t.card.querySelectorAll(".test-line.fail"), function (li) {
                   var w = li.querySelector(".tests-why");
                   why.push(li.querySelector(".tests-label").textContent + (w && w.textContent ? ": " + w.textContent : ""));

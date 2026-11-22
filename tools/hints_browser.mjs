@@ -54,7 +54,7 @@ try {
   // The page's checks answer these instead of running Python.
   const answer = (rs) => `window.IDENotesChecks.setRunner(function () { return Promise.resolve({ results: ${JSON.stringify(rs)} }); }); true`;
   const press = "document.querySelector('.tests-card .tests-run').click(); true";
-  const PANEL = "(function(){ var p=document.querySelector('.hint-panel'); if(!p||p.hidden) return null; return { title: (p.querySelector('.hint-title')||{}).textContent, why: (p.querySelector('.hint-why')||{}).textContent || '', hints: [...p.querySelectorAll('.hint-text')].map(e=>e.textContent), code: (p.querySelector('.hint-code')||{}).textContent || '', button: (p.querySelector('.hint-go')||{}).textContent || '', inEditor: !!p.closest('.editor-wrap'), pass: p.classList.contains('is-pass') }; })()";
+  const PANEL = "(function(){ var p=document.querySelector('.hint-panel'); if(!p||p.hidden) return null; return { title: (p.querySelector('.hint-title')||{}).textContent, why: (p.querySelector('.hint-why')||{}).textContent || '', hints: [...p.querySelectorAll('.hint-text')].map(e=>e.textContent), code: (p.querySelector('.hint-code')||{}).textContent || '', button: (p.querySelector('.hint-go')||{}).textContent || '', centered: (function(){ var r=p.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && Math.abs((r.left+r.right)/2 - innerWidth/2) < 4 && r.width >= 600; })(), dimmed: !!document.querySelector('.hint-backdrop:not([hidden])'), end: (p.querySelector('.hint-end')||{}).textContent || '', pass: p.classList.contains('is-pass') }; })()";
   const go = "document.querySelector('.hint-panel .hint-go').click(); true";
 
   const s = await open(cfg.student, cfg.page);
@@ -78,6 +78,13 @@ try {
   await until(s, "!!document.querySelector('.hint-panel .hint-code')");
   out.code = await s(PANEL);
   await s.shot("3-code");
+  out.words = await s(`[ window.IDEHints._why("NameError: name 'hay' is not defined"),
+                         window.IDEHints._why("main.py can't be read: line 1: invalid syntax"),
+                         window.IDEHints._why('It printed: (nothing)'),
+                         window.IDEHints._goal('With input apple, sun, flower, prints hayride'),
+                         window.IDEHints._goal('crop is made with +') ]`);
+  // The bubble in the editor no longer lists why (the card says it).
+  out.bubbleWhy = await s("document.querySelectorAll('.editor-tip-why').length");
   // Closed, then the next check brings it back.
   await s("document.querySelector('.hint-close').click(); true");
   out.closed = await s("document.querySelector('.hint-panel').hidden");

@@ -334,8 +334,11 @@ else:
     check("  clicks go through it to the code", r.get("clicksThrough") == "none", r.get("clicksThrough"))
     check("  it sits under the last line with code on it, not after blank lines",
           r.get("underLast") is True, r.get("underLast"))
-    check("a wrong step, checked from the bubble, says Not yet there, with the check's reason",
-          "Not yet" in (r.get("nope") or "") and "title" in (r.get("nope") or "") and "✗" in (r.get("nope") or ""), r.get("nope"))
+    # The reason itself is the hint card's now (hints.js): said in both places
+    # it was twice the reading (the teacher, Nov 2026). test_hints_browser.py
+    # checks the card says it.
+    check("a wrong step, checked from the bubble, says Not yet there, and leaves why to the hint card",
+          "Not yet" in (r.get("nope") or "") and "✗" not in (r.get("nope") or ""), r.get("nope"))
     check("the steps' check cards are hidden on the student's slide (the bubble checks)",
           r.get("cardsOnSlide") is False and r.get("cardsInPage") == 2, (r.get("cardsOnSlide"), r.get("cardsInPage")))
     check("  and the slide says to finish the step in the editor, not 'the check above'",
