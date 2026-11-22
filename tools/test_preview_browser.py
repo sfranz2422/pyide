@@ -81,6 +81,12 @@ MASTER-BOX
 prints Hey
 ```
 :::end
+
+---
+
+## Next
+
+The second slide.
 """
 
 chrome = find_chrome()
@@ -161,6 +167,9 @@ check("the page never sees the teacher's own browser storage", r.get("seesReal")
 check("it's a student's page: not authoring", r.get("authoring") is False, r.get("authoring"))
 check("the starter is in the editor", "# start here" in (r.get("code") or ""), r.get("code"))
 check("the page still fits the window with the bar on top", r.get("fitsWindow") is True, r.get("fitsWindow"))
+check("the slide arrows are in the window and can be clicked (the bar once pushed them below it)",
+      r.get("navTall") is True, r.get("navTall"))
+check("  on a short laptop screen too (1100×620), where the bar wraps", r.get("navShort") is True, r.get("navShort"))
 fr = r.get("fresh") or {}
 check("opened again: a first visit again — nothing stored, the starter back", fr.get("stored") is None
       and "# start here" in (fr.get("code") or "") and "print(1)" not in (fr.get("code") or ""), fr)

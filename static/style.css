@@ -1854,6 +1854,15 @@ details.gb-hidden summary { cursor: pointer; padding: 4px 0; }
 .preview-bar .field { padding: 2px 6px; }
 .preview-bar #preview-exit { margin-left: auto; }
 .is-student-preview #author { display: none; }   /* a student on an assignment has no name box */
+/* The bar takes room the panes were sized without: .split is the window
+   less the editor's header, so with the bar on top the bottom of every pane
+   — the notes' slide arrows — went below the window, and body's
+   overflow: hidden cut it off without a scrollbar (the teacher had no way
+   to the next slide). A column, so the panes get what's left, however tall
+   the bar wraps. */
+body.is-student-preview { display: flex; flex-direction: column; }
+body.is-student-preview > .preview-bar, body.is-student-preview > .bar, body.is-student-preview > .banner { flex: 0 0 auto; }
+body.is-student-preview > .split { flex: 1 1 0; height: auto; min-height: 0; }
 
 /* The hint panel (hints.js): a failed check brings it up over the bottom of
    the student's own editor, big and orange, because the small grey reason

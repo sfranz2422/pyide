@@ -63,6 +63,14 @@ try {
   out.slide = await ev("(document.querySelector('.slide-count, .slides-count, .slide-of')||{}).textContent || ''");
   out.code = await ev("document.querySelector('.CodeMirror') && document.querySelector('.CodeMirror').CodeMirror.getValue()");
   out.fitsWindow = await ev("document.documentElement.scrollHeight <= window.innerHeight + 2");
+  // The slide arrows, inside the window: the bar on top once pushed them
+  // below it, where body's overflow: hidden hid them without a scrollbar.
+  const NAV = "(function(){ var n=document.querySelector('.slide-nav'); if(!n) return 'no nav'; var r=n.getBoundingClientRect(); var b=[...n.querySelectorAll('.slide-btn')].pop(); var rb=b.getBoundingClientRect(); var at=document.elementFromPoint(rb.left+rb.width/2, rb.top+rb.height/2); return r.height > 0 && r.bottom <= window.innerHeight && (at===b||b.contains(at)); })()";
+  out.navTall = await ev(NAV);
+  await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 620, deviceScaleFactor: 1, mobile: false }, S);
+  await sleep(500);
+  out.navShort = await ev(NAV);
+  await send("Emulation.setDeviceMetricsOverride", { width: 1300, height: 900, deviceScaleFactor: 1, mobile: false }, S);
   await shot("1-preview");
   // Do things a student would: storage written, a slide opened.
   await ev("localStorage.setItem('pyide-unlocked:x', '1'); document.querySelector('.CodeMirror').CodeMirror.setValue('print(1)'); true");
