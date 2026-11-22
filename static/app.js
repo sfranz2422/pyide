@@ -235,7 +235,8 @@
      answer, and notes.js says so on the question rather than taking one. */
   window.PyIDENotes.setQuizContext({ assignment: window.PYIDE.assignmentSlug,
                                      signedIn: window.PYIDE.signedIn,
-                                     viewOnly: window.PYIDE.viewOnly });
+                                     viewOnly: window.PYIDE.viewOnly,
+                                     previewLevel: window.PYIDE.previewLevel });
   // Predictions in the notes: XP for a first-try one, and the teacher
   // writing them is never held by one (snippets.js).
   if (window.IDESnippets) window.IDESnippets.configure({ assignment: window.PYIDE.assignmentSlug,

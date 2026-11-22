@@ -17,6 +17,8 @@ window.PyIDETests = (function () {
   var OUTPUT = /^input\s+(.*?)\s*->\s*prints(\s+exactly)?\s+(.+)$/i;
   var PRINTS = /^prints(\s+exactly)?\s+(.+)$/i;
   var CODE = /^(uses|avoids|defines)\s+(.+?)\s*$/i;
+  // `crop is made with +`: the line that makes crop uses it (autograde.py MADE).
+  var MADE = /^([A-Za-z_]\w*)\s+is\s+made\s+with\s+(.+?)\s*$/i;
   var WORDS = { "for": "a for loop", "while": "a while loop", "if": "an if statement",
                 "def": "a function", "function": "a function", "return": "return",
                 "else": "else", "elif": "elif", "try": "try / except",
@@ -85,6 +87,7 @@ window.PyIDETests = (function () {
     }
     if (t.kind === "call") return t.expr + " gives " + t.expect;
     if (t.kind === "defines") return "Defines " + t.name + "()";
+    if (t.kind === "made") return t.name + " is made with " + t.word;
     var word = Object.prototype.hasOwnProperty.call(WORDS, t.name.toLowerCase())
       ? WORDS[t.name.toLowerCase()] : t.name;
     return (t.kind === "uses" ? "Uses " : "Doesn't use ") + word;
@@ -110,6 +113,10 @@ window.PyIDETests = (function () {
         var name = m[2].trim();
         if (name.slice(-2) === "()") name = name.slice(0, -2);
         t = { kind: m[1].toLowerCase(), name: name };
+      } else if ((m = MADE.exec(line))) {
+        var word = m[2].trim();
+        if (word.slice(-2) === "()") word = word.slice(0, -2);
+        t = { kind: "made", name: m[1], word: word };
       } else if (line.indexOf(" == ") >= 0) {
         var at = line.indexOf(" == ");
         t = { kind: "call", expr: line.slice(0, at).trim(), expect: line.slice(at + 4).trim() };
@@ -430,6 +437,25 @@ window.PyIDETests = (function () {
     "                         and n.name == t['name'] for tree in trees for n in _ag_ast.walk(tree))",
     "                if not ok:",
     "                    detail = 'There\\'s no def %s(...) in the code.' % t['name']",
+    "            elif t['kind'] == 'made':",
+    "                # Every line that makes the variable (=, +=, x: int =): one",
+    "                # of them has to use the word. Read from the code's tree, as",
+    "                # uses is, so a + inside quotes doesn't count.",
+    "                made = []",
+    "                for tree in trees:",
+    "                    for n in _ag_ast.walk(tree):",
+    "                        targets = (n.targets if isinstance(n, _ag_ast.Assign) else",
+    "                                   [n.target] if isinstance(n, (_ag_ast.AugAssign, _ag_ast.AnnAssign)) else [])",
+    "                        if getattr(n, 'value', None) is not None and any(",
+    "                                isinstance(x, _ag_ast.Name) and x.id == t['name']",
+    "                                for tg in targets for x in _ag_ast.walk(tg)):",
+    "                            # score += 2: the + is the statement's own op.",
+    "                            made.append(n if isinstance(n, _ag_ast.AugAssign) else n.value)",
+    "                ok = any(_ag_uses([v], t['word']) for v in made)",
+    "                if not made:",
+    "                    detail = 'There\\'s no %s = ... in the code yet.' % t['name']",
+    "                elif not ok:",
+    "                    detail = '%s is made without %s.' % (t['name'], t['word'])",
     "            elif t['kind'] in ('uses', 'avoids'):",
     "                used = _ag_uses(trees, t['name'])",
     "                ok = used if t['kind'] == 'uses' else not used",

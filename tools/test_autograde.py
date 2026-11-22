@@ -118,7 +118,8 @@ if not node or not os.path.exists(PYODIDE):
 
 samples = [NOTES, "```tests\nprints Hello\nprints exactly  Hi there  \n```",
            "```tests\ninput  -> prints x\nadd(1,2) == 3 (3 points)\nuses len (1 point)\n```",
-           "```tests\nprint the answer\n```", "no block here"]
+           "```tests\nprint the answer\n```", "no block here",
+           "```tests\ncrop is made with +\nclean is made with strip()  (2 points)\nCrop Is Made With  len\n```"]
 script = ("global.window={};eval(require('fs').readFileSync(%s,'utf8'));"
           "process.stdout.write(JSON.stringify(%s.map(s=>window.PyIDETests.parse(s))))"
           % (json.dumps(AUTOGRADE), json.dumps(samples)))
@@ -222,6 +223,14 @@ out.words = await window.PyIDETests.run(py, { "main.py": "n = 0\ndef f():\n    g
   window.PyIDETests.parse(WORDS).tests);
 out.nowords = await window.PyIDETests.run(py, { "main.py": "n = 0\nn = n + 1\nprint('sep pass global del finally', n in [1], n < 2)\n" },
   window.PyIDETests.parse(WORDS).tests);
+// `crop is made with +` (Nov 2026): the line that makes crop uses it.
+// "pump" "kin" (Python glues strings side by side) printed pumpkin, and
+// `uses +` was true already from an earlier line.
+const MADE = "```tests\ncrop is made with +\nclean is made with strip\nscore is made with +\nghost is made with +\n```";
+out.made = await window.PyIDETests.run(py, { "main.py": 'print("hay" + "ride")\ncrop = "pump" + "kin"\n'
+  + 'clean = " Ava ".strip()\nscore = 1\nscore += 2\nprint(crop, clean, score)\n' }, window.PyIDETests.parse(MADE).tests);
+out.notmade = await window.PyIDETests.run(py, { "main.py": 'print("hay" + "ride")\ncrop = "pump" "kin"\n'
+  + 'label = "a + b"\nclean = " Ava "\nscore = 3\nprint(crop + clean, label, score)\n' }, window.PyIDETests.parse(MADE).tests);
 process.stdout.write(JSON.stringify(out));
 """ % {"pyodide": json.dumps(PYODIDE), "runtime": json.dumps(RUNTIME),
        "autograde": json.dumps(AUTOGRADE), "notes": json.dumps(NOTES),
@@ -234,7 +243,7 @@ try:
     ran = json.loads(out.stdout)
 except ValueError:
     ran = {}
-check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 5, out.stderr[-400:])
+check("Pyodide ran every program", len(ran) == len(PROGRAMS) + 7, out.stderr[-400:])
 
 
 def lines(name):
@@ -298,6 +307,15 @@ check("uses +=, finally, sep (a keyword argument), pass, global, del, not in are
 check("  and not in code that only says them in a string, or uses + and in and < instead",
       nowords == [False] * 8, ran.get("nowords"))
 check("  a - inside a string isn't a minus, and avoids * holds", ops[3:] == [False, True], ran.get("ops"))
+made = [(x.get("ok"), x.get("detail")) for x in ran.get("made", {}).get("results", [])]
+notmade = [(x.get("ok"), x.get("detail")) for x in ran.get("notmade", {}).get("results", [])]
+check("X is made with: crop = \"pump\" + \"kin\" uses +, clean = ....strip() uses strip, score += 2 counts",
+      [m[0] for m in made[:3]] == [True, True, True], made)
+check("  crop = \"pump\" \"kin\" fails it, though + is used on the line before and the output is the same",
+      notmade[0] == (False, "crop is made without +."), notmade)
+check("  a + inside quotes isn't a +, and a variable never made says so",
+      notmade[1][0] is False and made[3] == (False, "There's no ghost = ... in the code yet."), (notmade, made))
+check("  a variable made without the word fails (score = 3, no +)", notmade[2][0] is False, notmade)
 
 # ------------------------------- Pi, turtle and block-world programs
 # Before, every check in a Raspberry Pi or block-world assignment failed with
@@ -598,7 +616,8 @@ example = _html.unescape(_re.search(r'id="tests-example">(.*?)</pre>', helppage,
 # the notes are cut off before reading it — what is left must all be tests.
 bare = "\n".join(_re.split(r"\s{3,}", ln)[0] for ln in example.split("\n"))
 got, bad = autograde.parse(bare)
-check("the help page's example is all tests", len(got) == 7 and not bad, (len(got), bad))
+check("the help page's example is all tests, is made with among them",
+      len(got) == 8 and not bad and any(t["kind"] == "made" for t in got), (len(got), bad))
 
 authoring = teacher.get("/teacher/%s/edit" % SLUG).get_data(as_text=True)
 # Writing tests is the tutorial editor's now (the library's, PresMaker, + Tests):

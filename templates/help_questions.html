@@ -88,12 +88,16 @@ area(3, 4) == 12        (2 points)    call their function and compare
 uses for                              a for loop (also while, if, def, return, import math, len…)
 avoids sum                            the name sum appears nowhere
 defines area                          there is a def area
+total is made with +                  the line that makes total (total = ...) uses +
 # a line starting with # is a comment
 ```</pre>
   <p class="dim">"prints" ignores capitals, extra spaces, single vs double quotes, and spaces
     around <code>: , ; =</code> and brackets — <code>Stand:{"apples":3}</code> passes
     <code>prints Stand: {'apples': 3}</code>. The words, numbers and their order still count;
-    "prints exactly" counts everything. A program that runs longer than 5
+    "prints exactly" counts everything. "is made with" takes any word "uses" does (an operator,
+    a name, a method: <code>clean is made with strip</code>), but only on the line that makes that
+    variable — the check for a step that says how to make it, since "uses" would be passed by
+    any line, and <code>"pump" "kin"</code> prints pumpkin with no + at all. A program that runs longer than 5
     seconds, or asks for more input than the test types, fails that test and says why.</p>
 
   <h3 id="tests-hints">Hints under a test</h3>

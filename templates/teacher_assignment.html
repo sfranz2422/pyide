@@ -48,6 +48,9 @@
     {% elif assignment.kind != 'lesson' %}
       <a class="btn btn-primary" id="edit-project" href="{{ url_for('edit_assignment', slug=assignment.slug) }}"
          title="Open the code, files and notes in the editor">Edit project</a>
+      {#  The page a student gets, from the start, saving nothing (student_preview). #}
+      <a class="btn" id="student-preview" href="{{ url_for('student_preview', slug=assignment.slug) }}"
+         title="See it exactly as a student does, from the start. Nothing is saved, and Exit brings you back here.">👁 Student preview</a>
     {% endif %}
     {#  The teacher's own HTML slides for this (teacher_deck), in a tab of
         their own. Only they can open it. Upload replaces it. #}

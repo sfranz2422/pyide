@@ -1309,7 +1309,9 @@ window.PyIDENotes = (function () {
   function setQuizContext(ctx) {
     quizCtx = { assignment: (ctx && ctx.assignment) || "",
                 signedIn: !!(ctx && ctx.signedIn),
-                viewOnly: !!(ctx && ctx.viewOnly) };
+                viewOnly: !!(ctx && ctx.viewOnly),
+                // A teacher's student preview: the level picked there.
+                previewLevel: (ctx && ctx.previewLevel) || "" };
     mine = null;
     answered = {};
     levelLoad = null;
@@ -1400,6 +1402,11 @@ window.PyIDENotes = (function () {
   }
 
   function loadLevels() {
+    // A teacher's student preview shows the level they picked there.
+    if (quizCtx.previewLevel && LEVELS.indexOf(quizCtx.previewLevel) >= 0) {
+      myLevel = quizCtx.previewLevel;
+      return Promise.resolve(myLevel);
+    }
     var mode = levelMode();
     if (mode !== "student") {
       if (mode === "local") myLevel = "easy";

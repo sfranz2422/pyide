@@ -1845,6 +1845,16 @@ details.gb-hidden summary { cursor: pointer; padding: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .reveal-pop { animation: none; } }
 
 
+/* Student preview (index.html, student_preview in app.py): a bar across the
+   top, so the teacher always knows they're looking through a student's eyes
+   and has the way out. */
+.preview-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 8px 16px;
+               background: var(--amber); color: var(--bg); font-family: var(--sans); font-size: 14px; }
+.preview-bar label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.preview-bar .field { padding: 2px 6px; }
+.preview-bar #preview-exit { margin-left: auto; }
+.is-student-preview #author { display: none; }   /* a student on an assignment has no name box */
+
 /* The hint panel (hints.js): a failed check brings it up over the bottom of
    the student's own editor, big and orange, because the small grey reason
    under a failed test went unread (Nov 2026). Theme colors only. */

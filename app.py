@@ -2323,6 +2323,48 @@ def open_assignment(slug):
 # Turning it in
 # --------------------------------------------------------------------------
 
+@app.get("/teacher/<slug>/preview")
+def student_preview(slug):
+    """Student preview (Nov 2026, the teacher's request: "see a lesson from
+    the start ... behaves exactly like a student ... no edit privileges").
+
+    The page a student gets, from the very start, every time: the starter
+    and the notes as students have them (keys and hints out), the lock, the
+    editor's pop-ups and the hint panel on, the teacher's controls off. It
+    saves nothing: there's no draft (so no save and no Turn in), the server
+    records nothing a teacher does here (answers, checks, hints, XP), and
+    the page keeps its browser storage in memory (index.html), so the
+    slides, predictions and typing start fresh and the teacher's own
+    storage isn't touched. `?level=` previews a v11 level's boxes; a
+    student's comes from the gradebook. Exit goes back to the assignment."""
+    db = SessionLocal()
+    try:
+        user, bounce = _require_teacher(db)
+        if bounce:
+            return bounce
+        item = db.query(accounts.Assignment).filter(
+            accounts.Assignment.slug == slug, accounts.Assignment.app.in_(EDITOR_IDES)).first()
+        if item is None or item.teacher_id != user.id:
+            abort(404)
+        if _is_lesson(item) or _own_page(item):
+            # No editor: their own pages already have a student's view.
+            return redirect(url_for("open_assignment", slug=item.slug, preview=1))
+        level = request.args.get("level", "easy")
+        level = level if level in LEVELS else "easy"
+        ctx = user_context(db)
+        ctx.update(
+            ide=_ide_of(item), code=item.code, files=quiz.redact_files(item.file_map()),
+            title=item.title, author="", readonly=False, authoring=False, slug=None,
+            shared_at=None, draft_slug=None, assignment_title=item.title,
+            assignment_slug=item.slug, submitted_at="", sign_in_hint=False,
+            is_teacher=False,
+            student_preview={"exit": url_for("teacher_assignment", slug=item.slug), "level": level,
+                             "levels": bool(_level_keys(item)), "url": url_for("student_preview", slug=item.slug)})
+        return render_template("index.html", **ctx)
+    finally:
+        db.close()
+
+
 @app.post("/api/submit")
 def turn_in():
     """Freeze the student's work and record it against the assignment.

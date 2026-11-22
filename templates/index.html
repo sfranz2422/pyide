@@ -41,6 +41,27 @@
     } catch (e) { /* storage blocked; the CSS default still applies */ }
   })();
 </script>
+{% if student_preview %}
+<script>
+  /* Student preview (student_preview in app.py): this page's localStorage
+     lives in memory, so every preview starts as a student's first visit —
+     no slides opened, no predictions made, nothing typed — and nothing the
+     teacher does here touches their own storage. Before every other script,
+     so none of them ever holds the real one. */
+  (function () {
+    var data = {};
+    var mem = {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+      setItem: function (k, v) { data[k] = String(v); },
+      removeItem: function (k) { delete data[k]; },
+      clear: function () { data = {}; },
+      key: function (i) { return Object.keys(data)[i] || null; },
+      get length() { return Object.keys(data).length; }
+    };
+    try { Object.defineProperty(window, "localStorage", { value: mem, configurable: true }); } catch (e) { /* left as it was */ }
+  })();
+</script>
+{% endif %}
 {% if flask %}
 {#  Before any other script: every JSON body this page sends goes base64,
     past Render's firewall, which turned away a Flask lesson's notes (pack.js).
@@ -49,7 +70,21 @@
 {% endif %}
 </head>
 
-<body class="ide-{{ ide }}{% if authoring %} is-authoring{% endif %}">
+<body class="ide-{{ ide }}{% if authoring %} is-authoring{% endif %}{% if student_preview %} is-student-preview{% endif %}">
+{% if student_preview %}
+<div class="preview-bar" role="status">
+  <span>👁 <strong>Student preview</strong>: exactly what a student sees, from the start. Nothing you do here is saved.</span>
+  {% if student_preview.levels %}
+  <label>Level
+    <select id="preview-level" class="field" data-url="{{ student_preview.url }}"
+            onchange="location.href = this.dataset.url + '?level=' + this.value">
+      {% for lv in ('easy', 'medium', 'master') %}<option value="{{ lv }}" {% if lv == student_preview.level %}selected{% endif %}>{{ lv|capitalize }}</option>{% endfor %}
+    </select></label>
+  {% endif %}
+  <a class="btn" href="{{ student_preview.url }}{{ '?level=' + student_preview.level if student_preview.levels else '' }}" title="Start over from the beginning">↺ Start over</a>
+  <a class="btn btn-primary" id="preview-exit" href="{{ student_preview.exit }}">Exit preview</a>
+</div>
+{% endif %}
 
 <header class="bar">
   {#  To the front door, which sends a student to their classes and a
@@ -144,6 +179,12 @@
     #}
     {% if visitor %}
       <a class="btn" href="{{ url_for('class_view', token=visitor) }}">Back to {{ course.name }}</a>
+    {% elif student_preview %}
+      {#  What a student on this assignment has — Saved, and Turn in — shown
+          but doing nothing: a preview keeps nothing (student_preview). #}
+      <span class="savestate" title="A preview saves nothing">Not saved (preview)</span>
+      <button class="btn btn-primary" type="button" disabled
+              title="Students turn in here. A preview can't.">Turn in</button>
     {% elif readonly %}
       <a class="btn btn-primary" href="{{ url_for('fork_shared', slug=slug) }}">Edit a copy</a>
     {% else %}
@@ -600,7 +641,9 @@
     editingAssignment: {{ (editing_assignment or '') | tojson }},
     editingStarted: {{ (editing_started or 0) | tojson }},
     draftFresh: {{ 'true' if draft_fresh else 'false' }},
-    startingCode: {{ code | tojson }}
+    startingCode: {{ code | tojson }},
+    // Student preview (app.py student_preview): the level whose boxes show.
+    previewLevel: {{ (student_preview.level if student_preview else '') | tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='zip.js') }}"></script>

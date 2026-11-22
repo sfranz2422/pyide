@@ -10,6 +10,8 @@ A ```tests block in the notes is the assignment's tests, one per line:
     area(3, 4) == 12                call their function; == compares
     uses for                        a for loop somewhere (for, while, if,
                                     def, return, or any name: uses len)
+    crop is made with +             the line that makes crop (crop = ...)
+                                    uses it: any word uses takes
     avoids sum                      the name sum appears nowhere
     defines area                    there is a def area
     # a comment                     ignored
@@ -39,6 +41,12 @@ POINTS = re.compile(r"\s*\((\d{1,4}(?:\.\d{1,2})?)\s*points?\)\s*$", re.I)
 OUTPUT = re.compile(r"^input\s+(.*?)\s*->\s*prints(\s+exactly)?\s+(.+)$", re.I)
 PRINTS = re.compile(r"^prints(\s+exactly)?\s+(.+)$", re.I)
 CODE = re.compile(r"^(uses|avoids|defines)\s+(.+?)\s*$", re.I)
+#: `crop is made with +`: the line that makes that variable uses it (Nov
+#: 2026, the teacher's catch: `crop = "pump" "kin"` passed "prints pumpkin" —
+#: Python glues two strings written side by side — and `uses +` was already
+#: true from the line before). Any word `uses` takes: an operator, a name, a
+#: method (`clean is made with strip`).
+MADE = re.compile(r"^([A-Za-z_]\w*)\s+is\s+made\s+with\s+(.+?)\s*$", re.I)
 
 #: How a code check on a Python word reads to a student.
 WORDS = {"for": "a for loop", "while": "a while loop", "if": "an if statement",
@@ -112,6 +120,8 @@ def _label(t):
         return "%s gives %s" % (t["expr"], t["expect"])
     if k == "defines":
         return "Defines %s()" % t["name"]
+    if k == "made":
+        return "%s is made with %s" % (t["name"], t["word"])
     word = WORDS.get(t["name"].lower(), t["name"])
     return ("Uses " if k == "uses" else "Doesn't use ") + word
 
@@ -147,6 +157,11 @@ def parse_block(body):
                 if name.endswith("()"):
                     name = name[:-2]
                 t = {"kind": m.group(1).lower(), "name": name}
+        if t is None:
+            m = MADE.match(line)
+            if m:
+                word = m.group(2).strip()
+                t = {"kind": "made", "name": m.group(1), "word": word[:-2] if word.endswith("()") else word}
         if t is None and " == " in line:
             expr, expect = line.split(" == ", 1)
             t = {"kind": "call", "expr": expr.strip(), "expect": expect.strip()}
