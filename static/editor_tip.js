@@ -92,6 +92,20 @@ window.PyIDEEditorTip = (function () {
         });
       });
     }
+    /* What it should print, big and in its own colour (the teacher, Nov
+       2026: "I don't think the students are paying attention to it, make it
+       pop"). A paragraph that says "should print" is marked, and so is a
+       ```text block straight after it ("When you type apple, it should
+       print:" then the output). Read from the words, as the lessons write
+       it; a step that words it otherwise just stays plain. */
+    function markExpect(root) {
+      Array.prototype.forEach.call(root.querySelectorAll("p"), function (p) {
+        if (!/should print/i.test(p.textContent)) return;
+        p.classList.add("editor-tip-expect");
+        var nx = p.nextElementSibling;
+        if (nx && nx.tagName === "PRE") nx.classList.add("editor-tip-expect");
+      });
+    }
     function refreshCode() {
       if (!bubble) return;
       Array.prototype.forEach.call(bubble.querySelectorAll(".editor-tip-code .CodeMirror"), function (el) {
@@ -167,6 +181,7 @@ window.PyIDEEditorTip = (function () {
         bubble.setAttribute("role", "status");
       }
       bubble.innerHTML = t.html;
+      markExpect(bubble);
       codeBlocks(bubble);
       bubble.classList.toggle("is-done", !!t.passed);
       // A step with no check (a challenge) gets no button: nothing to pass.

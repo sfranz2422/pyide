@@ -112,6 +112,11 @@ try {
   await sleep(400);
   out.firstPassed = await ev("!!document.querySelectorAll('.tests-card')[0].hasAttribute('data-passed')");
   out.second = await ev(tipText);
+  // "It should print hawk." stands out: bigger, and not the bubble's own colour.
+  out.expect = await ev(`(() => { const e = ${TIP} && ${TIP}.querySelector('p.editor-tip-expect'); if (!e) return null;
+    const t = ${TIP}, cs = getComputedStyle(e);
+    return { text: e.textContent, size: parseFloat(cs.fontSize), base: parseFloat(getComputedStyle(t).fontSize),
+             colour: cs.color, plain: getComputedStyle(t).color, bold: +cs.fontWeight >= 600 }; })()`);
   await sleep(300);
   // The new step's bubble is scrolled into sight, all of it, in the editor
   // and the window (kids never saw one below the end of their code).

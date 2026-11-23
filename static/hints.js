@@ -5,15 +5,15 @@
  * bottom of the student's own editor, where they're looking: what failed,
  * why, and — for a test the notes give hints for — 💡 Hint (free), then a
  * second hint for part of that test's points, then 👀 Show me the code for
- * more. Checking is free, always: only opening a paid hint costs.
+ * more (the buttons say none of that: the teacher wanted just "Hint"). Checking is free, always: only opening a paid hint costs.
  *
  * The hints aren't on the page (quiz.redact takes them out of the notes):
  * each is asked for here, and the server records it and takes its cost off
  * the test's points. One press opens one: a paid hint once asked to be
  * pressed twice, and the teacher found that looked like the button didn't
- * work (Nov 2026); the button already says what it costs. A Try It step's
- * hints cost nothing (`free`, hints.py: the box in the editor already says
- * what to type), so its buttons name no cost.
+ * work (Nov 2026). A Try It step's hints cost nothing (`free`, hints.py:
+ * the box in the editor already says what to type). Only the newest opened
+ * step is on the card: the code alone once it's shown.
  *
  * Every check of a card says how it went: ✗ with the hints, or ✓ when the
  * card passes (the teacher liked the pass box and wanted it every time, not
@@ -163,7 +163,7 @@ window.IDEHints = (function () {
     back.addEventListener("click", hide);
     if (current.passed) {
       panel.classList.add("is-pass");
-      panel.appendChild(el("div", "hint-title", "✓ It passes!"));
+      panel.appendChild(el("div", "hint-title", "✓ Great Job!"));
       (current.labels || []).forEach(function (lab) { panel.appendChild(el("div", "hint-why", "✓ " + goal(lab))); });
       back.textContent = "Keep going";
       var r0 = el("div", "hint-actions");
@@ -177,10 +177,14 @@ window.IDEHints = (function () {
     if (said) panel.appendChild(el("div", "hint-why", said));
 
     var label = current.label, have = takenOf(label), all = steps(label);
-    // What's been opened already, in order: shown again, free.
+    /* Only the newest opened step is shown (the teacher, Nov 2026: "in the
+       final hint just show the code remove the other hints above"): each
+       step says more than the one before, so the last one is all they need.
+       Opened ones still open again free after a reload. */
+    var newest = all.filter(function (lv) { return !!opened[label + "|" + lv]; }).pop();
     all.forEach(function (lv) {
       var text = opened[label + "|" + lv];
-      if (!text) return;
+      if (!text || lv !== newest) return;
       if (lv === 3) {
         panel.appendChild(el("div", "hint-head", "👀 The code"));
         panel.appendChild(el("pre", "hint-code", text));
@@ -206,8 +210,9 @@ window.IDEHints = (function () {
     var cost = costOf(label, next), paid = cost > 0 && info.signed_in;
     var words = next === 3 ? "👀 Show me the code" : next === 1 ? "💡 Hint" : "💡 Another hint";
     var already = have.indexOf(next) >= 0;
-    if (paid && !already) words += " · costs " + share(cost) + " of this test's points";
-    else if (next === 1 || (steps(label).length && (info.tests[label] || {}).free)) words += " (free)";
+    // Just the words, nothing about cost or "(free)" (the teacher, Nov 2026:
+    // "don't put anything on the button ... just say hint"). What a hint
+    // costs is still charged on the server; the button no longer says it.
     var b = el("button", "btn hint-go" + (paid && !already ? " is-paid" : ""), words);
     b.type = "button";
     b.addEventListener("click", function () { take(label, next); });

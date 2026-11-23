@@ -5,7 +5,7 @@
     HINTS_SHOT=/some/dir python3 tools/test_hints_browser.py   # and screenshots
 
 A failed check brings up the panel over the editor — the test, why, and
-💡 Hint (free); the second hint asks to be pressed again before it costs
+💡 Hint; one press each, the buttons naming no cost
 anything; then the code; closing it lasts until the next check; a fixed test
 says so; a reload shows what was paid for again, free; a quiz shows nothing.
 The page's runner is replaced with set results (hints_browser.mjs), so no
@@ -130,7 +130,7 @@ check("a failed check: a big card in the middle of the screen, the page dimmed b
       f.get("centered") is True and f.get("dimmed") is True, f)
 check("  in a student's words: what it should do, what it did, and a free hint",
       f.get("title") == "✗ Not yet: It should print Hello" and f.get("why") == "Your program printed: Hi"
-      and f.get("button") == "💡 Hint (free)", f)
+      and f.get("button") == "💡 Hint", f)
 w = r.get("words") or []
 check("  a NameError says the word needs quotes; a syntax error gets the Run button's plain words",
       len(w) == 5 and "Python doesn't know hay" in w[0] and 'quotes: "hay"' in w[0]
@@ -139,26 +139,27 @@ check("  nothing printed, the checker's own input list gone, and 'is made with' 
       w[2:] == ["Your program didn't print anything.", "It should print hayride",
                 "The line that makes crop should use +"], w)
 h1 = r.get("hint1") or {}
-check("Hint: the first hint, and the second offered with its cost",
+check("Hint: the first hint, and the second offered, the button saying nothing of cost",
       h1.get("hints") == ["💡 Use print() with the words inside quotes."]
-      and h1.get("button") == "💡 Another hint · costs a quarter of this test's points", h1)
+      and h1.get("button") == "💡 Another hint", h1)
 h2 = r.get("hint2") or {}
-check("one press opens the paid hint (twice looked broken), then the code offered at its cost",
-      len(h2.get("hints") or []) == 2 and h2.get("button") == "👀 Show me the code · costs half of this test's points"
+check("one press opens the paid hint (twice looked broken), only it on the card, then the code offered",
+      (h2.get("hints") or [None])[0] != "💡 Use print() with the words inside quotes." and len(h2.get("hints") or []) == 1
+      and h2.get("button") == "👀 Show me the code"
       and r.get("hint2Recorded") == [1, 2], (h2, r.get("hint2Recorded")))
 c = r.get("code") or {}
-check("the code, after one press — and then it says that was every hint, not a dead end",
-      c.get("code") == 'print("Hello")' and c.get("button") == ""
+check("the code alone, after one press (the hints above it gone) — and then it says that was every hint, not a dead end",
+      c.get("code") == 'print("Hello")' and c.get("hints") == [] and c.get("button") == ""
       and c.get("end") == "That's every hint for this one.", c)
 db = P.SessionLocal()
 taken = sorted(lv for (lv,) in db.query(P.HintTaken.level).filter_by(student_id=sid, assignment_id=ids["page"]))
 db.close()
 check("…and the server recorded each, once", taken == [1, 2, 3], taken)
 check("✕ hides it", r.get("closed") is True)
-check("the next failed check brings it back, with what was opened", len((r.get("back") or {}).get("hints") or []) == 2
+check("the next failed check brings it back, with the newest opened: the code", (r.get("back") or {}).get("hints") == []
       and (r.get("back") or {}).get("code") == 'print("Hello")', r.get("back"))
 p = r.get("passed") or {}
-check("fixed: the pass card, with what passes", p.get("pass") and p.get("title") == "✓ It passes!"
+check("fixed: the pass card, with what passes", p.get("pass") and p.get("title") == "✓ Great Job!"
       and p.get("button") == "" and "✓ It should print Hello" in (p.get("why") or ""), p)
 check("a program asking for input after the check: the card waits until it's done",
       r.get("heldWhileRunning") is True and ((r.get("afterRun") or {}).get("title") or "").startswith("✗ Not yet"),
@@ -167,12 +168,12 @@ fs_ = r.get("firstStep") or {}
 check("a Try It slide: passing step 1 says it passes — not that step 2 (not typed yet) fails",
       fs_.get("pass") is True and "Hey" in (fs_.get("why") or ""), fs_)
 t1, t2 = r.get("tryHint1") or {}, r.get("tryHint2") or {}
-check("a Try It step's hints are free: no cost named, one press each, the code too",
-      t1.get("button") == "💡 Another hint (free)" and len(t2.get("hints") or []) == 2
-      and t2.get("button") == "👀 Show me the code (free)", (t1, t2))
+check("a Try It step's hints: one press each, no \"(free)\" on the buttons, the code too",
+      t1.get("button") == "💡 Another hint" and len(t2.get("hints") or []) == 1
+      and t2.get("button") == "👀 Show me the code", (t1, t2))
 rl = r.get("reloaded") or {}
 check("after a reload, what was paid for is shown again on the next failed check",
-      len(rl.get("hints") or []) == 2 and rl.get("code") == 'print("Hello")', rl)
+      rl.get("hints") == [] and rl.get("code") == 'print("Hello")', rl)
 db = P.SessionLocal()
 again = db.query(P.HintTaken).filter_by(student_id=sid, assignment_id=ids["page"]).count()
 db.close()

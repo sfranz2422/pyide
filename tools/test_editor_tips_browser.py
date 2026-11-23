@@ -346,6 +346,10 @@ else:
     check("its check, run from the bubble's button, passes in the real Pyodide", r.get("firstPassed") is True, r)
     check("  and the bubble moves on to the next step",
           "print(title[2:6])" in (r.get("second") or ""), r.get("second"))
+    ex = r.get("expect") or {}
+    check("  'It should print hawk.' stands out in the bubble: bigger, bold, its own colour",
+          ex.get("text") == "It should print hawk." and ex.get("size", 0) >= ex.get("base", 99) + 3
+          and ex.get("bold") is True and ex.get("colour") != ex.get("plain"), ex)
     check("  a long program scrolled to its top: the next step's bubble is scrolled into sight, whole",
           r.get("secondInView") == {"top": True, "bottom": True}, r.get("secondInView"))
     check("the last step passed: the bubble says so", r.get("allPassed") is True and "✓" in (r.get("done") or ""),

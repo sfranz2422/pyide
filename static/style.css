@@ -1831,6 +1831,10 @@ details.gb-hidden summary { cursor: pointer; padding: 4px 0; }
    paragraph): one line, never broken across two. */
 .editor-tip p > code:only-child { display: inline-block; font-size: 14px; padding: 2px 6px; }
 .editor-tip-foot { margin: 8px 0 0; }
+/* "It should print …": students read past it (editor_tip.js markExpect). */
+.editor-tip p.editor-tip-expect { font-size: 18px; font-weight: 700; color: var(--purple); margin: 6px 0; }
+.editor-tip p.editor-tip-expect code { font-size: 17px; color: var(--purple); }
+.editor-tip pre.editor-tip-expect { font-size: 17px; font-weight: 700; color: var(--purple); }
 .editor-tip-check { pointer-events: auto; }
 .editor-tip-nope { color: var(--amber); font-size: 13px; margin: 6px 0 0; font-weight: 600; }
 .editor-tip-why { font-weight: 400; white-space: pre-wrap; }
