@@ -1599,7 +1599,7 @@
       setBusy(true, "console");
       try { return await window.PyIDETests.run(pyodide, files, tests); }
       finally { setBusy(false); }
-    });
+    }, null, function () { return dataFiles(); });
   }
   /* A failed check brings up the hint panel over the student's OWN editor
      (hints.js), never the teacher's mirror. */

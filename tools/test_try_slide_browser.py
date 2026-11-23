@@ -134,6 +134,22 @@ prints pumpkinseed
 """
 db.add(accounts.Assignment(slug="tryv14", app="pyide", teacher_id=tid, title="v14", code="",
                            files=json.dumps({"notes.md": V14})))
+# The Netflix unit's shape: the box starts with the starter's loading lines
+# (```try-start), and the project's data file is read by the check AND by
+# the run whose output shows under the box (the snippet worker).
+DATA = """# Data
+
+```try-start
+rows = open("data.csv").read().splitlines()
+
+```
+
+```tests try
+prints 3
+```
+"""
+db.add(accounts.Assignment(slug="trydata", app="pyide", teacher_id=tid, title="data", code="",
+                           files=json.dumps({"notes.md": DATA, "data.csv": "a\nb\nc\n"})))
 db.commit()
 db.close()
 
@@ -142,7 +158,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 sign = P.app.session_interface.get_signing_serializer(P.app)
 setup = os.path.join(TMP, "setup.json")
 with open(setup, "w") as f:
-    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/tryslide", "v14": "/a/tryv14",
+    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/tryslide", "v14": "/a/tryv14", "data": "/a/trydata",
                "student": sign.dumps({"uid": sid})}, f)
 run = subprocess.run(["node", os.path.join(HERE, "try_slide_browser.mjs"), setup, chrome],
                      cwd=ROOT, capture_output=True, text=True, timeout=600)
@@ -190,6 +206,10 @@ check("v14, a step on its own slide: its box starts with the step before's code,
       v.get("second") == 'print("hay" + "ride")\n', v.get("second"))
 check("  and in the notes' order: the step before's, not the box last typed in (they went back to step 1)",
       (v.get("third") or "").startswith('print("hay" + "ride")\ncrop = "pump"') and "BACK" not in (v.get("third") or ""), v.get("third"))
+
+d = r.get("data") or {}
+check("a box that reads the project's data file: its check passes, and its output (the worker's run) shows what it read",
+      d.get("marks") == "✓" and "3" in (d.get("out") or "") and "Error" not in (d.get("out") or ""), d)
 
 db = P.SessionLocal()
 kept = db.query(accounts.TestResult).filter_by(assignment_id=aid).count()

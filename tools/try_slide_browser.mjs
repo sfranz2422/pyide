@@ -139,6 +139,24 @@ try {
   await v(NEXT); await sleep(400); await v(NEXT); await sleep(600);
   await v(`${BOX}.focus(); true`);
   o.third = await v(`${BOX}.value`);
+  // A box reading the project's data file.
+  {
+    const dd = out.data = {};
+    const w = await open(cfg.student, cfg.data);
+    await w("document.querySelector('.try-step .try-code').focus(); true");
+    await w("(function(){ var a=document.querySelector('.try-step .try-code'); a.setRangeText('print(len(rows))', a.selectionStart, a.selectionEnd, 'end'); a.dispatchEvent(new Event('input')); return 1; })()");
+    for (let k = 0; k < 120; k++) { if (await w("(function(){ var b=document.querySelector('.try-step .tests-run'); return b && !b.hidden && !b.disabled; })()")) break; await sleep(500); }
+    // The first check waits for Python to load: press until it answers.
+    for (let k = 0; k < 90; k++) {
+      await w("document.querySelector('.try-step .tests-run').click(); true");
+      let got = false;
+      for (let j = 0; j < 10; j++) { await sleep(300); if (await w("/[✓✗]/.test([...document.querySelectorAll('.try-step .tests-mark')].map(m=>m.textContent).join(''))")) { got = true; break; } }
+      if (got) break;
+    }
+    dd.marks = await w("[...document.querySelectorAll('.try-step .tests-mark')].map(m=>m.textContent).join('')");
+    for (let k = 0; k < 150; k++) { if (await w("/Output/.test((document.querySelector('.try-step .try-out')||{}).textContent||'') && !/Running/.test(document.querySelector('.try-step .try-out').textContent)")) break; await sleep(300); }
+    dd.out = await w("(document.querySelector('.try-step .try-out')||{}).textContent || ''");
+  }
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

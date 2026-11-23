@@ -38,6 +38,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
 
   var runner = null;      // the page's: () => Promise<{results}>, or null
   var tryRunner = null;   // the page's: (code, tests) => Promise<{results}>, for a Try It box
+  var tryFiles = null;    // the page's: () => the project's data files, for a Python box's output run
   var tryShow = null;     // the page's: (code, tests, out) => draws what the box's code makes (a web page, a table)
   var latest = null;      // label -> {ok, detail}, from the last check
   var pressed = null;     // the card whose ✔ ran the last check (hints.js)
@@ -351,7 +352,9 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     out.hidden = false;
     out.className = "try-out";
     out.textContent = "Running…";
-    S.run(code, inputs).then(function (r) {
+    var files = null;
+    try { files = tryFiles ? tryFiles() : null; } catch (e) { files = null; }
+    S.run(code, inputs, files).then(function (r) {
       out.textContent = "";
       out.appendChild(el("span", "try-out-head", "Output:\n"));
       out.appendChild(document.createTextNode(r.text || (r.error ? "" : "(It printed nothing.)")));
@@ -362,9 +365,12 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   /* `show`, for an IDE whose box isn't a Python program (a web page, a
      Flask app, a query, a PHP page): draws what it makes into `out`. Without
      it, the box is run as Python and what it prints is shown. */
-  function setTryRunner(fn, show) {
+  function setTryRunner(fn, show, files) {
     tryRunner = typeof fn === "function" ? fn : null;
     tryShow = typeof show === "function" ? show : null;
+    // A Python box's output runs in the snippet worker, which has none of the
+    // project: its data files go with it (pd.read_csv("netflix_data.csv")).
+    tryFiles = typeof files === "function" ? files : null;
     paintAll(false);
   }
 

@@ -59,6 +59,16 @@ onmessage = function (e) {
       .catch(function () { /* the import itself will say what's missing */ })
       .then(function () {
         py.runPython(SETUP, { globals: ns, filename: "<setup>" });
+        // The project's data files (a Try It box on the slide: pd.read_csv
+        // reads the project's netflix_data.csv), written where the code runs.
+        if (job.files) {
+          try { py.FS.mkdirTree("/try"); } catch (e) { /* there already */ }
+          Object.keys(job.files).forEach(function (name) {
+            if (name.indexOf("/") >= 0 || /\.(md|py)$/i.test(name)) return;
+            py.FS.writeFile("/try/" + name, String(job.files[name]));
+          });
+          py.runPython("import os; os.chdir('/try')");
+        }
         // Answers given (a Try It box runs with its test's inputs): input()
         // takes them in turn and shows each after its prompt, as typed.
         if (job.inputs && job.inputs.length) {

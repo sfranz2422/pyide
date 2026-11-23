@@ -730,7 +730,8 @@
   if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner && runner.checksOn) {
     // A web or Flask project's runner also says how to show the box's page or rows (tryShow).
     window.IDENotesChecks.setTryRunner(function (code, tests) { return runner.checksOn(code, tests); },
-                                       runner.tryShow || null);
+                                       runner.tryShow || null,
+                                       function () { return dataFiles(); });
   }
   /* A failed check brings up the hint panel over this editor (hints.js):
      for a student working on an assignment, never the teacher writing it. */
