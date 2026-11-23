@@ -587,7 +587,7 @@ run when the library or an assignment page opens) hasn't taken it yet —
 identical notes become ONE tutorial linked to all of them; 0 means unlinked
 on purpose, its notes its own copy. New lessons and published projects get
 their own tutorial at once (`library.adopt`), or every untouched lesson
-starter would merge into one. Copies (`copy_assignment`, `duplicate_class`)
+starter would merge into one. **One name** (PyIDE's `same_titles` hook; Nov 2026, the teacher: "since every lesson is tied to a tutorial can we just make it so the names are always one and the same"): renaming a tutorial renames every assignment linked to it (`library.same_titles`, from `save`, a rename alone and `link`, so linking takes the tutorial's name), and renaming an assignment (its page, the editor's title box, a lesson's) renames its tutorial and so every other period's copy (`_same_name`). A tutorial made FOR an assignment with no name given takes the assignment's, not its heading's. Names that already differed (169 when this shipped) were left as they were, the teacher's choice; the import never renames. GameIDE's copy of library.py doesn't pass the hook, so its names stay each assignment's own. Copies (`copy_assignment`, `duplicate_class`)
 keep `tutorial_id` and `deck_id`. Bulk upload replaces a tutorial of the same
 title (links kept, so the change reaches every assignment), base64 in JSON
 for Render's firewall. `test_library.py` is the same in all three. The library's editor is PresMaker,

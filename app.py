@@ -3721,9 +3721,11 @@ def save_lesson(slug):
         # Its title. Its notes are a library tutorial (library.py), edited
         # there and nowhere else; any sent here are left alone.
         data = request.get_json(silent=True) or {}
+        before = item.title
         item.title = clean(data.get("title"), 200) or item.title
         item.updated_at = accounts.now()
         db.commit()
+        _same_name(db, item, before)
         return jsonify(ok=True, title=item.title)
     finally:
         db.close()
@@ -3841,7 +3843,28 @@ library.init(
     # (its `app`), and links only to that IDE's assignments (library.py).
     app_names=EDITOR_IDES,
     page_for=lambda db, user, item: _library_page(item),
+    # An assignment and its tutorial have one name (_same_name).
+    same_titles=True,
 )
+
+
+def _same_name(db, item, before):
+    """An assignment renamed (the assignment page, the editor's title box, a
+    lesson's): its tutorial takes the name, and so does every other
+    assignment linked to it — Period 4's and Period 7's copies included.
+    The teacher (Nov 2026): "since every lesson is tied to a tutorial can we
+    just make it so the names are always one and the same". The library's
+    side is library.same_titles. Unlinked (tutorial_id 0 or NULL): its own."""
+    if not item.tutorial_id or item.title == before:
+        return
+    tut = db.get(accounts.LibraryItem, item.tutorial_id)
+    if tut is None or tut.kind != "tutorial" or tut.teacher_id != item.teacher_id:
+        return
+    if tut.title != item.title:
+        tut.title = item.title
+        tut.updated_at = accounts.now()
+        db.commit()
+    library.same_titles(db, tut)
 
 
 @app.post("/api/lesson/<slug>/turnin")
@@ -4177,11 +4200,13 @@ def update_assignment(slug):
         files = {k: v for k, v in files.items() if not _is_notes(k)}
         files.update({k: v for k, v in item.file_map().items() if _is_notes(k)})
 
+        before = item.title
         item.title = clean(data.get("title"), 200) or item.title
         item.code = code
         item.files = json.dumps(files)
         item.updated_at = accounts.now()
         db.commit()
+        _same_name(db, item, before)
         _store_quiz_keys(db, item.id, files.values())
 
         # Not the author's own draft, if one is lying about from before the
@@ -4212,9 +4237,11 @@ def rename_assignment(slug):
         title = clean((request.get_json(silent=True) or {}).get("title"), 200)
         if not title:
             return jsonify(error="Give it a name."), 400
+        before = item.title
         item.title = title
         item.updated_at = accounts.now()
         db.commit()
+        _same_name(db, item, before)
         return jsonify(ok=True, title=item.title)
     finally:
         db.close()

@@ -187,6 +187,24 @@ def fan_out(db, item):
     return n
 
 
+def same_titles(db, item):
+    """Every assignment linked to this tutorial takes its name, where the
+    editor asks for that (the `same_titles` hook; PyIDE, Nov 2026, the
+    teacher: "since every lesson is tied to a tutorial can we just make it
+    so the names are always one and the same"). Without the hook, names are
+    each assignment's own, as they always were. Returns how many changed."""
+    if item.kind != "tutorial" or not H.get("same_titles"):
+        return 0
+    n = 0
+    for a in linked(db, item):
+        if a.title != item.title:
+            a.title = item.title
+            n += 1
+    if n:
+        db.commit()
+    return n
+
+
 def save(db, item, body, title=None):
     item.body = body
     item.size = len(body.encode("utf-8"))
@@ -194,6 +212,8 @@ def save(db, item, body, title=None):
         item.title = title
     item.updated_at = accounts.now()
     db.commit()
+    if title is not None:
+        same_titles(db, item)
     return fan_out(db, item)
 
 
@@ -203,6 +223,7 @@ def link(db, item, a):
         db.commit()
         if H["notes_of"](a) != item.body:
             H["write_notes"](db, a, item.body)
+        same_titles(db, item)                   # linked, it takes the tutorial's name
     else:
         a.deck_id = item.id
         db.commit()
@@ -507,6 +528,11 @@ def new_item():
                              accounts.Assignment.app.in_(_apps()),
                              accounts.Assignment.teacher_id == user.id).first())
             ide = _target(a.app if a is not None else data.get("ide"))
+            # Made for an assignment, with no name given: the assignment's,
+            # where names are kept the same (same_titles), or linking it
+            # would rename the assignment after the notes' heading.
+            if a is not None and H.get("same_titles") and not str(data.get("title") or "").strip():
+                title = a.title or title
             item = accounts.LibraryItem(slug=_new_slug(db), app=ide if kind == "tutorial" else H["app_name"],
                                         teacher_id=user.id, kind=kind,
                                         title=title, body=body, size=len(body.encode("utf-8")))
@@ -564,6 +590,7 @@ def save_item(slug):
             item.title = title
             item.updated_at = accounts.now()
             db.commit()
+            same_titles(db, item)
             return jsonify(ok=True, updated=0)
         body, problem = _clean_body(item.kind, sent)
         if problem:

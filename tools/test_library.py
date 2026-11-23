@@ -283,6 +283,38 @@ check("  nor anyone signed out", stranger.get("/api/library").status_code == 403
 # WebIDE and FlaskIDE are suspended (Nov 2026) and their repos kept as they
 # were, so they are no longer held to PyIDE's copies: a service brought back
 # has its shared files brought up to date first (CLAUDE.md). GameIDE still is.
+print("one name for an assignment and its tutorial")
+# Where the editor asks (PyIDE's same_titles hook; the teacher, Nov 2026:
+# "make it so the names are always one and the same"). The other editors
+# keep each assignment's own name.
+if getattr(P, "_same_name", None):
+    teacher.post("/api/library", json={"title": "Strings v12", "body": "# Strings\n", "linkTo": "p2"})
+    st = item_titled(teacher, "Strings v12")
+    check("linking an assignment gives it the tutorial's name",
+          st and one(accounts.Assignment, slug="p2").title == "Strings v12", one(accounts.Assignment, slug="p2").title)
+    assignment("solo", None)
+    teacher.post("/api/library", json={"body": "# A heading\n", "linkTo": "solo"})
+    check("  a tutorial made for an assignment with no name takes the assignment's, not the heading's",
+          one(accounts.Assignment, slug="solo").title == "SOLO" and item_titled(teacher, "SOLO"),
+          one(accounts.Assignment, slug="solo").title)
+    teacher.post("/api/library/%s/link" % st["slug"], json={"link": ["p5"]})
+    check("  and another period's copy linked too", one(accounts.Assignment, slug="p5").title == "Strings v12")
+    teacher.post("/api/library/" + st["slug"], json={"title": "Strings v13"})
+    check("renaming the tutorial renames every assignment linked to it",
+          [one(accounts.Assignment, slug=x).title for x in ("p2", "p5")] == ["Strings v13"] * 2,
+          [one(accounts.Assignment, slug=x).title for x in ("p2", "p5")])
+    teacher.post("/api/library/" + st["slug"], json={"title": "Strings v14", "body": "# Strings\n\nMore.\n"})
+    check("  a rename sent with new text too",
+          [one(accounts.Assignment, slug=x).title for x in ("p2", "p5")] == ["Strings v14"] * 2)
+    teacher.post("/api/assignment/p2/title", json={"title": "Joining Strings"})
+    check("renaming an assignment renames its tutorial, and the other period's copy",
+          item_titled(teacher, "Joining Strings") and one(accounts.Assignment, slug="p5").title == "Joining Strings",
+          one(accounts.Assignment, slug="p5").title)
+    sent = ({"title": "Joined", "files": {ENTRY: MAIN}} if ENTRY else {"title": "Joined", "code": MAIN, "files": {}})
+    teacher.post("/api/assignment/p5", json=sent)
+    check("  from the editor's title box too", item_titled(teacher, "Joined") and one(accounts.Assignment, slug="p2").title == "Joined")
+    check("  an unlinked assignment keeps its own name", one(accounts.Assignment, slug="bare").title != "Joined")
+
 print("the same in GameIDE")
 home = os.path.expanduser("~")
 
