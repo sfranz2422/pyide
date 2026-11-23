@@ -1422,9 +1422,15 @@
   /* A Try It box on the slide (```tests try): one whole page, checked as
      index.html on its own and shown under the box; posted nowhere. */
   if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner) {
+    // The box's page with their project's stylesheets beside it, as in the editor (runners/web.js).
+    var boxFiles = function (code) {
+      var files = { "index.html": code }, all = allFiles();
+      Object.keys(all).forEach(function (n) { if (/\.css$/i.test(n)) files[n] = all[n]; });
+      return files;
+    };
     window.IDENotesChecks.setTryRunner(function (code, tests) {
-      return tests.length ? window.WebIDETests.run({ "index.html": code }, tests) : Promise.resolve(null);
-    }, function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.page(out, code); });
+      return tests.length ? window.WebIDETests.run(boxFiles(code), tests) : Promise.resolve(null);
+    }, function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.webPage(out, boxFiles(code)); });
   }
   /* A failed check brings up the hint panel over the student's OWN editor
      (hints.js), never the teacher's mirror. */

@@ -51,7 +51,7 @@
        shown under the box, as in the editor (runners/web.js). */
     if (ide === "webide" && window.WebIDETests) {
       C.setTryRunner(function (code, tests) { return window.WebIDETests.run({ "index.html": code }, tests); },
-                     function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.page(out, code); });
+                     function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.webPage(out, { "index.html": code }); });
       return;
     }
     var T = window.PyIDETests;

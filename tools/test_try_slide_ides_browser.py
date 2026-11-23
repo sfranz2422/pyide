@@ -85,6 +85,7 @@ KINDS = {
 JS_START = """# Select and change
 
 ```try-start
+<link rel="stylesheet" href="style.css">
 <h1>Arcade Night</h1>
 <p class="game">Tetris</p>
 <script>
@@ -146,7 +147,8 @@ for name, (ide, starter, md, right, wrong, shows) in KINDS.items():
         db.commit()
         pages[name]["live"] = "/live/try" + name + "l"
 js = accounts.Assignment(slug="tryjsstart", app="webide", teacher_id=tid, title="JS start", code="",
-                         files=json.dumps(dict(P.WEB_STARTER, **{"notes.md": JS_START})))
+                         files=json.dumps(dict(P.WEB_STARTER, **{"notes.md": JS_START,
+                                                                 "style.css": "/* STYLE-MARK */ h1 { color: gold; }\n"})))
 db.add(js)
 db.commit()
 db.close()
@@ -182,10 +184,13 @@ for name in ("web", "sql"):
 
 j = r.get("jsStart") or {}
 check("JavaScript Try It: the first box starts with the lesson's page (```try-start), the cursor inside its <script>",
-      (j.get("value") or "").startswith('<h1>Arcade Night</h1>\n<p class="game">Tetris</p>\n<script>\n')
+      (j.get("value") or "").startswith('<link rel="stylesheet" href="style.css">\n<h1>Arcade Night</h1>\n<p class="game">Tetris</p>\n<script>\n')
       and j.get("caretLine") == "", j)
 check("  the page block itself isn't drawn on the slide", j.get("startShown") is False, j.get("startShown"))
 check("  the JavaScript typed at the cursor passes the step", j.get("marks") == "✓", j.get("marks"))
+check("  the box's page brings in the project's style.css (a class from it looks as it should)",
+      j.get("styled") is True, j.get("styled"))
+check("  and what it logs is listed under it (steps say 'It should log …')", "changed it" in (j.get("console") or ""), j.get("console"))
 check("  and the next box starts with that whole page, JavaScript and all",
       "Pac-Man" in (j.get("next") or "") and "<h1>Arcade Night</h1>" in (j.get("next") or ""), j.get("next"))
 

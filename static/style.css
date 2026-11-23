@@ -1923,6 +1923,8 @@ body.is-student-preview > .split { flex: 1 1 0; height: auto; min-height: 0; }
 .try-out-page table { border-collapse: collapse; font-family: var(--mono); font-size: .9em; margin: 4px 0 10px; }
 .try-out-page th, .try-out-page td { border: 1px solid var(--line); padding: 3px 8px; text-align: left; }
 .try-out-page th { background: var(--bg-head, var(--bg-panel)); }
+.try-console { margin-top: 8px; }
+.try-console-lines { margin: 2px 0 0; font-family: var(--mono); font-size: .9em; white-space: pre-wrap; }
 .try-step .tests-card { margin-top: 8px; }
 .hint-title { font-size: 28px; font-weight: 700; line-height: 1.25; }
 .hint-panel.is-pass .hint-title { color: var(--green); }

@@ -309,12 +309,20 @@
        one whole page per box (the teacher's choice: CSS in <style>, JS in
        <script>), checked as index.html on its own, posted nowhere — and
        shown under the box (try_show.js). */
+    /* The box's page, with the project's stylesheets beside it: a step's
+       <link href="style.css"> (the starter page's, via ```try-start) finds
+       the student's own style.css, so a class from it looks as it should. */
+    function boxFiles(code) {
+      var files = { "index.html": code }, all = allFiles();
+      Object.keys(all).forEach(function (n) { if (/\.css$/i.test(n)) files[n] = all[n]; });
+      return files;
+    }
     async function checksOn(code, tests) {
       if (!window.WebIDETests || !tests || !tests.length) return null;
-      return await window.WebIDETests.run({ "index.html": code }, tests);
+      return await window.WebIDETests.run(boxFiles(code), tests);
     }
     function tryShow(code, tests, out) {
-      if (window.IDETryShow) window.IDETryShow.page(out, code);
+      if (window.IDETryShow) window.IDETryShow.webPage(out, boxFiles(code));
     }
 
     async function runChecks() {
