@@ -538,32 +538,45 @@
      empty tests block has nothing to pass, so it would hold a locked slide
      for good, with no way on for anyone. */
   /* A Try It step (v13; the teacher, Nov 2026: "the editor popups are just
-     not working"): the step in a plain pop box on the slide, then a
-     ```tests try block, which PyIDE draws as a box to type it into, right
-     there, with its own check, output and hints (two hints and the code,
-     as every v12+ test has). Python's only: a web or Flask tutorial's tests
-     don't know `try`, so theirs is still the v12 editor pop-up. */
-  function pythonTutorial() {
+     not working", then "I'd rather have everything in the slides" for the
+     HTML, Flask and PHP tutorials too): the step in a plain pop box on the
+     slide, then a ```tests try block, which the IDE draws as a box to type
+     it into, right there, with its own check, what it makes, and hints (two
+     hints and the code, as every v12+ test has). Written in the tutorial's
+     IDE's own form (PM_SERVER.ide): a Python program, one whole web page,
+     or a Flask route. GameIDE's tutorials (```check) keep the editor pop-up. */
+  var TRY_FORMS = {
+    pyide: { step: "`print(\"hello\")`", says: "It should print `hello`.",
+             tests: "prints hello\nhint: What to look at in the box above.\nhint: Closer, but not the whole line.\ncode: print(\"hello\")" },
+    webide: { step: "```html\n<h1>Hello</h1>\n```", says: "It should show **Hello** in big letters.",
+              tests: "has h1\nh1 contains Hello\nhint: A heading tag goes around the word.\nhint: <h1>, the word, then </h1>.\ncode: <h1>Hello</h1>" },
+    flaskide: { step: "```python\n@app.route(\"/\")\ndef home():\n    return \"Hello\"\n```", says: "It should show **Hello** at `/`.",
+                tests: "GET / contains Hello\nhint: A route is the path, then the function that answers it.\nhint: The function returns the words in quotes.\ncode: @app.route(\"/\")\ncode: def home():\ncode:     return \"Hello\"" }
+  };
+  function tryForm() {
     var s = window.PM_SERVER;
-    return !s || (s.tests === "form" && (s.testsFence || "tests") === "tests");
+    if (!s) return TRY_FORMS.pyide;                                  // the Mac app: PyIDE's
+    if ((s.testsFence || "tests") !== "tests") return null;          // GameIDE: ```check
+    return TRY_FORMS[s.ide] || (s.tests === "form" ? TRY_FORMS.pyide : null);
   }
-  var TRY_TESTS = "```tests try\nprints hello\nhint: What to look at in the box above.\nhint: Closer, but not the whole line.\ncode: print(\"hello\")\n```";
-  function insertTryStep() {
+  function insertTryStep(form) {
+    var tests = "```tests try\n" + form.tests + "\n```";
     if (cm.somethingSelected()) {
       var from = cm.getCursor("from"), to = cm.getCursor("to");
       var last = to.ch === 0 && to.line > from.line ? to.line - 1 : to.line;
       cm.operation(function () {
-        cm.replaceRange("\n:::\n\n" + TRY_TESTS, { line: last, ch: cm.getLine(last).length });
+        cm.replaceRange("\n:::\n\n" + tests, { line: last, ch: cm.getLine(last).length });
         cm.replaceRange(":::pop\n", { line: from.line, ch: 0 });
       });
       cm.focus();
       return;
     }
-    lineInsert(":::pop\nA sentence on what it means.\n\n✏ **Type this:**\n\n`print(\"hello\")`\n\nIt should print `hello`.\n:::\n\n" + TRY_TESTS,
+    lineInsert(":::pop\nA sentence on what it means.\n\n✏ **Type this:**\n\n" + form.step + "\n\n" + form.says + "\n:::\n\n" + tests,
                1, "A sentence on what it means.".length);
   }
   function insertEditorPop() {
-    if (pythonTutorial()) return insertTryStep();
+    var form = tryForm();
+    if (form) return insertTryStep(form);
     if (cm.somethingSelected()) {
       var from = cm.getCursor("from"), to = cm.getCursor("to");
       var last = to.ch === 0 && to.line > from.line ? to.line - 1 : to.line;

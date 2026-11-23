@@ -105,13 +105,21 @@ wide_id = db.query(accounts.Assignment).filter_by(slug="widenotes").first().id
 # The same notes on the air: the class's live page follows the teacher's slide.
 db.add(accounts.LiveSession(code="wide01", app="pyide", host_id=tid, title="Wide", assignment_id=wide_id,
                             version=1, slide="1/4", notes=NOTES))
+# A web lesson's and a Flask lesson's live pages (web/live.js, flask/live.js), the same notes.
+for code, ide, starter in (("wide02", "webide", P.WEB_STARTER), ("wide03", "flaskide", P.FLASK_STARTER)):
+    a2 = accounts.Assignment(slug="wide" + ide, app=ide, teacher_id=tid, title=ide, code="",
+                             files=json.dumps(dict(starter, **{"notes.md": NOTES})))
+    db.add(a2)
+    db.commit()
+    db.add(accounts.LiveSession(code=code, app=ide, host_id=tid, title="Wide " + ide, assignment_id=a2.id,
+                                version=1, slide="1/4", notes=NOTES, filename="index.html" if ide == "webide" else "app.py"))
 db.commit()
 db.close()
 
 
-def teacher_moves(slide, version):
+def teacher_moves(code, slide, version):
     d = P.SessionLocal()
-    row = d.query(accounts.LiveSession).filter_by(code="wide01").first()
+    row = d.query(accounts.LiveSession).filter_by(code=code).first()
     row.slide, row.version = slide, version
     d.commit()
     d.close()
@@ -127,7 +135,7 @@ with open(setup, "w") as f:
 # The node side asks for the teacher's moves by writing a file; this side makes them.
 moves = os.path.join(TMP, "moves")
 cfg = json.load(open(setup))
-cfg.update(live="/live/wide01", moves=moves)
+cfg.update(live="/live/wide01", lives={"python": "wide01", "web": "wide02", "flask": "wide03"}, moves=moves)
 json.dump(cfg, open(setup, "w"))
 proc = subprocess.Popen(["node", os.path.join(HERE, "notes_wide_browser.mjs"), setup, chrome],
                         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -138,8 +146,9 @@ while proc.poll() is None:
         for line in open(moves).read().split():
             if line not in done:
                 done.add(line)
-                slide, version = line.split("@")
-                teacher_moves(slide, int(version))
+                code, rest = line.split(":", 1)
+                slide, version = rest.split("@")
+                teacher_moves(code, slide, int(version))
     time.sleep(0.2)
 out_, err_ = proc.communicate()
 run = subprocess.CompletedProcess(proc.args, proc.returncode, out_, err_)
@@ -168,6 +177,15 @@ check("the class's live page, on the teacher's first slide: the slide alone, wid
 check("  the teacher moves to the warm-up: their editor and the teacher's code come back, drawn (code changed while hidden, every line)",
       lc.get("wide") is False and lc.get("mine") is True and lc.get("mirror") is True and lc.get("lines", 0) >= 20, lc)
 check("  and back to the first slide: wide again", lb.get("wide") is True, lb)
+# (Taking flask/live.js's own refresh out doesn't fail this: something else
+# on that page redraws its editor when it's shown. The refresh is kept as a
+# backstop; web/live.js's is needed, and is held here.)
+for kind in ("web", "flask"):
+    k = r.get("live_" + kind) or {}
+    check("a %s lesson's live page: wide on the first slide, editors back (drawn) at the warm-up" % kind,
+          (k.get("one") or {}).get("wide") is True and (k.get("one") or {}).get("mine") is False
+          and (k.get("three") or {}).get("wide") is False and (k.get("three") or {}).get("mine") is True
+          and (k.get("three") or {}).get("lines", 0) >= 20, k)
 check("notes with no work in main.py are never wide (the editor would never show)",
       (r.get("plain") or {}).get("wide") is False and (r.get("plain") or {}).get("editor") is True, r.get("plain"))
 

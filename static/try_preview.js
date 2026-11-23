@@ -10,9 +10,11 @@
  * is several MB. runtime.js's BOOTSTRAP first, because the tests' harness
  * (autograde.js) uses what it defines.
  *
- * Python tutorials only: the page loads this file only for them
- * (tools/sync_presmaker.py), since a web or Flask tutorial's tests don't
- * know `try`. Nothing is posted anywhere; it's the teacher's own preview.
+ * A Python tutorial's boxes, and a web tutorial's (one whole page each,
+ * checked by WebIDE's checker and shown under the box). Not a Flask, SQL or
+ * PHP tutorial's: their runtimes aren't on this page (tools/sync_presmaker.py
+ * loads this file only for the two). Nothing is posted anywhere; it's the
+ * teacher's own preview.
  */
 (function () {
   "use strict";
@@ -43,8 +45,17 @@
   }
 
   function attach() {
-    var C = window.IDENotesChecks, T = window.PyIDETests;
-    if (!C || !C.setTryRunner || !T || !T.run || !window.PyIDERuntime) return;
+    var C = window.IDENotesChecks, ide = (window.PM_SERVER || {}).ide;
+    if (!C || !C.setTryRunner) return;
+    /* A web tutorial's box is one whole page, checked as index.html and
+       shown under the box, as in the editor (runners/web.js). */
+    if (ide === "webide" && window.WebIDETests) {
+      C.setTryRunner(function (code, tests) { return window.WebIDETests.run({ "index.html": code }, tests); },
+                     function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.page(out, code); });
+      return;
+    }
+    var T = window.PyIDETests;
+    if (!T || !T.run || !window.PyIDERuntime) return;
     C.setTryRunner(function (code, tests) {
       return python().then(function (py) { return T.run(py, { "main.py": code }, tests); });
     });

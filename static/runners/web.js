@@ -305,6 +305,18 @@
       return window.WebIDETests.forLevels ? window.WebIDETests.forLevels(all) : all;
     }
 
+    /* A Try It box on the slide (```tests try, checks_in_notes.js tryStep):
+       one whole page per box (the teacher's choice: CSS in <style>, JS in
+       <script>), checked as index.html on its own, posted nowhere — and
+       shown under the box (try_show.js). */
+    async function checksOn(code, tests) {
+      if (!window.WebIDETests || !tests || !tests.length) return null;
+      return await window.WebIDETests.run({ "index.html": code }, tests);
+    }
+    function tryShow(code, tests, out) {
+      if (window.IDETryShow) window.IDETryShow.page(out, code);
+    }
+
     async function runChecks() {
       if (checking) return null;
       var files = allFiles(), tests = testsHere();
@@ -570,6 +582,8 @@
     // — never every redraw as the teacher types.
     livePage: function () { return sharedPage; },
       checks: runChecks,
+      checksOn: checksOn,
+      tryShow: tryShow,
       // Everything in files, `code` empty: how WebIDE always stored a project,
       // and what the server keeps for one (read_project in app.py). `ide` makes
       // a new project — Save, Publish, Share — a web one.

@@ -14,7 +14,9 @@ v13 (Nov 2026, the teacher: "the editor popups are just not working"): for a
 Python tutorial the item is a Try It step — a plain pop box and a ```tests
 try block (two hints and the code), typed on the slide — and the preview
 checks a Try It box with a Python of its own (try_preview.js). A web or
-Flask tutorial keeps the editor pop-up: their tests don't know `try`.
+Flask tutorial gets the step in its own form (Nov 2026, the teacher: "I'd
+rather have everything in the slides"); a web tutorial's preview checks its
+box as a page; a Flask one's has no runtime on that page to check with.
 """
 import json
 import logging
@@ -75,13 +77,14 @@ else:
         s["uid"] = tid
     made = c.post("/api/library", json={"kind": "tutorial", "title": "Notes", "body": "# Notes\n", "ide": "pyide"})
     slug = made.get_json()["slug"]
+    flask_slug = c.post("/api/library", json={"kind": "tutorial", "title": "Flask notes", "body": "# Flask\n", "ide": "flaskide"}).get_json()["slug"]
     web_slug = c.post("/api/library", json={"kind": "tutorial", "title": "Web notes", "body": "# Web\n", "ide": "webide"}).get_json()["slug"]
     server = make_server("127.0.0.1", 0, P.app, threaded=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % server.server_port
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/teacher/tutorials/%s/edit" % slug, "web": "/teacher/tutorials/%s/edit" % web_slug,
+        json.dump({"base": base, "page": "/teacher/tutorials/%s/edit" % slug, "web": "/teacher/tutorials/%s/edit" % web_slug, "flask": "/teacher/tutorials/%s/edit" % flask_slug,
                    "cookie": P.app.session_interface.get_signing_serializer(P.app).dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "presmaker_insert_browser.mjs"), setup, chrome],
                          cwd=PYIDE, capture_output=True, text=True, timeout=400)
@@ -109,10 +112,17 @@ else:
     check("  and shows what it printed under the box", "hello" in (r.get("previewOut") or ""), r.get("previewOut"))
     w = r.get("web") or {}
     wi = w.get("inserted") or ""
-    check("a web tutorial keeps the v12 editor pop-up (its tests don't know `try`)",
-          ":::pop editor\nA sentence on what it means." in wi and wi.rstrip().endswith("```tests\nprints hello\n```")
-          and w.get("wrapped") == "# Notes\n\n:::pop editor\nType x = 1 now.\n:::\n", (repr(wi[-80:]), w.get("wrapped")))
-    check("  and its preview loads no Python for Try It boxes", r.get("webPreview") is False, r.get("webPreview"))
+    check("a web tutorial: a Try It step as a web page (an html block, has h1, its hints and code)",
+          "```html\n<h1>Hello</h1>\n```" in wi and ":::pop editor" not in wi
+          and wi.rstrip().endswith("```tests try\nhas h1\nh1 contains Hello\nhint: A heading tag goes around the word.\n"
+                                   "hint: <h1>, the word, then </h1>.\ncode: <h1>Hello</h1>\n```"), repr(wi[-200:]))
+    check("  its preview checks a box as a page, and shows it under the box",
+          r.get("webMarks") == "✓" and "Hi web" in (r.get("webShown") or ""), (r.get("webMarks"), (r.get("webShown") or "")[:80]))
+    f = r.get("flask") or {}
+    fi = f.get("inserted") or ""
+    check("a Flask tutorial: a Try It step as a route, GET / contains Hello",
+          '@app.route("/")' in fi and "```tests try\nGET / contains Hello\n" in fi and ":::pop editor" not in fi, repr(fi[-220:]))
+    check("  and its preview loads nothing to run one (Flask's runtime isn't on that page)", r.get("flaskPreview") is False, r.get("flaskPreview"))
     server.shutdown()
 
 print()

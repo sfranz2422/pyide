@@ -80,6 +80,10 @@ def _part_of(info):
         return None
     if len(words) == 1:
         return "", ""
+    # ```tests try: a Try It step typed on the slide, practice, never graded
+    # (autograde.py TRY, the same rule in every grammar).
+    if len(words) == 2 and words[1] == "try":
+        return "try", ""
     if len(words) == 2 and words[1] in PARTS:
         return words[1], ""
     if len(words) == 3 and words[1] in PARTS and words[2] in LEVELS:
@@ -221,6 +225,9 @@ def parse(md):
     tests, errors = [], []
     for part, level, body in _blocks_with_parts(md):
         got, bad = parse_block(body)
+        if part == "try":
+            errors += bad                 # a typo there is still said
+            continue                      # practice on the slide, never graded
         for t in got:
             t["part"] = part
             t["level"] = level

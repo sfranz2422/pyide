@@ -438,6 +438,8 @@ def library_edit_page(slug):
         classes = _class_names(db, [a.id for a in uses])
         page = H["page_for"](db, user, item) if H.get("page_for") else H["page"](db, user)
         server = {"slug": item.slug, "title": item.title, "kind": item.kind, "body": item.body,
+                  # Which IDE it's for (pyide, webide, flaskide…): PresMaker writes a Try It step in its form.
+                  "ide": item.app,
                   "saveUrl": "/api/library/" + item.slug, "libraryUrl": "/teacher/tutorials", "brand": page["brand"],
                   # PyIDE's tests have a form; the others' are typed as lines,
                   # read by their own autograde.js as they're typed.

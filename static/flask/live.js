@@ -920,7 +920,17 @@
      replace a link — or a half-typed answer — under the student's hand. */
   var notesView = $("live-notes-view");
   var notesBody = $("live-notes");
-  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody) : null;
+  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { wide: true }) : null;
+  /* Reading slides fill the screen, as on the Python live page (live.js;
+     notes.js `wide`; the teacher, Nov 2026: everything in the slides, full
+     screen until the warm-up). Both editors are redrawn when they come back:
+     CodeMirror draws nothing while hidden. */
+  document.addEventListener("ide-notes-wide", function (e) {
+    var wide = !!(e.detail && e.detail.wide);
+    if (wide && notesView && notesView.hidden) return;
+    document.body.classList.toggle("notes-wide", wide);
+    if (!wide) setTimeout(function () { mirror.refresh(); mine.refresh(); }, 0);
+  });
   var teacherSlide = null;           // the last "3/5" the teacher sent
   var teacherAt = -1;                // and that slide, from 0
 
@@ -953,7 +963,7 @@
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
     notesView.hidden = !data.notes.trim();
-    if (notesView.hidden) return;
+    if (notesView.hidden) { document.body.classList.remove("notes-wide"); return; }
     var jump;
     if (slide !== teacherSlide) {
       teacherSlide = slide;
@@ -1466,6 +1476,25 @@
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(function () { return runLiveChecks(null); });
+  /* A Try It box on the slide (```tests try): its code as the lesson's
+     entry (app.py, query.sql or index.php), the rest of their project
+     beside it, checked and posted nowhere, then its / page or rows shown
+     under the box (try_show.js), as runners/flask.js does in the editor. */
+  if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner) {
+    var boxFiles = function (code) { var f = allFiles(); f[MAIN] = code; return f; };
+    window.IDENotesChecks.setTryRunner(async function (code, tests) {
+      if (running || !tests.length) return null;
+      setBusy(true);
+      try {
+        await runtime().boot(function () {});
+        return await window.PyIDETests.run(runtime(), boxFiles(code), tests);
+      } finally {
+        setBusy(false);
+      }
+    }, function (code, tests, out) {
+      if (window.IDETryShow) window.IDETryShow.served(out, runtime(), boxFiles(code), isSql() ? "sql" : isPhp() ? "php" : "flask");
+    });
+  }
   /* A failed check brings up the hint panel over the student's OWN editor
      (hints.js), never the teacher's mirror. */
   if (window.IDEHints && L.assignment) {

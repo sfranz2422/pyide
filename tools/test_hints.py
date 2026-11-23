@@ -287,6 +287,14 @@ def main():
     jp = json.loads(js.stdout or "{}").get("py", {})
     check("…and autograde.js reads it the same (Check my work on main.py never runs it)",
           jp.get("labels") == ["Prints Yo"] and jp.get("errors") == [], jp or js.stderr[-300:])
+    js2 = subprocess.run(["node", "-e", NODE, json.dumps({
+        "py": SLIDE_TRY,
+        "web": "```tests try\nhas h1\nhint: An h1.\n```\n\n```tests\nhas p\n```\n",
+        "flask": "```tests try\nGET / contains Hi\n```\n\n```tests\nGET / -> 200\n```\n"})], cwd=ROOT, capture_output=True, text=True)
+    jw = json.loads(js2.stdout or "{}")
+    check("…and the web's and Flask's autograde.js leave theirs out too (Check my work never runs them)",
+          (jw.get("web") or {}).get("labels") == ["Has p"] and (jw.get("flask") or {}).get("labels") == ["GET / answers 200"],
+          (jw, js2.stderr[-300:]))
     item_try = make(teacher, SLIDE_TRY, cls)
     redacted = kid.get("/a/" + item_try, follow_redirects=True).get_data(as_text=True)
     check("…its hint lines are out of the student's copy", "A plus." not in redacted and "tests try" in redacted)

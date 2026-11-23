@@ -38,6 +38,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
 
   var runner = null;      // the page's: () => Promise<{results}>, or null
   var tryRunner = null;   // the page's: (code, tests) => Promise<{results}>, for a Try It box
+  var tryShow = null;     // the page's: (code, tests, out) => draws what the box's code makes (a web page, a table)
   var latest = null;      // label -> {ok, detail}, from the last check
   var pressed = null;     // the card whose ✔ ran the last check (hints.js)
   var busy = false;
@@ -270,7 +271,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
       }
     });
     wrap.appendChild(area);
-    var out = el("pre", "try-out");
+    var out = el("div", "try-out");
     out.hidden = true;
     var box = card(tests, "✔ Check this step", "try");
     wrap.appendChild(box);
@@ -301,7 +302,16 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     }, function () { return null; }).then(function (got) {
       busy = false;
       paintAll(true);
-      if (got && out) showRun(code, tryInputs(box), out);
+      if (got && out) {
+        if (tryShow) {
+          out.hidden = false;
+          out.className = "try-out try-out-page";
+          out.textContent = "";
+          try { tryShow(code, box._tests || [], out); } catch (e) { out.textContent = String(e && e.message || e); }
+        } else {
+          showRun(code, tryInputs(box), out);
+        }
+      }
       return got;
     });
   }
@@ -321,8 +331,12 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     });
   }
 
-  function setTryRunner(fn) {
+  /* `show`, for an IDE whose box isn't a Python program (a web page, a
+     Flask app, a query, a PHP page): draws what it makes into `out`. Without
+     it, the box is run as Python and what it prints is shown. */
+  function setTryRunner(fn, show) {
     tryRunner = typeof fn === "function" ? fn : null;
+    tryShow = typeof show === "function" ? show : null;
     paintAll(false);
   }
 

@@ -1,2 +1,2 @@
 Copied from ~/presMaker/web by tools/sync_presmaker.py. Edit PresMaker, then sync.
-28ce37d 2026-11-23 Insert: Try It step (v13: a pop box and a ```tests try block) for a Python tutorial; web and Flask keep the editor pop-up
+726d7f1 2026-11-23 Insert → Try It step for web and Flask tutorials too, each in its IDE's own form

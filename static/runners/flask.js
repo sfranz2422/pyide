@@ -192,6 +192,34 @@
       return window.PyIDETests.forLevels ? window.PyIDETests.forLevels(all) : all;
     }
 
+    /* A Try It box on the slide (```tests try, checks_in_notes.js tryStep):
+       its code as the project's entry — app.py, query.sql or index.php,
+       whichever the project is — the rest of the project beside it
+       (templates, schema.sql), checked and posted nowhere; then what it
+       makes shown under the box: the / page, or the query's rows
+       (try_show.js). */
+    function withBox(code) {
+      var files = allFiles();
+      files[entry(files)] = code;
+      return files;
+    }
+    async function checksOn(code, tests) {
+      if (running || !tests || !tests.length) return null;
+      var files = withBox(code), rt = kindOf(files) === "php" ? window.PhpRuntime : window.FlaskIDERuntime;
+      running = true;
+      try {
+        await rt.boot(function () {});
+        return await window.PyIDETests.run(rt, files, tests);
+      } finally {
+        running = false;
+      }
+    }
+    function tryShow(code, tests, out) {
+      if (!window.IDETryShow) return;
+      var files = withBox(code), kind = kindOf(files);
+      window.IDETryShow.served(out, kind === "php" ? window.PhpRuntime : window.FlaskIDERuntime, files, kind);
+    }
+
     /* Check my work: every test in the notes, on the project as it is now
        (autograde.js). The shell keeps the result for the teacher. */
     async function runChecks() {
@@ -559,6 +587,8 @@
       isRunning: function () { return running; },
       hasRun: function () { return hasRun; },
       checks: runChecks,
+      checksOn: checksOn,
+      tryShow: tryShow,
       payload: function () { return { ide: "flaskide", code: "", files: allFiles() }; },
       forRescue: function (all) { return all; },
       forget: function () {},     // every run writes the files afresh

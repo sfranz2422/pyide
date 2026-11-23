@@ -132,11 +132,15 @@ def make_template():
       // a web tutorial's, in PyIDE (pm_autograde: web/autograde.js)
       || window.WebIDETests;
   </script>
-  {#  A Python tutorial's Try It boxes (```tests try) checked in the preview
-      (try_preview.js), with a Python loaded on the first check. Not a web
-      or Flask tutorial's (their tests don't know `try`), nor GameIDE's. #}
-  {% if not pm_autograde and pm_adapter != "gameide" and has_try_preview %}
-  <script src="{{ url_for('static', filename='runtime.js') }}"></script>
+  {#  Try It boxes (```tests try) checked in the preview (try_preview.js):
+      a Python tutorial's with a Python loaded on the first check, a web
+      tutorial's as a page. Not a Flask/SQL/PHP tutorial's (their runtimes
+      aren't on this page), nor GameIDE's. #}
+  {% if has_try_preview and pm_adapter != "gameide" and (not pm_autograde or pm_autograde == "web/autograde.js") %}
+  {% if not pm_autograde %}<script src="{{ url_for('static', filename='runtime.js') }}"></script>{% endif %}
+  {#  WebIDE's checker builds the page with WebIDERun (web/runner.js), which a web project's editor loads. #}
+  {% if pm_autograde == "web/autograde.js" %}<script src="{{ url_for('static', filename='web/runner.js') }}"></script>{% endif %}
+  <script src="{{ url_for('static', filename='try_show.js') }}"></script>
   <script src="{{ url_for('static', filename='try_preview.js') }}"></script>
   {% endif %}
   {% if pm_adapter == "gameide" %}

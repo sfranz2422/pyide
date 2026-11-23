@@ -45,6 +45,8 @@ window.WebIDETests = (function () {
     var words = String(info || "").trim().toLowerCase().split(/\s+/);
     if (!words[0] || words[0] !== "tests") return null;
     if (words.length === 1) return { part: "", level: "" };
+    // ```tests try: a Try It step typed on the slide, practice (autograde.py TRY).
+    if (words.length === 2 && words[1] === "try") return { part: "try", level: "" };
     if (words.length === 2 && PARTS.indexOf(words[1]) >= 0) return { part: words[1], level: "" };
     if (words.length === 3 && PARTS.indexOf(words[1]) >= 0 && LEVELS.indexOf(words[2]) >= 0)
       return { part: words[1], level: words[2] };
@@ -164,9 +166,10 @@ window.WebIDETests = (function () {
     var tests = [], errors = [];
     blocksWithParts(md).forEach(function (b) {
       var got = parseBlock(b.body);
+      errors = errors.concat(got.errors);
+      if (b.part === "try") return;   // checked on the slide, against its box; never graded
       got.tests.forEach(function (t) { t.part = b.part; t.level = b.level; });
       tests = tests.concat(got.tests);
-      errors = errors.concat(got.errors);
     });
     return { tests: tests, errors: errors };
   }
@@ -434,10 +437,15 @@ window.WebIDETests = (function () {
 
   /* A ```tests block in rendered notes, as a list a student can read. */
   function renderBlocks(root) {
-    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus']";
+    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus'], pre > code.language-tests-try";
     Array.prototype.forEach.call(root.querySelectorAll(sel), function (code) {
       var got = parseBlock(code.textContent);
       if (!got.tests.length) return;
+      // ```tests try: a box to type the step into, on the slide (checks_in_notes.js tryStep).
+      if (/\blanguage-tests-try\b/.test(code.className) && window.IDENotesChecks && window.IDENotesChecks.tryStep) {
+        code.parentNode.replaceWith(window.IDENotesChecks.tryStep(got.tests, code.textContent));
+        return;
+      }
       var bonus = /\blanguage-tests-bonus/.test(code.className);
       var heading = bonus ? "★ Bonus check — optional" : "✔ Tests your page will be checked against";
       // With checks_in_notes.js on the page, a card the student checks their

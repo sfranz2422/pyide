@@ -560,12 +560,6 @@ window.PyIDETests = (function () {
     // notes.js's runFences joins `tests bonus` / `tests exercise` into one
     // word, or the renderer would keep only "tests" and the card couldn't
     // tell a bonus check from the rest.
-    /* "It should print …" in a step's box, big and in its own colour, as
-       in the editor's bubble (editor_tip.js markExpect; the teacher, Nov
-       2026: students weren't paying attention to it). */
-    Array.prototype.forEach.call(root.querySelectorAll(".pop-box p"), function (p) {
-      if (/should print/i.test(p.textContent)) p.classList.add("says-expect");
-    });
     var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus'], pre > code.language-tests-try";
     Array.prototype.forEach.call(root.querySelectorAll(sel), function (code) {
       var got = parseBlock(code.textContent);

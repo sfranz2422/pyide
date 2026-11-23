@@ -1917,6 +1917,12 @@ body.is-student-preview > .split { flex: 1 1 0; height: auto; min-height: 0; }
            border: 1px solid var(--line); font-family: var(--mono); font-size: 15px; white-space: pre-wrap; }
 .try-out-head { color: var(--muted, inherit); font-family: var(--sans); font-size: 13px; font-weight: 600; }
 .try-out-err { color: var(--red, #d33); }
+/* A web, Flask or PHP step's page, a query's rows (each IDE's tryShow). */
+.try-out.try-out-page { white-space: normal; font-family: var(--sans); }
+.try-out-page .try-frame { display: block; width: 100%; height: 220px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.try-out-page table { border-collapse: collapse; font-family: var(--mono); font-size: .9em; margin: 4px 0 10px; }
+.try-out-page th, .try-out-page td { border: 1px solid var(--line); padding: 3px 8px; text-align: left; }
+.try-out-page th { background: var(--bg-head, var(--bg-panel)); }
 .try-step .tests-card { margin-top: 8px; }
 .hint-title { font-size: 28px; font-weight: 700; line-height: 1.25; }
 .hint-panel.is-pass .hint-title { color: var(--green); }

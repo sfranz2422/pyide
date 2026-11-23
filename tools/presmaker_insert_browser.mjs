@@ -77,10 +77,20 @@ try {
   out.previewMarks = await ev("[...document.querySelectorAll('#stage .try-step .tests-mark')].map(m => m.textContent).join('')");
   for (let k = 0; k < 100 && !(await ev("/hello/.test((document.querySelector('#stage .try-step .try-out')||{}).textContent||'')")); k++) await sleep(300);
   out.previewOut = await ev("(document.querySelector('#stage .try-step .try-out')||{}).textContent || ''");
-  // A web tutorial: its tests don't know `try`, so the v12 editor pop-up.
+  // A web tutorial: the step in its own form, and its preview checks a box as a page.
   const web = await open(cfg.web);
   out.web = await inserts(web);
-  out.webPreview = await web("!!document.querySelector('script[src*=\"try_preview.js\"]')");
+  await web(`${cm}.setValue('# Web\\n\\n:::pop\\nType it.\\n:::\\n\\n\x60\x60\x60tests try\\nhas h1\\n\x60\x60\x60\\n')`);
+  for (let k = 0; k < 50 && !(await web("!!document.querySelector('#stage .try-step .tests-run')")); k++) await sleep(200);
+  await sleep(1500);
+  await web("(function(){ var a=document.querySelector('#stage .try-step .try-code'); a.value='<h1>Hi web</h1>'; a.dispatchEvent(new Event('input')); document.querySelector('#stage .try-step .tests-run').click(); return 1; })()");
+  for (let k = 0; k < 100; k++) { await sleep(300); if (await web("[...document.querySelectorAll('#stage .try-step .tests-mark')].every(m => m.textContent === '✓' || m.textContent === '✗')")) break; }
+  out.webMarks = await web("[...document.querySelectorAll('#stage .try-step .tests-mark')].map(m => m.textContent).join('')");
+  out.webShown = await web("(function(){ var f=document.querySelector('#stage .try-step .try-out iframe'); return f ? f.srcdoc : ''; })()");
+  // A Flask tutorial: its form; no Python for its boxes on this page.
+  const fl = await open(cfg.flask);
+  out.flask = await inserts(fl);
+  out.flaskPreview = await fl("!!document.querySelector('script[src*=\"try_preview.js\"]')");
 } catch (e) {
   out.error = String(e);
 } finally {

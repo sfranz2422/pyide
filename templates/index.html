@@ -708,6 +708,7 @@
 <script src="{{ url_for('static', filename='split.js') }}"></script>
 <script src="{{ url_for('static', filename='laser.js') }}"></script>
 <script src="{{ url_for('static', filename='checks_in_notes.js') }}"></script>
+{% if web or flask %}<script src="{{ url_for('static', filename='try_show.js') }}"></script>{% endif %}
 <script src="{{ url_for('static', filename='hints.js') }}"></script>
 <script src="{{ url_for('static', filename='editor_tip.js') }}"></script>
 {% if web %}

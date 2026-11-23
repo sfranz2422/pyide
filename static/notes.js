@@ -1722,6 +1722,13 @@ window.PyIDENotes = (function () {
     if (tests) {
       try { tests.renderBlocks(root); } catch (e) { /* left as code */ }
     }
+    /* "It should print …" (or show) in a step's box, big and in its own
+       colour, as in the editor's bubble (editor_tip.js markExpect; the
+       teacher, Nov 2026: students weren't paying attention to it). Here,
+       not in one grammar's autograde.js, so every IDE's slides get it. */
+    Array.prototype.forEach.call(root.querySelectorAll(".pop-box p"), function (p) {
+      if (/should (print|show)/i.test(p.textContent)) p.classList.add("says-expect");
+    });
     // ```lab blocks, where lab_notes.js is loaded (an A+ lab's page): the
     // ticket's tasks for that step, ticked as the machine passes them.
     if (window.PyIDELabNotes) {

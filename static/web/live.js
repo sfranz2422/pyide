@@ -912,7 +912,17 @@
      mirror: v10 lessons say each typed step there, as on the Python live
      page (static/live.js). Without it this page showed those steps only on
      the slide, which is fine, but not the lesson the teacher wrote. */
-  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true }) : null;
+  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true, wide: true }) : null;
+  /* Reading slides fill the screen, as on the Python live page (live.js;
+     notes.js `wide`; the teacher, Nov 2026: everything in the slides, full
+     screen until the warm-up). Both editors are redrawn when they come back:
+     CodeMirror draws nothing while hidden. */
+  document.addEventListener("ide-notes-wide", function (e) {
+    var wide = !!(e.detail && e.detail.wide);
+    if (wide && notesView && notesView.hidden) return;
+    document.body.classList.toggle("notes-wide", wide);
+    if (!wide) setTimeout(function () { mirror.refresh(); mine.refresh(); }, 0);
+  });
   if (notesSlides && window.PyIDEEditorTip && mine) window.PyIDEEditorTip.attach(mine);
   /* Copy to editor under an Easy or Medium box's code with blanks (notes.js
      copyButtons), into the student's own editor, never the teacher's mirror:
@@ -962,7 +972,7 @@
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
     notesView.hidden = !data.notes.trim();
-    if (notesView.hidden) return;
+    if (notesView.hidden) { document.body.classList.remove("notes-wide"); return; }
     var jump;
     if (slide !== teacherSlide) {
       teacherSlide = slide;
@@ -1409,6 +1419,13 @@
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
+  /* A Try It box on the slide (```tests try): one whole page, checked as
+     index.html on its own and shown under the box; posted nowhere. */
+  if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner) {
+    window.IDENotesChecks.setTryRunner(function (code, tests) {
+      return tests.length ? window.WebIDETests.run({ "index.html": code }, tests) : Promise.resolve(null);
+    }, function (code, tests, out) { if (window.IDETryShow) window.IDETryShow.page(out, code); });
+  }
   /* A failed check brings up the hint panel over the student's OWN editor
      (hints.js), never the teacher's mirror. */
   if (window.IDEHints && L.assignment) {
