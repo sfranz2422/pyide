@@ -137,6 +137,18 @@ try {
   await until(r, "!!document.querySelector('.hint-panel .hint-code')");
   out.reloaded = await r(PANEL);
 
+  // A right prediction after a check has run on the page (a Try It step
+  // before it): the prediction's own "done" event must not close its card
+  // (the teacher, Nov 2026: "the screen flashes like its trying but nothing
+  // appears").
+  await r(answer([{ label: "Prints Hello", ok: true, detail: "" }, { label: "Uses a for loop", ok: true, detail: "" }]));
+  await r(press);
+  await sleep(600);
+  await r("(function(){ var b=document.querySelector('.hint-panel:not([hidden]) .hint-close'); if(b) b.click(); var c=document.querySelector('.tests-card'); c.parentNode.removeChild(c); return 1; })()");
+  await r("(function(){ var box=document.createElement('div'); box.className='snippet snippet-predict'; document.body.appendChild(box); window.IDEHints.predictCard({ pass: true, title: 'Right on the first try!', why: 'That is exactly what it prints.' }); box.dispatchEvent(new CustomEvent('ide-checks', { bubbles: true })); return 1; })()");
+  await sleep(600);
+  out.predictAfterCheck = await r(PANEL);
+
   // A prediction's card shows only the newest hint, as a test's does.
   await r("window.IDEHints.predictCard({ title: 'Not yet', hints: ['first nudge', 'second nudge'] }); true");
   out.predictHints = await r(PANEL);

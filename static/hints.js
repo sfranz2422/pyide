@@ -350,7 +350,15 @@ window.IDEHints = (function () {
   }
 
   var timer = null;
-  function onChecks() {
+  function onChecks(e) {
+    /* Only a tests card's check. A right prediction (snippets.js tellLock)
+       and a word card turned over send the same event, to open a locked
+       slide; answering one hid the prediction's ✓ card the moment it came
+       up — judged against an earlier slide's card, gone, so nothing to say,
+       so hide (the teacher, Nov 2026: "the screen flashes like its trying
+       but nothing appears"). */
+    var from = e && e.target;
+    if (from && from.closest && !from.closest(".tests-card")) return;
     // One event per card: answer once, when they've all gone by.
     if (timer) clearTimeout(timer);
     timer = setTimeout(function () {

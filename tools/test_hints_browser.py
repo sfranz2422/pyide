@@ -181,6 +181,9 @@ db = P.SessionLocal()
 again = db.query(P.HintTaken).filter_by(student_id=sid, assignment_id=ids["page"]).count()
 db.close()
 check("…without being charged again", again == 3, again)
+pa = r.get("predictAfterCheck") or {}
+check("a right prediction after an earlier check: its ✓ card stays up (it flashed and went)",
+      pa.get("pass") is True and "Right on the first try" in (pa.get("title") or ""), r.get("predictAfterCheck"))
 check("a wrong prediction's card shows only the newest hint",
       (r.get("predictHints") or {}).get("hints") == ["💡 second nudge"], r.get("predictHints"))
 check("a quiz: no panel at all", r.get("quiz") is True, r.get("quiz"))
