@@ -83,6 +83,29 @@ try {
   await sleep(800);
   out.master = { picked: await ev("document.querySelector('#preview-level') && document.querySelector('#preview-level').value"),
                  shown: await ev("[...document.querySelectorAll('.level-part')].filter(b => !b.hidden && b.getAttribute('data-level')).map(b => b.getAttribute('data-level'))") };
+  // Changing the Level keeps their place: on slide 2, with what they'd done.
+  // (The notes are `locked: yes`: slide 1 opened as if its checks had passed,
+  // which a Level change carries over like anything else in storage.)
+  const pickLevel = async (lv) => {
+    await ev(`var s=document.querySelector('#preview-level'); s.value='${lv}'; s.dispatchEvent(new Event('change')); true`);
+    await sleep(2500);
+    for (let k = 0; k < 40 && !(await ev("!!document.querySelector('.slide-pos') && !!document.querySelector('.preview-bar')")); k++) await sleep(200);
+    await sleep(800);
+  };
+  await ev("localStorage.setItem('pyide-unlocked:' + (window.PYIDE.assignmentSlug || location.pathname), '1'); localStorage.setItem('pyide-unlocked:x', '2'); true");
+  await pickLevel("medium");
+  await ev("(function(){ var b=[...document.querySelectorAll('.slide-nav .slide-btn')].find(b=>b.textContent.trim()==='▶'); b.click(); })(); true");
+  await sleep(500);
+  out.beforeLevel = await ev("(document.querySelector('.slide-pos')||{}).textContent");
+  await pickLevel("easy");
+  out.levelKept = { picked: await ev("document.querySelector('#preview-level').value"),
+                    slide: await ev("(document.querySelector('.slide-pos')||{}).textContent"),
+                    stored: await ev("localStorage.getItem('pyide-unlocked:x')") };
+  // ↺ Start over after that still starts over.
+  await go(cfg.preview, ".preview-bar");
+  await sleep(800);
+  out.overAgain = { slide: await ev("(document.querySelector('.slide-pos')||{}).textContent"),
+                    stored: await ev("localStorage.getItem('pyide-unlocked:x')") };
   // Back out: the real storage is just as it was.
   await go(cfg.details, "#student-preview");
   out.realAfter = await ev("localStorage.getItem('pyide-mine') + '|' + localStorage.getItem('pyide-unlocked:x')");

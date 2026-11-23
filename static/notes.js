@@ -874,7 +874,34 @@ window.PyIDENotes = (function () {
       drawPlayed();
     }
 
+    /* Reading slides full width (opts.wide; the teacher, Nov 2026: "make
+       the notes take up the whole screen until the warmup slide is
+       reached ... this will allow us to increase font sizes"). A slide is
+       for reading when it comes before the first slide with work in
+       main.py: a tests card that grades it (not a ```tests try, typed on
+       the slide) or a `:::pop editor` step. Notes with no such slide are
+       never wide, or the editor would never show. The page is told with an
+       "ide-notes-wide" event, and does the widening. */
+    var WORK = /^ {0,3}(`{3,}|~{3,})[ \t]*tests([ \t]+(exercise|bonus)\b[^\n]*)?[ \t]*$|^\s*:::\s*pop\s+editor\b/im;
+    var wideSaid = null;
+    function wideOn() {
+      var o = opts && opts.wide;
+      return typeof o === "function" ? !!o() : !!o;
+    }
+    function announceWide() {
+      var first = -1;
+      for (var i = 0; i < cut.length; i++) if (WORK.test(cut[i])) { first = i; break; }
+      var wide = wideOn() && first > 0 && at < first;
+      if (wide === wideSaid || typeof document.dispatchEvent !== "function") return;
+      wideSaid = wide;
+      var ev;
+      try { ev = new CustomEvent("ide-notes-wide", { detail: { wide: wide } }); }
+      catch (e) { ev = document.createEvent("CustomEvent"); ev.initCustomEvent("ide-notes-wide", false, false, { wide: wide }); }
+      document.dispatchEvent(ev);
+    }
+
     function draw() {
+      announceWide();
       if (mode) return drawPlayed();
       var text = cut.length ? cut[at] : takeTheme(md).body;
       setTheme(bar, theme);       // the arrows under a themed deck match it

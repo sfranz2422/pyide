@@ -50,6 +50,26 @@
      so none of them ever holds the real one. */
   (function () {
     var data = {};
+    /* Changing the Level reloads the page; what the "student" had done
+       (the slide they were on, slides opened, boxes typed) comes over the
+       reload in sessionStorage, once (the teacher, Nov 2026: picking a
+       level "resets me to the beginning"). ↺ Start over carries nothing. */
+    var CARRY = "pyide-preview-carry";
+    try {
+      var carried = JSON.parse(sessionStorage.getItem(CARRY) || "null");
+      sessionStorage.removeItem(CARRY);
+      if (carried) {
+        data = carried.data || {};
+        // The slide they were on (app.js goes there): notes without
+        // `animate:` keep no place of their own.
+        window.PyIDEPreviewSlide = carried.slide || 0;
+      }
+    } catch (e) { data = {}; }
+    window.PyIDEPreviewCarry = function () {
+      var at = 0;
+      try { at = window.PyIDEPreviewAt ? window.PyIDEPreviewAt() : 0; } catch (e) { at = 0; }
+      try { sessionStorage.setItem(CARRY, JSON.stringify({ data: data, slide: at })); } catch (e) { /* starts fresh */ }
+    };
     var mem = {
       getItem: function (k) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
       setItem: function (k, v) { data[k] = String(v); },
@@ -77,7 +97,7 @@
   {% if student_preview.levels %}
   <label>Level
     <select id="preview-level" class="field" data-url="{{ student_preview.url }}"
-            onchange="location.href = this.dataset.url + '?level=' + this.value">
+            onchange="if (window.PyIDEPreviewCarry) window.PyIDEPreviewCarry(); location.href = this.dataset.url + '?level=' + this.value">
       {% for lv in ('easy', 'medium', 'master') %}<option value="{{ lv }}" {% if lv == student_preview.level %}selected{% endif %}>{{ lv|capitalize }}</option>{% endfor %}
     </select></label>
   {% endif %}

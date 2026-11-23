@@ -288,7 +288,20 @@
     locked: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; },
     // `:::pop editor` steps also show in a bubble in the editor: for a
     // student working, as the lock is — never the teacher writing them.
-    editorTips: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; }
+    editorTips: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; },
+    // Reading slides (before the warm-up) fill the screen: for a student
+    // working, as the lock is — never the teacher writing them, nor live.
+    wide: function () { return !window.PYIDE.authoring && !window.PYIDE.readonly && !liveCode; }
+  });
+  /* notes.js says when the slide is a reading slide (before the first one
+     with work in main.py): the notes take the whole screen, bigger, and
+     the editor and output come back with the warm-up. The editor is
+     redrawn then: CodeMirror measures nothing while it's hidden. */
+  document.addEventListener("ide-notes-wide", function (e) {
+    var wide = !!(e.detail && e.detail.wide);
+    if (wide && notesView.hidden) return;          // notes closed: nothing to widen
+    document.body.classList.toggle("notes-wide", wide);
+    if (!wide) relayout();
   });
 
   // The guide bubble for `:::pop editor` steps (editor_tip.js), in this
@@ -316,7 +329,14 @@
     notesName.textContent = name;
     notesView.hidden = false;
     notesSlides.show(docs[name].getValue());
+    // Student preview, after its Level was changed: back on the slide it was on (index.html).
+    if (window.PyIDEPreviewSlide) {
+      var back = window.PyIDEPreviewSlide;
+      window.PyIDEPreviewSlide = 0;
+      notesSlides.go(back);
+    }
   }
+  window.PyIDEPreviewAt = function () { return notesSlides.at(); };
 
   docs[MAIN] = editor.getDoc();
 

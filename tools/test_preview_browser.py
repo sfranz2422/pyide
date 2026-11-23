@@ -175,6 +175,12 @@ check("opened again: a first visit again — nothing stored, the starter back", 
       and "# start here" in (fr.get("code") or "") and "print(1)" not in (fr.get("code") or ""), fr)
 m = r.get("master") or {}
 check("Level: Master shows Master's boxes, and only those", m.get("picked") == "master" and m.get("shown") == ["master"], m)
+lk = r.get("levelKept") or {}
+check("changing the Level keeps the place: the same slide, what was done kept (it went back to the start)",
+      r.get("beforeLevel") == "2 / 2" and lk.get("picked") == "easy" and lk.get("slide") == "2 / 2" and lk.get("stored") == "2",
+      (r.get("beforeLevel"), lk))
+oa = r.get("overAgain") or {}
+check("  and ↺ Start over still starts over", oa.get("slide") == "1 / 2" and oa.get("stored") is None, oa)
 check("the teacher's own storage, after: just as it was", r.get("realAfter") == "kept|null", r.get("realAfter"))
 db = P.SessionLocal()
 drafts = db.query(accounts.Draft).filter_by(owner_id=tid).count()

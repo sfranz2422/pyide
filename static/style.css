@@ -334,6 +334,18 @@ img.logo { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
    output column would leave a gap where the notes were. */
 .pane-notes { flex: 1 1 30%; background: var(--bg-panel); border-left: 1px solid var(--line); }
 .pane-notes[hidden] { display: none; }
+/* Reading slides, before the warm-up: the notes take the whole screen,
+   bigger (notes.js `wide`, app.js; the teacher, Nov 2026). !important over
+   split.js's sizes, which are set on the panes themselves. */
+body.notes-wide .split > .pane-editor, body.notes-wide .split > .pane-right,
+body.notes-wide .split > .resizer { display: none !important; }
+body.notes-wide .split > .pane-notes { flex: 1 1 100% !important; width: auto !important; max-width: none !important; border-left: 0; }
+body.notes-wide .pane-notes > .notes-body { font-size: 21px; max-width: none;
+  padding-left: max(24px, calc((100% - 76ch) / 2)); padding-right: max(24px, calc((100% - 76ch) / 2)); }
+body.notes-wide .pane-notes > .notes-body > * { max-width: none; }
+body.notes-wide .pane-notes .notes-close { display: none; }
+body.notes-wide .notes-body .try-code, body.notes-wide .notes-body .try-out { font-size: 19px; }
+body.notes-wide .notes-body .tests-run, body.notes-wide .notes-body .snippet .btn { font-size: 16px; }
 .split:has(> .pane-notes:not([hidden])) > .pane-editor { flex-basis: 40%; }
 .split:has(> .pane-notes:not([hidden])) > .pane-right { flex-basis: 30%; }
 .split:not(:has(> .pane-notes:not([hidden]))) > .pane-right { flex-grow: 1 !important; }
