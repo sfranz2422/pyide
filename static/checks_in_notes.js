@@ -243,9 +243,15 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
         area.value = start.replace(/\s+$/, "") + "\n";
         remember();
         fit();
-        var at = area.value.lastIndexOf("<script>");
-        var nl = at >= 0 ? area.value.indexOf("\n", at) : -1;
-        area.selectionStart = area.selectionEnd = nl >= 0 ? nl + 1 : area.value.length;
+        // On the empty line just above the last </script>: under anything
+        // the start page's script already has (its comments, its code).
+        var v = area.value, close = v.lastIndexOf("</script>"), caret = v.length;
+        if (close >= 0) {
+          var lineStart = v.lastIndexOf("\n", close - 1) + 1;
+          var prevStart = lineStart > 0 ? v.lastIndexOf("\n", lineStart - 2) + 1 : lineStart;
+          caret = lineStart > 0 && !v.slice(prevStart, lineStart - 1).trim() ? prevStart : lineStart;
+        }
+        area.selectionStart = area.selectionEnd = caret;
         return;
       }
       if (prior === null) return;                        // the first step: nothing before it

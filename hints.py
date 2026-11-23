@@ -79,6 +79,13 @@ def collect(md, parse_block):
     out, label, free = {}, None, {}
     after_pop = block_free = try_next = False
     was_inside = False
+    # Each level's own hints and code, for a test written at more than one
+    # level (```tests exercise easy …): `uses prompt` at Easy, Medium and
+    # Master shared one entry, and Show me the code joined all three levels'
+    # code (Nov 2026, the JavaScript unit). "by_level" holds them apart;
+    # app.py's _hints_of picks the student's own.
+    by_level = {}
+    level = level_next = ""
     for line, inside in _walk(md):
         if not inside:
             if was_inside:
@@ -95,32 +102,45 @@ def collect(md, parse_block):
             # ```tests try: a Try It step typed on the slide, free like the
             # editor box's (autograde.TRY).
             f = _FENCE.match(line)
-            try_next = bool(f) and f.group(2).strip().lower().split() == ["tests", "try"]
+            words = f.group(2).strip().lower().split() if f else []
+            try_next = words == ["tests", "try"]
+            level_next = words[2] if len(words) == 3 and words[0] == "tests" else ""
             continue
         if not was_inside:
             block_free = after_pop or try_next
+            level = level_next
         was_inside = True
         m = HINT_LINE.match(line)
         if m:
             if label is None:
                 continue                          # under no test: nothing to attach to
             entry = out.setdefault(label, {"hints": [], "code": ""})
-            if m.group(1).lower() == "hint":
-                text = m.group(2).strip()
-                if text:
-                    entry["hints"].append(text)
-            else:
-                code = m.group(2)
-                code = code[1:] if code.startswith(" ") else code
-                entry["code"] = (entry["code"] + "\n" + code) if entry["code"] else code
+            own = by_level.setdefault(label, {}).setdefault(level, {"hints": [], "code": ""})
+            for e in (entry, own):
+                if m.group(1).lower() == "hint":
+                    text = m.group(2).strip()
+                    if text:
+                        e["hints"].append(text)
+                else:
+                    code = m.group(2)
+                    code = code[1:] if code.startswith(" ") else code
+                    e["code"] = (e["code"] + "\n" + code) if e["code"] else code
             continue
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
             continue
+        # A # line is a comment only where the grammar doesn't read it as a
+        # test: `#headline contains …` is a web test, and its hints went to
+        # the test above it.
         tests, _ = parse_block(stripped)
+        if len(tests) != 1 and stripped.startswith("#"):
+            continue
         label = tests[0]["label"] if len(tests) == 1 else None
         if label is not None:
             free[label] = free.get(label, True) and block_free
     for k, v in out.items():
         v["free"] = free.get(k, False)
+        levels = by_level.get(k, {})
+        if len([lv for lv in levels if lv]) > 1:
+            v["by_level"] = levels
     return {k: v for k, v in out.items() if v["hints"] or v["code"]}

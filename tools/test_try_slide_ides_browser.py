@@ -89,6 +89,7 @@ JS_START = """# Select and change
 <h1>Arcade Night</h1>
 <p class="game">Tetris</p>
 <script>
+// Day 3A — the starter's own comment
 
 </script>
 ```
@@ -186,6 +187,9 @@ j = r.get("jsStart") or {}
 check("JavaScript Try It: the first box starts with the lesson's page (```try-start), the cursor inside its <script>",
       (j.get("value") or "").startswith('<link rel="stylesheet" href="style.css">\n<h1>Arcade Night</h1>\n<p class="game">Tetris</p>\n<script>\n')
       and j.get("caretLine") == "", j)
+check("  the cursor under what the script already has (the starter's comments), not above it",
+      (j.get("typed") or "").index("// Day 3A") < (j.get("typed") or "").index("Pac-Man") if "Pac-Man" in (j.get("typed") or "") else False,
+      j.get("typed"))
 check("  the page block itself isn't drawn on the slide", j.get("startShown") is False, j.get("startShown"))
 check("  the JavaScript typed at the cursor passes the step", j.get("marks") == "✓", j.get("marks"))
 check("  the box's page brings in the project's style.css (a class from it looks as it should)",

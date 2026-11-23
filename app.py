@@ -3218,14 +3218,31 @@ def _hint_key(label):
     return hashlib.sha1(str(label).encode("utf-8")).hexdigest()[:12]
 
 
-def _hints_of(item):
-    """{label: {"hints": [...], "code": "..."}} from the assignment's notes."""
+def _hints_of(item, level=None):
+    """{label: {"hints": [...], "code": "..."}} from the assignment's notes.
+    With `level` (the student's), a test written at several levels gives that
+    level's own hints and code (hints.collect's by_level), not all of them
+    joined."""
     grader = _grader(item)
     out = {}
     for name, text in sorted(item.file_map().items()):
         if _is_notes(name) and isinstance(text, str):
             out.update(hints.collect(text, grader.parse_block))
+    if level:
+        for label, e in out.items():
+            own = (e.get("by_level") or {}).get(level)
+            if own and (own["hints"] or own["code"]):
+                out[label] = dict(e, hints=own["hints"], code=own["code"])
     return out
+
+
+def _hint_level(db, item, user):
+    """Whose hints: the student's level (the teacher sets it), or the level a
+    Student preview asks for (?level=); Easy otherwise."""
+    asked = request.args.get("level") or (request.get_json(silent=True) or {}).get("viewLevel") if request else None
+    if user is not None and not accounts.is_teacher(user.email) and user.id != item.teacher_id:
+        return _student_level(db, item, user.id, user)
+    return asked if asked in LEVELS else "easy"
 
 
 def _hint_steps(entry):
@@ -3278,7 +3295,7 @@ def hints_list(slug):
             return jsonify(tests={}, taken={}, costs=HINT_COSTS, quiz=True)
         user = current_user(db)
         tests = {label: {"steps": _hint_steps(e), "free": bool(e.get("free"))}
-                 for label, e in _hints_of(item).items()}
+                 for label, e in _hints_of(item, _hint_level(db, item, user)).items()}
         taken = {}
         if user is not None:
             keys = {_hint_key(label): label for label in tests}
@@ -3307,7 +3324,7 @@ def hints_take(slug):
             return jsonify(error="There are no hints in a quiz."), 403
         data = request.get_json(silent=True) or {}
         label = str(data.get("label") or "")[:200]
-        entry = _hints_of(item).get(label)
+        entry = _hints_of(item, _hint_level(db, item, current_user(db))).get(label)
         try:
             level = int(data.get("level"))
         except (TypeError, ValueError):

@@ -295,6 +295,30 @@ def main():
     check("…and the web's and Flask's autograde.js leave theirs out too (Check my work never runs them)",
           (jw.get("web") or {}).get("labels") == ["Has p"] and (jw.get("flask") or {}).get("labels") == ["GET / answers 200"],
           (jw, js2.stderr[-300:]))
+    # A test written at several levels (`uses prompt` at Easy and Master):
+    # each level's own hints and code, not one list for all (Nov 2026).
+    LV = ("```tests exercise easy\nuses prompt\nhint: EASY one\nhint: EASY two\ncode: let a = prompt(\"x\");\n```\n\n"
+          "```tests exercise master\nuses prompt\nhint: MASTER one\nhint: MASTER two\ncode: let b = prompt(\"y\");\n```\n")
+    lv = hints.collect(LV, autograde_web.parse_block)
+    check("a test at two levels keeps each level's hints and code apart (by_level)",
+          lv["Uses prompt"].get("by_level", {}).get("master", {}).get("hints") == ["MASTER one", "MASTER two"]
+          and lv["Uses prompt"].get("by_level", {}).get("easy", {}).get("code") == 'let a = prompt("x");', lv)
+    WEBHASH = "```tests\nhas h1\nhint: H1 one\nhint: H1 two\ncode: <h1>x</h1>\n#title contains Hi\nhint: ID one\nhint: ID two\ncode: <p id=\"title\">Hi</p>\n```\n"
+    wh = hints.collect(WEBHASH, autograde_web.parse_block)
+    check("a web test starting with # (#title contains …) has its own hints, not the test above's",
+          wh.get("#title contains Hi", {}).get("hints") == ["ID one", "ID two"] and wh["Has h1"]["hints"] == ["H1 one", "H1 two"], wh)
+    check("…and a Python # line is still a comment", "x" not in json.dumps(hints.collect("```tests\n# x\nprints a\nhint: p\n```\n", autograde.parse_block)))
+    witem = make(teacher, LV, cls, ide="webide")
+    seen = teacher.get("/api/hints/%s?level=master" % witem).get_json()
+    got = teacher.post("/api/hints/" + witem, json={"label": "Uses prompt", "level": 3, "viewLevel": "master"}).get_json()
+    check("the server hands out the level's own code (a preview at Master: Master's, not all levels joined)",
+          got.get("text") == 'let b = prompt("y");' and seen["tests"]["Uses prompt"]["steps"] == [1, 2, 3], (got, seen))
+    lvk = client(user("lvk", "lvk@example.org", "Level Kid"))
+    kg = lvk.post("/api/hints/" + witem, json={"label": "Uses prompt", "level": 1, "viewLevel": "master"}).get_json()
+    lvk.post("/api/hints/" + witem, json={"label": "Uses prompt", "level": 2, "viewLevel": "master"})
+    kc = lvk.post("/api/hints/" + witem, json={"label": "Uses prompt", "level": 3, "viewLevel": "master"}).get_json()
+    check("…a student gets their own level's (Easy until the teacher sets one), whatever level the page asks for",
+          kg.get("text") == "EASY one" and kc.get("text") == 'let a = prompt("x");', (kg, kc))
     item_try = make(teacher, SLIDE_TRY, cls)
     redacted = kid.get("/a/" + item_try, follow_redirects=True).get_data(as_text=True)
     check("…its hint lines are out of the student's copy", "A plus." not in redacted and "tests try" in redacted)

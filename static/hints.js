@@ -47,8 +47,12 @@ window.IDEHints = (function () {
     return x === 0.25 ? "a quarter" : x === 0.5 ? "half" : x === 0.75 ? "three quarters" : Math.round(x * 100) + "%";
   }
 
+  /* Student preview's Level (index.html's bar): its hints, as a student at
+     that level gets. A student's own level is the server's to know. */
+  function viewLevel() { return (window.PYIDE && window.PYIDE.previewLevel) || ""; }
+
   function load() {
-    return fetch("/api/hints/" + encodeURIComponent(cfg.slug), { cache: "no-store" })
+    return fetch("/api/hints/" + encodeURIComponent(cfg.slug) + (viewLevel() ? "?level=" + viewLevel() : ""), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d) info = d; })
       .catch(function () { /* no hints offered; the reasons still show */ });
@@ -278,7 +282,7 @@ window.IDEHints = (function () {
   function fetchHint(label, level) {
     return fetch("/api/hints/" + encodeURIComponent(cfg.slug), {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: label, level: level })
+      body: JSON.stringify({ label: label, level: level, viewLevel: viewLevel() })
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (x) {
         if (!x.ok) return x;
