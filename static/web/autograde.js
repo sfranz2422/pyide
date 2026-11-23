@@ -248,6 +248,34 @@ window.WebIDETests = (function () {
     return parts.join("\n");
   }
 
+  /* Can the browser read every script at all? Each is compiled, never run
+     (new Function parses its body and runs nothing). A script that can't
+     be read doesn't run — none of it — so a check that only looks at the
+     code's text (uses, defines, avoids) must not pass on it: Day 3A's
+     `const firstGame = document.querySelector(".game` passed `uses
+     firstGame` while the console said SyntaxError (the teacher, Nov 2026).
+     A Python program with a syntax error fails every check; this is the
+     same. Module scripts (type="module") are skipped: import/export can't
+     be compiled this way, and none of the lessons use them. */
+  function syntaxError(files) {
+    var bad = null;
+    Object.keys(files).forEach(function (name) {
+      if (bad) return;
+      var text = String(files[name] || ""), pieces = [];
+      if (/\.js$/i.test(name)) pieces.push(text);
+      if (/\.html?$/i.test(name)) {
+        var re = /<script\b(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi, m;
+        while ((m = re.exec(text))) if (!/type\s*=\s*["']?module/i.test(m[1])) pieces.push(m[2]);
+      }
+      pieces.forEach(function (code) {
+        if (bad) return;
+        try { new Function(code); }
+        catch (e) { if (e && e.name === "SyntaxError") bad = { file: name, message: e.message }; }
+      });
+    });
+    return bad;
+  }
+
   function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
   function codeCheck(t, js) {
@@ -408,10 +436,13 @@ window.WebIDETests = (function () {
   /* Run `tests` against `files` (name → text). Resolves
      {results: [{label, ok, detail, points}], earned, possible}. */
   async function run(files, tests) {
-    var found = {}, js = scriptText(files), byPage = {};
+    var found = {}, js = scriptText(files), byPage = {}, broken = syntaxError(files);
     tests.forEach(function (t, i) {
       if (t.kind === "uses" || t.kind === "avoids" || t.kind === "defines") {
-        found[i] = codeCheck(t, js);
+        found[i] = broken
+          ? { ok: false, detail: "Your JavaScript in " + broken.file + " can't run: " + broken.message +
+                                 ". Check its quotes and brackets." }
+          : codeCheck(t, js);
         return;
       }
       var page = t.page || window.WebIDERun.ENTRY;

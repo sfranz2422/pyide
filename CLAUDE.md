@@ -137,7 +137,7 @@ under `.ide-webide` (`#preview` is also the avatar page's). Not yet for a web
 project: Go live (the live page has no web runner), and the teacher's pages
 (dashboard, Check all, class pages still filter `app=APP_NAME`).
 `test_web_browser.py` drives it in Chrome; `test_autograde_web.py` is
-WebIDE's test of its tests.
+WebIDE's test of its tests. A script the browser can't read (a SyntaxError) fails every `uses`/`defines`/`avoids` check, saying it can't run (web/autograde.js `syntaxError`, compiled with `new Function`, never run): those checks read the code's text, so Day 3A's `document.querySelector(".game` passed `uses firstGame` (Nov 2026).
 **So does a FlaskIDE project** (`flaskide`): a Flask app, a SQL project or
 a PHP site, the kind read off the files (`flask_kind`, and the same rule in
 `runners/flask.js`), never stored. Its files may sit in `templates/`,

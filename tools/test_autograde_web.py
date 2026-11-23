@@ -215,6 +215,9 @@ SITES = {
     "inner": variant(**{"script.js": ("textContent = '1'", "innerHTML = '1'")}),
     "no_about": {k: v for k, v in RIGHT.items() if k != "about.html"},
     "endless": variant(**{"script.js": ("console.log('Hello there');", "while (true) {}")}),
+    # A script with a missing quote doesn't run at all, so its words passing
+    # `uses` let Day 3A's `document.querySelector(".game` through (Nov 2026).
+    "typo": variant(**{"script.js": ("console.log('Hello there');", "console.log('Hello there);")}),
 }
 if not os.path.exists(CHROME) or not os.path.isdir(WS):
     check("Chrome and node_modules/ws are here", False)
@@ -295,6 +298,12 @@ check("a button that does nothing fails the click, saying what #out says",
       not L["After clicking #btn: #out contains 1"]["ok"]
       and "It says: 0" in L["After clicking #btn: #out contains 1"]["detail"]
       and not L["Uses addEventListener"]["ok"])
+L = lines("typo")
+check("a script with a syntax error fails its code checks (uses, defines), saying it can't run",
+      not L["Uses addEventListener"]["ok"] and "can't run" in L["Uses addEventListener"]["detail"]
+      and "script.js" in L["Uses addEventListener"]["detail"]
+      and not L["Defines greet()"]["ok"], (L.get("Uses addEventListener"), L.get("Defines greet()")))
+check("  but the page's own checks still pass: the HTML is fine", L["Every img has alt"]["ok"], L.get("Every img has alt"))
 L = lines("three_img")
 check("three imgs fails 'exactly 2', saying it has 3",
       not L["Has exactly 2 img"]["ok"] and "It has 3" in L["Has exactly 2 img"]["detail"]
