@@ -29,6 +29,15 @@ var SETUP = [
   "    raise RuntimeError('input() needs someone to type, and code in the notes can\\'t ask. Try this in main.py instead.')",
 ].join("\n");
 
+var GIVEN = [
+  "def input(prompt=''):",
+  "    if not _given:",
+  "        raise RuntimeError('input() asked for more answers than this check gives.')",
+  "    answer = _given.pop(0)",
+  "    print(str(prompt) + answer)",
+  "    return answer",
+].join("\n");
+
 /* What a beginner needs from a traceback: the line in their snippet and
    what went wrong — "Line 3: NameError: name 'x' is not defined" — not
    Pyodide's own frames above it. */
@@ -50,6 +59,12 @@ onmessage = function (e) {
       .catch(function () { /* the import itself will say what's missing */ })
       .then(function () {
         py.runPython(SETUP, { globals: ns, filename: "<setup>" });
+        // Answers given (a Try It box runs with its test's inputs): input()
+        // takes them in turn and shows each after its prompt, as typed.
+        if (job.inputs && job.inputs.length) {
+          ns.set("_given", py.toPy(job.inputs.map(String)));
+          py.runPython(GIVEN, { globals: ns, filename: "<setup>" });
+        }
         return py.runPythonAsync(job.code, { globals: ns, filename: "<exec>" });
       })
       .then(function () {

@@ -95,7 +95,7 @@ window.IDESnippets = (function () {
     });
   }
 
-  function runPython(code, write, done) {
+  function runPython(code, write, done, inputs) {
     if (!worker) startWorker();
     var id = nextId++;
     ready.then(function () {
@@ -107,7 +107,7 @@ window.IDESnippets = (function () {
           done("Stopped: it was still running after " + TIME_LIMIT / 1000 + " seconds. Is there a loop that never ends?");
         }, TIME_LIMIT)
       };
-      worker.postMessage({ id: id, code: code });
+      worker.postMessage({ id: id, code: code, inputs: inputs || null });
     }, function (e) {
       done("Python couldn't load here (" + e.message + "). Check the internet connection and try again.");
     });
@@ -896,14 +896,17 @@ window.IDESnippets = (function () {
 
   /* A question's code, run (notes.js: a `type: predict` question once it's
      answered, and the teacher's preview): what it printed and any error. */
-  function run(code) {
+  /* `inputs`, when given, answer input() in turn, each shown after its
+     prompt as if typed (a Try It box on the slide runs with its test's
+     inputs, checks_in_notes.js). */
+  function run(code, inputs) {
     return new Promise(function (resolve) {
       var text = "";
       runPython(code, function (chunk) {
         if (text.length < OUTPUT_MAX) text += chunk;
       }, function (error) {
         resolve({ text: text, error: error || "" });
-      });
+      }, inputs);
     });
   }
 

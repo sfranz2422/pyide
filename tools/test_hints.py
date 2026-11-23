@@ -105,6 +105,34 @@ prints Hi
 hint: free here
 ```
 """
+# v12 from Nov 2026: a Try It step typed on the slide (```tests try).
+# Practice: never graded, hints free. Then a closing `:::pop editor` box
+# with no card, a new slide, and the warm-up — whose hints must still cost
+# (the closing box once made the warm-up free).
+SLIDE_TRY = """:::pop
+Type `print("Hey")`.
+:::
+
+```tests try
+prints Hey
+hint: Type what's in the box.
+uses +
+hint: A plus.
+```
+
+:::pop editor
+✓ That's the Try It.
+:::
+
+---
+
+## Warm-Up
+
+```tests
+prints Yo
+hint: Use print.
+```
+"""
 FLASK = "```tests\nreturns 2 rows\nhint: WHERE keeps some rows.\ncode: SELECT * FROM t WHERE x > 1;\n```\n"
 
 NODE = r"""
@@ -244,6 +272,25 @@ def main():
           tr["Prints Hey"]["free"] is True and tr["Prints Yo"]["free"] is False, tr)
     check("…a test in both a free and a paid block is paid", tr["Prints Hi"]["free"] is False, tr["Prints Hi"])
 
+    st = hints.collect(SLIDE_TRY, autograde.parse_block)
+    check("a ```tests try step's hints are free; the warm-up's, a slide after a closing editor box, aren't",
+          (st.get("Prints Hey") or {}).get("free") is True and (st.get("Uses +") or {}).get("free") is True
+          and (st.get("Prints Yo") or {}).get("free") is False, st)
+    got, bad = autograde.parse(SLIDE_TRY)
+    check("…and a ```tests try step is never graded: not among the tests, not in what it's out of",
+          [t["label"] for t in got] == ["Prints Yo"] and not bad
+          and autograde.possible({"notes.md": SLIDE_TRY}) == 1, ([t["label"] for t in got], bad))
+    check("…but a typo in one is still said",
+          autograde.parse("```tests try\nprnts Hey\n```\n")[1] != [])
+    js = subprocess.run(["node", "-e", NODE, json.dumps({"py": SLIDE_TRY, "web": WEB, "flask": FLASK})],
+                        cwd=ROOT, capture_output=True, text=True)
+    jp = json.loads(js.stdout or "{}").get("py", {})
+    check("…and autograde.js reads it the same (Check my work on main.py never runs it)",
+          jp.get("labels") == ["Prints Yo"] and jp.get("errors") == [], jp or js.stderr[-300:])
+    item_try = make(teacher, SLIDE_TRY, cls)
+    redacted = kid.get("/a/" + item_try, follow_redirects=True).get_data(as_text=True)
+    check("…its hint lines are out of the student's copy", "A plus." not in redacted and "tests try" in redacted)
+
     print("The cost")
     # The teacher's Check all on the kid's work: both tests pass (3 of 4 points; area fails).
     db = P.SessionLocal()
@@ -363,6 +410,8 @@ def main():
 
     for js in ("static/app.js", "static/live.js"):
         src = open(os.path.join(ROOT, js)).read()
+        check("%s: a Try It box on the slide is checked on its own code (setTryRunner)" % js,
+              "setTryRunner(" in src)
         check("%s: a program asking for input() after a check holds the card (IDEHints.wait)" % js,
               "IDEHints.wait(ran)" in src and "input\\s*\\(" in src)
 

@@ -68,7 +68,7 @@ try {
   await until(s, "document.querySelectorAll('.hint-panel .hint-text').length === 1");
   out.hint1 = await s(PANEL);
   await s(go);                                           // the paid one: one press opens it
-  await until(s, "document.querySelectorAll('.hint-panel .hint-text').length === 2");
+  await until(s, "[...document.querySelectorAll('.hint-panel .hint-text')].some(e => /one line/.test(e.textContent))");
   out.hint2 = await s(PANEL);
   out.hint2Recorded = await s(`fetch('/api/hints/${cfg.slug}').then(r=>r.json()).then(d=>d.taken['Prints Hello']||[])`);
   await s.shot("2-hint2");
@@ -119,7 +119,7 @@ try {
   await until(t, "document.querySelectorAll('.hint-panel .hint-text').length === 1");
   out.tryHint1 = await t(PANEL);
   await t(go);
-  await until(t, "document.querySelectorAll('.hint-panel .hint-text').length === 2");
+  await until(t, "[...document.querySelectorAll('.hint-panel .hint-text')].some(e => /brackets/.test(e.textContent))");
   out.tryHint2 = await t(PANEL);
   await t.shot("4-tryit");
 
@@ -129,6 +129,10 @@ try {
   await r(press);
   await until(r, "!!document.querySelector('.hint-panel .hint-code')");
   out.reloaded = await r(PANEL);
+
+  // A prediction's card shows only the newest hint, as a test's does.
+  await r("window.IDEHints.predictCard({ title: 'Not yet', hints: ['first nudge', 'second nudge'] }); true");
+  out.predictHints = await r(PANEL);
 
   // A quiz: nothing at all.
   const q = await open(cfg.student, cfg.quiz);

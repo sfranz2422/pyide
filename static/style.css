@@ -1880,6 +1880,25 @@ body.is-student-preview > .split { flex: 1 1 0; height: auto; min-height: 0; }
               box-shadow: 0 20px 60px var(--shadow); animation: hint-in .3s ease-out; }
 .hint-panel[hidden] { display: none; }
 .hint-panel.is-pass { border-color: var(--green); }
+/* Nothing on the hint card can be selected or copied (hints.js ensurePanel). */
+.hint-panel, .hint-panel * { -webkit-user-select: none; user-select: none; }
+/* "It should print …" in a step's box on the slide (autograde.js renderBlocks). */
+/* A slide theme has its own light or dark (color-scheme), not the page's:
+   the page's purple was pale on fall's cream. light-dark() follows the slide;
+   var(--purple) is for a browser without it. */
+.pop-box p.says-expect { font-size: 1.2em; font-weight: 700; color: var(--purple); color: light-dark(#6d28d9, #c4b5fd); }
+.pop-box p.says-expect code { color: inherit; }
+/* A Try It step typed on the slide (```tests try, checks_in_notes.js tryStep). */
+.try-step { margin: 10px 0 14px; }
+.try-code { display: block; width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 16px;
+            line-height: 1.5; padding: 8px 10px; border: 2px solid var(--accent); border-radius: 8px;
+            background: var(--bg); color: var(--text); resize: vertical; tab-size: 4; white-space: pre; overflow-x: auto; }
+.try-code:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.try-out { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-panel);
+           border: 1px solid var(--line); font-family: var(--mono); font-size: 15px; white-space: pre-wrap; }
+.try-out-head { color: var(--muted, inherit); font-family: var(--sans); font-size: 13px; font-weight: 600; }
+.try-out-err { color: var(--red, #d33); }
+.try-step .tests-card { margin-top: 8px; }
 .hint-title { font-size: 28px; font-weight: 700; line-height: 1.25; }
 .hint-panel.is-pass .hint-title { color: var(--green); }
 .hint-why { font-size: 21px; line-height: 1.45; margin-top: 10px; }

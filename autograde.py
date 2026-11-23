@@ -69,14 +69,26 @@ PARTS = ("exercise", "bonus")
 LEVELS = ("easy", "medium", "master")
 
 
+#: ```tests try (Nov 2026, the teacher: "the editor popups are just not
+#: working"): a Try It step typed into a box ON THE SLIDE, checked there
+#: (checks_in_notes.js tryStep) against what's in that box, never main.py.
+#: Practice only, by the teacher's choice: not part of the grade, so parse()
+#: leaves it out and nothing that grades (Check all, possible, the
+#: gradebook) ever sees it. Its hints are free (hints.collect).
+TRY = "try"
+
+
 def _part_of(info):
-    """(part, level) a fence's words name — part "", "exercise" or "bonus",
-    level "" or one of LEVELS — or None for a fence that isn't a tests block."""
+    """(part, level) a fence's words name — part "", "exercise", "bonus" or
+    "try", level "" or one of LEVELS — or None for a fence that isn't a
+    tests block."""
     words = info.strip().lower().split()
     if not words or words[0] != "tests":
         return None
     if len(words) == 1:
         return "", ""
+    if len(words) == 2 and words[1] == TRY:
+        return TRY, ""
     if len(words) == 2 and words[1] in PARTS:
         return words[1], ""
     if len(words) == 3 and words[1] in PARTS and words[2] in LEVELS:
@@ -179,6 +191,9 @@ def parse(md):
     tests, errors = [], []
     for part, level, body in _blocks_with_parts(md):
         got, bad = parse_block(body)
+        if part == TRY:
+            errors += bad                 # a typo there is still said
+            continue                      # practice on the slide, never graded (TRY)
         for t in got:
             t["part"] = part
             t["level"] = level

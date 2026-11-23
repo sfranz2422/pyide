@@ -138,6 +138,13 @@ window.IDEHints = (function () {
       panel.setAttribute("role", "dialog");
       panel.setAttribute("aria-live", "polite");
       panel.setAttribute("aria-label", "Hint");
+      /* Nothing on the card can be copied (the teacher, Nov 2026: students
+         copied the hint's code into the editor). Typing it is the point.
+         Unselectable in style.css too; this catches the keyboard and the
+         right-click menu. A speed bump, as the live page's teacher pane is. */
+      ["copy", "cut", "dragstart", "contextmenu", "selectstart"].forEach(function (t) {
+        panel.addEventListener(t, function (e) { e.preventDefault(); });
+      });
       document.body.appendChild(backdrop);
       document.body.appendChild(panel);
       document.addEventListener("keydown", function (e) {
@@ -242,7 +249,9 @@ window.IDEHints = (function () {
     panel.appendChild(close);
     panel.appendChild(el("div", "hint-title", (o.pass ? "✓ " : "✗ ") + (o.title || (o.pass ? "Right!" : "Not yet"))));
     if (o.why) panel.appendChild(el("div", "hint-why", o.why));
-    (o.hints || []).forEach(function (h) { panel.appendChild(el("div", "hint-text", "💡 " + h)); });
+    // Only the newest hint (the teacher, Nov 2026: as on a test's card).
+    var hs = o.hints || [];
+    if (hs.length) panel.appendChild(el("div", "hint-text", "💡 " + hs[hs.length - 1]));
     if (o.shown) {
       panel.appendChild(el("div", "hint-head", "👀 " + (o.answerLabel || "The answer")));
       panel.appendChild(el("pre", "hint-code", o.answer));
@@ -340,7 +349,9 @@ window.IDEHints = (function () {
     if (timer) clearTimeout(timer);
     timer = setTimeout(function () {
       timer = null;
-      var results = window.IDENotesChecks && window.IDENotesChecks.results();
+      var C = window.IDENotesChecks, box = C && C.pressed && C.pressed();
+      // A Try It card on the slide has results of its own (its box's code).
+      var results = C && (box && C.resultsFor ? C.resultsFor(box) : C.results());
       if (!results || info.quiz) return;
       var said = judge(results);
       if (!said) { current = null; hide(); return; }

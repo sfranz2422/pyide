@@ -1577,6 +1577,18 @@
     }
   }
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runLiveChecks);
+  /* A Try It step typed on the slide (```tests try): its tests on its own
+     box's code, in this page's Python, posted nowhere (practice). */
+  if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner) {
+    window.IDENotesChecks.setTryRunner(async function (code, tests) {
+      if (running || !pyodide || !tests.length) return null;
+      var files = dataFiles();
+      files[MAIN] = code;
+      setBusy(true, "console");
+      try { return await window.PyIDETests.run(pyodide, files, tests); }
+      finally { setBusy(false); }
+    });
+  }
   /* A failed check brings up the hint panel over the student's OWN editor
      (hints.js), never the teacher's mirror. */
   if (window.IDEHints && L.assignment) {

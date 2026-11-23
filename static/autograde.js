@@ -35,6 +35,8 @@ window.PyIDETests = (function () {
     var words = String(info || "").trim().toLowerCase().split(/\s+/);
     if (!words[0] || words[0] !== "tests") return null;
     if (words.length === 1) return { part: "", level: "" };
+    // ```tests try: a Try It step typed on the slide, practice only (autograde.py TRY).
+    if (words.length === 2 && words[1] === "try") return { part: "try", level: "" };
     if (words.length === 2 && PARTS.indexOf(words[1]) >= 0) return { part: words[1], level: "" };
     if (words.length === 3 && PARTS.indexOf(words[1]) >= 0 && LEVELS.indexOf(words[2]) >= 0)
       return { part: words[1], level: words[2] };
@@ -136,9 +138,10 @@ window.PyIDETests = (function () {
     var tests = [], errors = [];
     blocksWithParts(md).forEach(function (b) {
       var got = parseBlock(b.body);
+      errors = errors.concat(got.errors);
+      if (b.part === "try") return;   // checked on the slide, against its box; never graded
       got.tests.forEach(function (t) { t.part = b.part; t.level = b.level; });
       tests = tests.concat(got.tests);
-      errors = errors.concat(got.errors);
     });
     return { tests: tests, errors: errors };
   }
@@ -557,10 +560,23 @@ window.PyIDETests = (function () {
     // notes.js's runFences joins `tests bonus` / `tests exercise` into one
     // word, or the renderer would keep only "tests" and the card couldn't
     // tell a bonus check from the rest.
-    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus']";
+    /* "It should print …" in a step's box, big and in its own colour, as
+       in the editor's bubble (editor_tip.js markExpect; the teacher, Nov
+       2026: students weren't paying attention to it). */
+    Array.prototype.forEach.call(root.querySelectorAll(".pop-box p"), function (p) {
+      if (/should print/i.test(p.textContent)) p.classList.add("says-expect");
+    });
+    var sel = "pre > code.language-tests, pre > code[class*='language-tests-exercise'], pre > code[class*='language-tests-bonus'], pre > code.language-tests-try";
     Array.prototype.forEach.call(root.querySelectorAll(sel), function (code) {
       var got = parseBlock(code.textContent);
       if (!got.tests.length) return;
+      /* ```tests try: a box to type the step into, right here on the slide,
+         and its card checking that box (checks_in_notes.js tryStep). Where
+         nothing can check (a class page's preview), the plain list. */
+      if (/\blanguage-tests-try\b/.test(code.className) && window.IDENotesChecks && window.IDENotesChecks.tryStep) {
+        code.parentNode.replaceWith(window.IDENotesChecks.tryStep(got.tests, code.textContent));
+        return;
+      }
       var bonus = /\blanguage-tests-bonus/.test(code.className);
       var heading = bonus ? "★ Bonus check — optional" : "✔ Tests your code will be checked against";
       // With checks_in_notes.js on the page, a card the student checks their

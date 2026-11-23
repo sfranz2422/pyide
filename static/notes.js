@@ -556,7 +556,8 @@ window.PyIDENotes = (function () {
        anything, a student skipped straight past them to the typing, and
        predicting was the point of the step. */
     // A bonus check (```tests bonus, v11) never holds anyone: it's optional.
-    var TESTS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*tests([ \t]+exercise([ \t]+(easy|medium|master))?)?[ \t]*$/im;
+    // ```tests try (a Try It step typed on the slide) holds like any card.
+    var TESTS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*tests([ \t]+exercise([ \t]+(easy|medium|master))?|[ \t]+try)?[ \t]*$/im;
     // An ```html predict holds only with choices (a pick), but taking any as holding errs safe.
     var PREDICT_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(py(thon)?|html|sql|php)[ \t]+predict[ \t]*$/im;
     var CARDS_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*cards[ \t]*$/im;
@@ -1595,7 +1596,7 @@ window.PyIDENotes = (function () {
           return ln.slice(0, ln.indexOf(f[1]) + f[1].length) + w.join("-").toLowerCase();
         if (w.length === 2 && (/^(python|py|html)$/i.test(w[0]) && /^(run|predict)$/i.test(w[1]) ||
                               /^(sql|php)$/i.test(w[0]) && /^predict$/i.test(w[1]) ||
-                              /^tests$/i.test(w[0]) && /^(exercise|bonus)$/i.test(w[1])))
+                              /^tests$/i.test(w[0]) && /^(exercise|bonus|try)$/i.test(w[1])))
           return ln.slice(0, ln.indexOf(f[1]) + f[1].length) + w[0].toLowerCase() + "-" + w[1].toLowerCase();
         return ln;
       }

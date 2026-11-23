@@ -37,6 +37,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   "use strict";
 
   var runner = null;      // the page's: () => Promise<{results}>, or null
+  var tryRunner = null;   // the page's: (code, tests) => Promise<{results}>, for a Try It box
   var latest = null;      // label -> {ok, detail}, from the last check
   var pressed = null;     // the card whose ✔ ran the last check (hints.js)
   var busy = false;
@@ -69,6 +70,8 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     // student who hasn't tried it — Check my work runs every test at once,
     // so without that everyone who skipped it would see a row of crosses.
     if (part === "bonus") box.setAttribute("data-bonus", "");
+    // A Try It step's card (tryStep): checks its own box, keeps its own results.
+    if (part === "try") { box.setAttribute("data-try", ""); box._tests = tests; }
     var head = el("div", "tests-head", heading || "✔ Tests your code will be checked against");
     box.appendChild(head);
     var list = el("ul", "tests-lines");
@@ -98,7 +101,14 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   }
 
   /* One card, from the latest results: its lines, its button, its total. */
+  /* A Try It card's results are its own (its box's code, not main.py's):
+     "Uses +" on a Try It step and on the exercise are different checks. */
+  function resultsFor(box) {
+    return box && box.hasAttribute && box.hasAttribute("data-try") ? (box._tryResults || null) : latest;
+  }
+
   function paint(box) {
+    var latest = resultsFor(box), isTry = box.hasAttribute("data-try");
     var lines = box.querySelectorAll(".test-line"), passing = 0, checked = 0;
     var hide = hiding(), bonus = box.hasAttribute("data-bonus");
     // Not tried yet: nothing on a bonus card passes. Its ✗s would only say
@@ -118,10 +128,11 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
       li.querySelector(".tests-why").textContent = r && !r.ok && r.detail ? r.detail : "";
     });
     var btn = box.querySelector(".tests-run");
-    btn.hidden = !runner;
+    var can = isTry ? !!tryRunner : !!runner;
+    btn.hidden = !can;
     btn.disabled = busy;
     btn.textContent = busy ? "Checking…" : "✔ Check my work";
-    box.querySelector(".tests-sum").textContent = !runner ? "" : busy ? "" :
+    box.querySelector(".tests-sum").textContent = !can ? "" : busy ? "" :
       hide ? (box.hasAttribute("data-checked") ? "Checked — your teacher will see how it went." : "")
       : untried ? "Optional: a bonus point if it all passes, nothing lost if you skip it."
       : checked ? passing + " of " + lines.length + " passing" : lines.length + " to pass";
@@ -148,6 +159,7 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
      moves the bubble on to the next step. Only that card's — every check
      runs every test, so "has results" would be every card on the slide. */
   function check(box) {
+    if (box && box.hasAttribute && box.hasAttribute("data-try")) return checkTry(box);
     if (!runner || busy) return Promise.resolve(null);
     if (box && box.setAttribute) box.setAttribute("data-checked", "");
     // hints.js talks about this card only: a Try It slide has a card per step.
@@ -168,6 +180,150 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
       paintAll(true);
       return got;
     });
+  }
+
+  /* ---------------------------------------------------- Try It, on the slide
+     ```tests try (Nov 2026, the teacher: "the editor popups are just not
+     working but i like the teaching that the try it slides do"): the step
+     is typed into a box right under it on the slide, and its card checks
+     THAT box — run as main.py would be, with the tests' inputs, in the
+     page's Python (tryRunner, app.js / live.js), then run again for the
+     output under the box (snippets.js, its own worker). Practice: nothing
+     is posted, nothing graded (autograde.py TRY); the hints are free.
+
+     Like typing under the last line in main.py, an empty box starts with
+     the step before's code when it's first clicked (the box above it, or
+     on a new slide the box last typed in), so `print(crop + "seed")` has
+     its `crop`. What's typed is kept in this browser. Paste
+     is refused: typing it is the exercise (the teacher's pane is
+     unselectable on the live page for the same reason). */
+  var TRY_KEY = "pyide-try:";
+  function hash(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function keep(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* private window */ } }
+
+  function tryStep(tests, source) {
+    var key = TRY_KEY + location.pathname + ":" + hash(String(source || ""));
+    var wrap = el("div", "try-step");
+    var area = el("textarea", "try-code");
+    area.spellcheck = false;
+    area.setAttribute("autocapitalize", "off");
+    area.setAttribute("autocomplete", "off");
+    area.setAttribute("aria-label", "Type the step here");
+    area.placeholder = "Type it here";
+    var saved = load(key);
+    area.value = saved || "";
+    function fit() { area.rows = Math.max(2, Math.min(16, area.value.split("\n").length + 1)); }
+    fit();
+    var lastKey = TRY_KEY + location.pathname + ":last";
+    function remember() {
+      keep(key, area.value);
+      try { localStorage.setItem(lastKey, JSON.stringify({ k: key, v: area.value })); } catch (e) { /* private window */ }
+    }
+    area.addEventListener("input", function () { remember(); fit(); });
+    // Empty and never typed in: start from the step before's code, as main.py would have it.
+    area.addEventListener("focus", function () {
+      if (area.value || load(key) !== null) return;
+      var steps = document.querySelectorAll(".try-step"), before = null;
+      for (var i = 0; i < steps.length && steps[i] !== wrap; i++) before = steps[i];
+      var prev = before && before.querySelector(".try-code").value;
+      // The first box on a slide: the step before was on an earlier one
+      // (a Try It split over slides, the teacher's call), so the box last
+      // typed in, kept in this browser.
+      if (!before) {
+        var last = null;
+        try { last = JSON.parse(load(lastKey) || "null"); } catch (e) { last = null; }
+        if (last && last.k !== key) prev = last.v;
+      }
+      prev = String(prev || "").replace(/\s+$/, "");
+      if (!prev) return;
+      area.value = prev + "\n";
+      remember();
+      fit();
+      area.selectionStart = area.selectionEnd = area.value.length;
+    });
+    area.addEventListener("paste", function (e) { e.preventDefault(); });
+    area.addEventListener("drop", function (e) { e.preventDefault(); });
+    area.addEventListener("keydown", function (e) {
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        var a = area.selectionStart, b = area.selectionEnd;
+        area.value = area.value.slice(0, a) + "    " + area.value.slice(b);
+        area.selectionStart = area.selectionEnd = a + 4;
+        remember();
+      } else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        // Keep the line's indent, and one more after a colon, as the editor does.
+        var at = area.selectionStart, line = area.value.slice(area.value.lastIndexOf("\n", at - 1) + 1, at);
+        var pad = (/^\s*/.exec(line) || [""])[0] + (/:\s*$/.test(line) ? "    " : "");
+        if (!pad) return;
+        e.preventDefault();
+        area.value = area.value.slice(0, at) + "\n" + pad + area.value.slice(area.selectionEnd);
+        area.selectionStart = area.selectionEnd = at + 1 + pad.length;
+        remember(); fit();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        check(box);
+      }
+    });
+    wrap.appendChild(area);
+    var out = el("pre", "try-out");
+    out.hidden = true;
+    var box = card(tests, "✔ Check this step", "try");
+    wrap.appendChild(box);
+    wrap.insertBefore(out, box);
+    return wrap;
+  }
+
+  // What a Try It box's program is given for input(): its first test's that has any.
+  function tryInputs(box) {
+    var t = (box._tests || []).filter(function (t) { return t.inputs && t.inputs.length; })[0];
+    return t ? t.inputs.slice() : [];
+  }
+
+  function checkTry(box) {
+    var wrap = box.parentNode, area = wrap && wrap.querySelector(".try-code"), out = wrap && wrap.querySelector(".try-out");
+    if (!tryRunner || busy || !area) return Promise.resolve(null);
+    box.setAttribute("data-checked", "");
+    pressed = box;
+    busy = true;
+    paintAll(false);
+    var code = area.value;
+    return Promise.resolve().then(function () { return tryRunner(code, box._tests || []); }).then(function (got) {
+      if (got && got.results) {
+        box._tryResults = {};
+        got.results.forEach(function (r) { box._tryResults[r.label] = { ok: !!r.ok, detail: r.detail || "" }; });
+      }
+      return got;
+    }, function () { return null; }).then(function (got) {
+      busy = false;
+      paintAll(true);
+      if (got && out) showRun(code, tryInputs(box), out);
+      return got;
+    });
+  }
+
+  /* The box's program, run for its output under the box, as Run would show it. */
+  function showRun(code, inputs, out) {
+    var S = window.IDESnippets;
+    if (!S || !S.run) return;
+    out.hidden = false;
+    out.className = "try-out";
+    out.textContent = "Running…";
+    S.run(code, inputs).then(function (r) {
+      out.textContent = "";
+      out.appendChild(el("span", "try-out-head", "Output:\n"));
+      out.appendChild(document.createTextNode(r.text || (r.error ? "" : "(It printed nothing.)")));
+      if (r.error) out.appendChild(el("span", "try-out-err", (r.text && !/\n$/.test(r.text) ? "\n" : "") + r.error));
+    });
+  }
+
+  function setTryRunner(fn) {
+    tryRunner = typeof fn === "function" ? fn : null;
+    paintAll(false);
   }
 
   function setRunner(fn) {
@@ -195,5 +351,6 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   }
 
   return { card: card, check: check, setRunner: setRunner, forget: forget, reveal: reveal, setQuiz: setQuiz,
+           tryStep: tryStep, setTryRunner: setTryRunner, resultsFor: resultsFor,
            results: function () { return latest; }, pressed: function () { return pressed; } };
 })();

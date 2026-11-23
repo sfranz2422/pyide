@@ -756,6 +756,22 @@
        now. The notes' tests cards (checks_in_notes.js) show the results;
        the student's result is kept for the teacher here. Null when it can't
        run now. */
+    /* A Try It box on the slide (checks_in_notes.js tryStep): its tests,
+       run on its code as if it were main.py, the project's data files
+       beside it. Nothing is pulled back from Python: what a step's
+       practice line wrote is no file of theirs. */
+    async function checksOn(code, tests) {
+      if (running || !pyodide || !tests || !tests.length) return null;
+      var files = dataFiles();
+      files[MAIN] = code;
+      setBusy(true, "console");
+      try {
+        return await window.PyIDETests.run(pyodide, files, tests);
+      } finally {
+        setBusy(false, "console");
+      }
+    }
+
     async function runChecks() {
       if (running || !pyodide) return null;
       var files = projectFiles(), tests = testsHere();
@@ -1149,6 +1165,7 @@
       isRunning: function () { return running; },
       hasRun: function () { return hasRun; },
       checks: runChecks,
+      checksOn: checksOn,
       // What a save, a share or a turn-in sends: main.py apart from the rest,
       // the shape every Python route has always taken.
       payload: function () { return { code: mainSource(), files: dataFiles() }; },

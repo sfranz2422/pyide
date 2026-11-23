@@ -706,6 +706,10 @@
   }
   // The notes' own ✔ Check my work, on each tests card.
   if (window.IDENotesChecks) window.IDENotesChecks.setRunner(runChecks);
+  // A Try It step typed on the slide (```tests try): checked on its own box, posted nowhere.
+  if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner && runner.checksOn) {
+    window.IDENotesChecks.setTryRunner(function (code, tests) { return runner.checksOn(code, tests); });
+  }
   /* A failed check brings up the hint panel over this editor (hints.js):
      for a student working on an assignment, never the teacher writing it. */
   if (window.IDEHints && window.PYIDE.assignmentSlug && !window.PYIDE.authoring && !window.PYIDE.readonly) {

@@ -61,6 +61,7 @@ def strip(md):
 
 
 _EDITOR_POP = re.compile(r"^\s*:::\s*pop\s+editor\b", re.I)
+_SLIDE_BREAK = re.compile(r"^\s*---\s*$")
 
 
 def collect(md, parse_block):
@@ -68,14 +69,15 @@ def collect(md, parse_block):
     tests in one notes file that have any. `parse_block` is the grammar's: a
     test line is whatever it reads as exactly one test.
 
-    `free`: every block the test is in comes after a `:::pop editor` box —
-    a Try It step, where the box in the editor says what to type. The
+    `free`: every block the test is in comes after a `:::pop editor` box
+    (on the same slide), or is a ```tests try block — a Try It step, where
+    the box says what to type. The
     teacher (Nov 2026): "we are basically telling the kids what to type ...
     it seems silly to penalize them". The warm-up and the exercises have no
     editor box (their directions are on the slide) and keep the costs:
     "those require independent thought"."""
     out, label, free = {}, None, {}
-    after_pop = block_free = False
+    after_pop = block_free = try_next = False
     was_inside = False
     for line, inside in _walk(md):
         if not inside:
@@ -85,9 +87,18 @@ def collect(md, parse_block):
             label = None
             if _EDITOR_POP.match(line):
                 after_pop = True
+            # A new slide ends a step: an editor box with no card after it
+            # (a Try It's closing "✓ + glues…") once made the WARM-UP's
+            # hints, slides later, free.
+            if _SLIDE_BREAK.match(line):
+                after_pop = False
+            # ```tests try: a Try It step typed on the slide, free like the
+            # editor box's (autograde.TRY).
+            f = _FENCE.match(line)
+            try_next = bool(f) and f.group(2).strip().lower().split() == ["tests", "try"]
             continue
         if not was_inside:
-            block_free = after_pop
+            block_free = after_pop or try_next
         was_inside = True
         m = HINT_LINE.match(line)
         if m:
