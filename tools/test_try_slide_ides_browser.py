@@ -74,6 +74,14 @@ KINDS = {
     "sql": ("flaskide", P.SQL_STARTER,
             notes("Every teacher.", "returns 6 rows"),
             "SELECT * FROM teachers;\n", "SELECT * FROM teachers LIMIT 2;\n", "rows"),
+    # A SQL box with no SELECT (SQL Day 3's INSERT steps, once typed in
+    # schema.sql): it runs after schema.sql, and the lesson's query.sql
+    # shows the result.
+    "sqlinsert": ("flaskide", {"schema.sql": "CREATE TABLE snacks (id INTEGER, name TEXT);\n",
+                               "query.sql": "SELECT * FROM snacks;\n"},
+                  notes("Add a snack.", "result contains 1 | Popcorn"),
+                  "INSERT INTO snacks (id, name) VALUES (1, 'Popcorn');\n",
+                  "INSERT INTO snacks (id, name) VALUES (1, 'Nachos');\n", "Popcorn"),
     "php": ("flaskide", P.PHP_STARTER,
             notes("Say hi in PHP.", "GET / contains Hi php"),
             '<?php echo "<p>Hi php</p>"; ?>\n', '<?php echo "<p>nope</p>"; ?>\n', "Hi php"),

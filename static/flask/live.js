@@ -1481,7 +1481,17 @@
      beside it, checked and posted nowhere, then its / page or rows shown
      under the box (try_show.js), as runners/flask.js does in the editor. */
   if (window.IDENotesChecks && window.IDENotesChecks.setTryRunner) {
-    var boxFiles = function (code) { var f = allFiles(); f[MAIN] = code; return f; };
+    // A SQL box with no SELECT changes the database: it runs after schema.sql,
+    // and the lesson's query.sql shows the result (runners/flask.js boxProject).
+    var boxFiles = function (code) {
+      var f = allFiles();
+      if (isSql() && !/\bselect\b/i.test(String(code).replace(/--[^\n]*/g, ""))) {
+        f["schema.sql"] = (f["schema.sql"] || "").replace(/\s*$/, "\n\n") + code;
+      } else {
+        f[MAIN] = code;
+      }
+      return f;
+    };
     window.IDENotesChecks.setTryRunner(async function (code, tests) {
       if (running || !tests.length) return null;
       setBusy(true);

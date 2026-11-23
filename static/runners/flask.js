@@ -42,6 +42,23 @@
     return { sql: SQL_ENTRY, php: PHP_ENTRY }[kindOf(files)] || FLASK_ENTRY;
   }
 
+  /* A Try It box's code in the project (runners/flask.js, flask/live.js):
+     the project's entry, the rest beside it — except a SQL box with no
+     SELECT. That box changes the database (CREATE TABLE, INSERT: SQL Days
+     2 and 3, whose steps were typed into schema.sql), so it runs after
+     schema.sql and the lesson's own query.sql shows the result, as Run did
+     — alone in query.sql it returned no rows, and nothing could be checked
+     (Nov 2026). */
+  function boxProject(files, code) {
+    files = Object.assign({}, files);
+    if (kindOf(files) === "sql" && !/\bselect\b/i.test(String(code).replace(/--[^\n]*/g, ""))) {
+      files["schema.sql"] = (files["schema.sql"] || "").replace(/\s*$/, "\n\n") + code;
+    } else {
+      files[entry(files)] = code;
+    }
+    return files;
+  }
+
   function modeFor(name) {
     if (/\.php$/.test(name)) return "application/x-httpd-php";
     if (/\.sql$/.test(name)) return "text/x-sql";
@@ -198,11 +215,7 @@
        (templates, schema.sql), checked and posted nowhere; then what it
        makes shown under the box: the / page, or the query's rows
        (try_show.js). */
-    function withBox(code) {
-      var files = allFiles();
-      files[entry(files)] = code;
-      return files;
-    }
+    function withBox(code) { return boxProject(allFiles(), code); }
     async function checksOn(code, tests) {
       if (running || !tests || !tests.length) return null;
       var files = withBox(code), rt = kindOf(files) === "php" ? window.PhpRuntime : window.FlaskIDERuntime;
