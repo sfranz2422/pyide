@@ -1155,12 +1155,18 @@ window.PyIDENotes = (function () {
      difficulty will be carrying over the previous editor box text into the
      next slide"; "it just applies to the try it slides bc those are all
      related code"). */
-  var tryOrder = [];
+  var tryOrder = [], tryStarts = [];
+  /* A ```try-start block before a Try It step is what that step's box
+     starts with, instead of the step before's code (the teacher, Nov 2026,
+     for the JavaScript unit: the first box starts with the lesson's starter
+     page, and students type the JavaScript inside its <script>). Never
+     drawn on the slide (enhanceQuizzes takes it out). */
   function noteTryOrder(md) {
-    var out = [], lines = String(md || "").replace(/\r\n?/g, "\n").split("\n"), i = 0;
+    var out = [], starts = [], start = null, lines = String(md || "").replace(/\r\n?/g, "\n").split("\n"), i = 0;
     while (i < lines.length) {
       var f = FENCE.exec(lines[i]);
-      if (f && /^\s*tests\s+try\s*$/i.test(f[2])) {
+      var isTry = f && /^\s*tests\s+try\s*$/i.test(f[2]), isStart = f && /^\s*try-start\s*$/i.test(f[2]);
+      if (isTry || isStart) {
         var body = [], fence = f[1];
         i++;
         while (i < lines.length) {
@@ -1169,11 +1175,18 @@ window.PyIDENotes = (function () {
           body.push(lines[i]);
           i++;
         }
-        out.push(body.join("\n").trim());
+        if (isStart) start = body.join("\n");
+        else { out.push(body.join("\n").trim()); starts.push(start); start = null; }
       }
       i++;
     }
     tryOrder = out;
+    tryStarts = starts;
+  }
+  /* What this step's box starts with, when the notes give one (```try-start). */
+  function tryStart(text) {
+    var at = tryOrder.indexOf(String(text || "").trim());
+    return at < 0 ? null : tryStarts[at];
   }
   /* The step before this one's text: null for the first step, undefined
      when this step isn't in the notes being shown (then the page guesses). */
@@ -1758,6 +1771,10 @@ window.PyIDENotes = (function () {
     if (tests) {
       try { tests.renderBlocks(root); } catch (e) { /* left as code */ }
     }
+    // A ```try-start block is the start of a Try It box (noteTryOrder), never shown.
+    Array.prototype.forEach.call(root.querySelectorAll("pre > code.language-try-start"), function (c) {
+      c.parentNode.parentNode.removeChild(c.parentNode);
+    });
     /* "It should print …" (or show) in a step's box, big and in its own
        colour, as in the editor's bubble (editor_tip.js markExpect; the
        teacher, Nov 2026: students weren't paying attention to it). Here,
@@ -2592,6 +2609,7 @@ window.PyIDENotes = (function () {
 
   return {
     tryBefore: tryBefore,
+    tryStart: tryStart,
     parseCards: parseCards,
     _enhanceCards: enhanceCards,
     runFences: runFences,

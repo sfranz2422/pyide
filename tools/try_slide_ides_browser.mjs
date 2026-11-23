@@ -90,6 +90,25 @@ try {
       }
     } catch (e) { o.error = String(e && e.stack || e); }
   }
+  // The JavaScript unit: a box that starts with the lesson's page.
+  {
+    const j = out.jsStart = {};
+    const ev = await open(cfg.student, cfg.jsStart);
+    j.startShown = await ev("[...document.querySelectorAll('.notes-body pre, .notes-body code')].some(e => /Arcade Night/.test(e.textContent))");
+    await ev("document.querySelector('.try-step .try-code').focus(); true");
+    j.value = await ev("document.querySelector('.try-step .try-code').value");
+    j.caretLine = await ev("(function(){ var a=document.querySelector('.try-step .try-code'); var v=a.value, p=a.selectionStart; var s=v.lastIndexOf('\\n', p-1)+1, e=v.indexOf('\\n', p); return v.slice(s, e < 0 ? v.length : e); })()");
+    await ev("(function(){ var a=document.querySelector('.try-step .try-code'); a.setRangeText('document.querySelector(\".game\").textContent = \"Pac-Man\";', a.selectionStart, a.selectionEnd, 'end'); a.dispatchEvent(new Event('input')); return 1; })()");
+    await until(ev, press, 30000);
+    await ev(press);
+    await until(ev, done, 60000);
+    j.marks = await ev(marks);
+    await ev(close);
+    await ev("(function(){ var b=[...document.querySelectorAll('.slide-nav .slide-btn')].find(b=>b.textContent.trim()==='▶'); b.click(); return 1; })()");
+    await sleep(800);
+    await ev("document.querySelector('.try-step .try-code').focus(); true");
+    j.next = await ev("document.querySelector('.try-step .try-code').value");
+  }
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

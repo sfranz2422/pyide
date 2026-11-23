@@ -79,6 +79,37 @@ KINDS = {
             '<?php echo "<p>Hi php</p>"; ?>\n', '<?php echo "<p>nope</p>"; ?>\n', "Hi php"),
 }
 
+# The JavaScript unit (the teacher's choice): the first Try It box starts
+# with the lesson's starter page (```try-start), and students type the
+# JavaScript inside its <script>; the next box carries it on.
+JS_START = """# Select and change
+
+```try-start
+<h1>Arcade Night</h1>
+<p class="game">Tetris</p>
+<script>
+
+</script>
+```
+
+:::pop
+Type this inside the `<script>`: `document.querySelector(".game").textContent = "Pac-Man";`
+:::
+
+```tests try
+.game contains Pac-Man
+```
+
+---
+
+# Step 2
+
+```tests try
+.game contains Pac-Man
+has h1
+```
+"""
+
 print("Never graded, in every grammar")
 for name, parse in (("web", autograde_web.parse), ("flask", autograde_flask.parse)):
     md = KINDS[name][2] + "\n```tests\n" + ("has p" if name == "web" else "GET / -> 200") + "\n```\n"
@@ -114,6 +145,10 @@ for name, (ide, starter, md, right, wrong, shows) in KINDS.items():
                                     assignment_id=a.id, version=1, notes=md, filename="index.html" if name == "web" else "query.sql"))
         db.commit()
         pages[name]["live"] = "/live/try" + name + "l"
+js = accounts.Assignment(slug="tryjsstart", app="webide", teacher_id=tid, title="JS start", code="",
+                         files=json.dumps(dict(P.WEB_STARTER, **{"notes.md": JS_START})))
+db.add(js)
+db.commit()
 db.close()
 
 server = make_server("127.0.0.1", 0, P.app, threaded=True)
@@ -121,7 +156,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 sign = P.app.session_interface.get_signing_serializer(P.app)
 setup = os.path.join(TMP, "setup.json")
 with open(setup, "w") as f:
-    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "kinds": pages,
+    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "kinds": pages, "jsStart": "/a/tryjsstart",
                "student": sign.dumps({"uid": sid})}, f)
 run = subprocess.run(["node", os.path.join(HERE, "try_slide_ides_browser.mjs"), setup, chrome],
                      cwd=ROOT, capture_output=True, text=True, timeout=900)
@@ -144,6 +179,15 @@ for name in ("web", "sql"):
     lv = (r.get(name) or {}).get("live") or {}
     check("%s, the class's live page: the box checks, and shows what it makes" % name,
           lv.get("rightMarks") and set(lv.get("rightMarks")) == {"✓"} and KINDS[name][5] in (lv.get("shown") or ""), lv)
+
+j = r.get("jsStart") or {}
+check("JavaScript Try It: the first box starts with the lesson's page (```try-start), the cursor inside its <script>",
+      (j.get("value") or "").startswith('<h1>Arcade Night</h1>\n<p class="game">Tetris</p>\n<script>\n')
+      and j.get("caretLine") == "", j)
+check("  the page block itself isn't drawn on the slide", j.get("startShown") is False, j.get("startShown"))
+check("  the JavaScript typed at the cursor passes the step", j.get("marks") == "✓", j.get("marks"))
+check("  and the next box starts with that whole page, JavaScript and all",
+      "Pac-Man" in (j.get("next") or "") and "<h1>Arcade Night</h1>" in (j.get("next") or ""), j.get("next"))
 
 db = P.SessionLocal()
 kept = db.query(accounts.TestResult).filter(accounts.TestResult.assignment_id.in_(list(ids.values()))).count()

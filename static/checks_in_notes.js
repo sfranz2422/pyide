@@ -235,6 +235,19 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
          what was typed in it, kept in this browser. Only a Try It box's:
          they're one program built step by step; nothing else carries. */
       var N = window.PyIDENotes, prior = N && N.tryBefore ? N.tryBefore(source) : undefined, prev = null;
+      /* The notes give this step a start (```try-start: the JavaScript
+         unit's starter page): that, with the cursor on the empty line inside
+         its last <script>, where the step's code goes. */
+      var start = N && N.tryStart ? N.tryStart(source) : null;
+      if (start) {
+        area.value = start.replace(/\s+$/, "") + "\n";
+        remember();
+        fit();
+        var at = area.value.lastIndexOf("<script>");
+        var nl = at >= 0 ? area.value.indexOf("\n", at) : -1;
+        area.selectionStart = area.selectionEnd = nl >= 0 ? nl + 1 : area.value.length;
+        return;
+      }
       if (prior === null) return;                        // the first step: nothing before it
       if (prior !== undefined) prev = load(tryKey(prior));
       else {
