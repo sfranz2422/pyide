@@ -66,6 +66,24 @@ try {
   await s(NEXT); await sleep(600); out.s4 = await s(STATE);
   for (let k = 0; k < 3; k++) { await s(PREV); await sleep(400); }
   out.back = await s(STATE);
+  // The class's live page, pinned to the teacher's slide.
+  const LSTATE = `(function(){ var vis = function(sel){ var e=document.querySelector(sel); return !!e && e.offsetParent !== null && e.getBoundingClientRect().width > 0; };
+    return { wide: document.body.classList.contains('notes-wide'), mine: vis('#mine + .CodeMirror, .live-left .editor-wrap'),
+             mirror: vis('.live-mirror'), notesW: Math.round(document.getElementById('live-notes-view').getBoundingClientRect().width),
+             lines: document.getElementById('mine').nextElementSibling.querySelectorAll('.CodeMirror-line').length }; })()`;
+  const move = (slide, v) => fs.appendFileSync(cfg.moves, slide + "@" + v + "\n");
+  const L = await open(cfg.student, cfg.live);
+  for (let k = 0; k < 60 && !(await L("!!document.querySelector('#live-notes .slide-nav, .slide-nav')")); k++) await sleep(200);
+  await sleep(1500);
+  out.live1 = await L(LSTATE); await L.shot("4-live-reading");
+  await L("document.getElementById('mine').nextElementSibling.CodeMirror.setValue(Array.from({length: 20}, (_, i) => 'x = ' + i).join('\\n')); true");
+  move("3/4", 2);
+  for (let k = 0; k < 40 && (await L("document.body.classList.contains('notes-wide')")); k++) await sleep(250);
+  await sleep(800);
+  out.live3 = await L(LSTATE); await L.shot("5-live-warmup");
+  move("1/4", 3);
+  for (let k = 0; k < 40 && !(await L("document.body.classList.contains('notes-wide')")); k++) await sleep(250);
+  out.live1again = await L(LSTATE);
   const p = await open(cfg.student, cfg.plain);
   await sleep(800);
   out.plain = await p(STATE);

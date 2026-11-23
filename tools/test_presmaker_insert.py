@@ -1,4 +1,4 @@
-"""PresMaker's Insert ▾ → Editor pop-up, in the library's editor, in Chrome.
+"""PresMaker's Insert ▾ → Try It step, in the library's editor, in Chrome.
 
 Run: python3 tools/test_presmaker_insert.py      (needs node and Chrome)
 
@@ -9,6 +9,12 @@ has an Insert item for it (Nov 2026, the teacher's request): with nothing
 selected it inserts a whole step — and with a real check in its tests
 block, because an empty block has nothing to pass and would hold a locked
 slide for good; with a selection it wraps it, as Pop box does.
+
+v13 (Nov 2026, the teacher: "the editor popups are just not working"): for a
+Python tutorial the item is a Try It step — a plain pop box and a ```tests
+try block (two hints and the code), typed on the slide — and the preview
+checks a Try It box with a Python of its own (try_preview.js). A web or
+Flask tutorial keeps the editor pop-up: their tests don't know `try`.
 """
 import json
 import logging
@@ -51,7 +57,7 @@ def find_chrome():
     return None
 
 
-print("PresMaker's Insert → Editor pop-up, in a real browser")
+print("PresMaker's Insert → Try It step, in a real browser")
 chrome = find_chrome()
 if chrome is None or shutil.which("node") is None:
     print("  skip  no Chrome (or no node) here")
@@ -69,31 +75,44 @@ else:
         s["uid"] = tid
     made = c.post("/api/library", json={"kind": "tutorial", "title": "Notes", "body": "# Notes\n", "ide": "pyide"})
     slug = made.get_json()["slug"]
+    web_slug = c.post("/api/library", json={"kind": "tutorial", "title": "Web notes", "body": "# Web\n", "ide": "webide"}).get_json()["slug"]
     server = make_server("127.0.0.1", 0, P.app, threaded=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % server.server_port
     setup = os.path.join(TMP, "setup.json")
     with open(setup, "w") as f:
-        json.dump({"base": base, "page": "/teacher/tutorials/%s/edit" % slug,
+        json.dump({"base": base, "page": "/teacher/tutorials/%s/edit" % slug, "web": "/teacher/tutorials/%s/edit" % web_slug,
                    "cookie": P.app.session_interface.get_signing_serializer(P.app).dumps({"uid": tid})}, f)
     out = subprocess.run(["node", os.path.join(HERE, "presmaker_insert_browser.mjs"), setup, chrome],
-                         cwd=PYIDE, capture_output=True, text=True, timeout=180)
+                         cwd=PYIDE, capture_output=True, text=True, timeout=400)
     try:
         r = json.loads(out.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         r = {"error": out.stdout[-300:] + out.stderr[-300:]}
     check("the browser run finished", not r.get("error"), r.get("error", ""))
-    check("Insert ▾ has Editor pop-up", r.get("menuItem") == "Editor pop-up", r.get("menuItem"))
+    check("Insert ▾ has Try It step", r.get("menuItem") == "Try It step", r.get("menuItem"))
     ins = r.get("inserted") or ""
-    check("with nothing selected it inserts a whole step: the box, Type this, the code on its own line",
-          ":::pop editor\nA sentence on what it means.\n\n✏ **Type this:**\n\n`print(\"hello\")`\n:::" in ins, repr(ins))
-    check("  then a tests block with a real check in it (an empty one would hold a locked slide)",
-          ins.rstrip().endswith("```tests\nprints hello\n```"), repr(ins[-60:]))
+    check("a Python tutorial, nothing selected: a whole step in a plain pop box — Type this, the code, what it prints",
+          ':::pop\nA sentence on what it means.\n\n✏ **Type this:**\n\n`print("hello")`\n\nIt should print `hello`.\n:::' in ins
+          and ":::pop editor" not in ins, repr(ins))
+    check("  then a ```tests try block with a real check, two hints and the code",
+          ins.rstrip().endswith('```tests try\nprints hello\nhint: What to look at in the box above.\n'
+                                'hint: Closer, but not the whole line.\ncode: print("hello")\n```'), repr(ins[-140:]))
     check("  after what was there, the explanation selected to type over",
-          ins.startswith("# Notes\n\nSome words.\n\n:::pop editor") and r.get("selected") == "A sentence on what it means.",
+          ins.startswith("# Notes\n\nSome words.\n\n:::pop\n") and r.get("selected") == "A sentence on what it means.",
           (repr(ins[:40]), r.get("selected")))
-    check("with a selection it wraps the selection",
-          r.get("wrapped") == "# Notes\n\n:::pop editor\nType x = 1 now.\n:::\n", repr(r.get("wrapped")))
+    check("  with a selection: the selection in a pop box, a ```tests try block after it",
+          (r.get("wrapped") or "").startswith("# Notes\n\n:::pop\nType x = 1 now.\n:::\n\n```tests try\nprints hello"),
+          repr(r.get("wrapped")))
+    check("the preview checks a Try It box, with a Python of its own", r.get("previewButton") is True
+          and r.get("previewMarks") == "✓✓", (r.get("previewButton"), r.get("previewMarks")))
+    check("  and shows what it printed under the box", "hello" in (r.get("previewOut") or ""), r.get("previewOut"))
+    w = r.get("web") or {}
+    wi = w.get("inserted") or ""
+    check("a web tutorial keeps the v12 editor pop-up (its tests don't know `try`)",
+          ":::pop editor\nA sentence on what it means." in wi and wi.rstrip().endswith("```tests\nprints hello\n```")
+          and w.get("wrapped") == "# Notes\n\n:::pop editor\nType x = 1 now.\n:::\n", (repr(wi[-80:]), w.get("wrapped")))
+    check("  and its preview loads no Python for Try It boxes", r.get("webPreview") is False, r.get("webPreview"))
     server.shutdown()
 
 print()

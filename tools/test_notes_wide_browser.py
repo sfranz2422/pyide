@@ -101,7 +101,21 @@ for slug, notes in (("widenotes", NOTES), ("plainnotes", PLAIN)):
     db.add(accounts.Assignment(slug=slug, app="pyide", teacher_id=tid, title=slug, code="print('start')\n",
                                files=json.dumps({"notes.md": notes})))
 db.commit()
+wide_id = db.query(accounts.Assignment).filter_by(slug="widenotes").first().id
+# The same notes on the air: the class's live page follows the teacher's slide.
+db.add(accounts.LiveSession(code="wide01", app="pyide", host_id=tid, title="Wide", assignment_id=wide_id,
+                            version=1, slide="1/4", notes=NOTES))
+db.commit()
 db.close()
+
+
+def teacher_moves(slide, version):
+    d = P.SessionLocal()
+    row = d.query(accounts.LiveSession).filter_by(code="wide01").first()
+    row.slide, row.version = slide, version
+    d.commit()
+    d.close()
+
 
 server = make_server("127.0.0.1", 0, P.app, threaded=True)
 threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -110,8 +124,25 @@ setup = os.path.join(TMP, "setup.json")
 with open(setup, "w") as f:
     json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/widenotes", "plain": "/a/plainnotes",
                "student": sign.dumps({"uid": sid})}, f)
-run = subprocess.run(["node", os.path.join(HERE, "notes_wide_browser.mjs"), setup, chrome],
-                     cwd=ROOT, capture_output=True, text=True, timeout=300)
+# The node side asks for the teacher's moves by writing a file; this side makes them.
+moves = os.path.join(TMP, "moves")
+cfg = json.load(open(setup))
+cfg.update(live="/live/wide01", moves=moves)
+json.dump(cfg, open(setup, "w"))
+proc = subprocess.Popen(["node", os.path.join(HERE, "notes_wide_browser.mjs"), setup, chrome],
+                        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+done = set()
+import time                                                  # noqa: E402
+while proc.poll() is None:
+    if os.path.exists(moves):
+        for line in open(moves).read().split():
+            if line not in done:
+                done.add(line)
+                slide, version = line.split("@")
+                teacher_moves(slide, int(version))
+    time.sleep(0.2)
+out_, err_ = proc.communicate()
+run = subprocess.CompletedProcess(proc.args, proc.returncode, out_, err_)
 try:
     r = json.loads(run.stdout.strip().splitlines()[-1])
 except (ValueError, IndexError):
@@ -131,6 +162,12 @@ check("  the editor redrawn: code changed while it was hidden is drawn, every li
 check("  the normal size again", 0 < c.get("font", 0) < 18, c.get("font"))
 check("a slide after the work began stays beside the editor", d.get("wide") is False, d)
 check("back to the first slide: wide again", back.get("wide") is True, back)
+la, lc, lb = (r.get(k) or {} for k in ("live1", "live3", "live1again"))
+check("the class's live page, on the teacher's first slide: the slide alone, wide",
+      la.get("wide") is True and la.get("mine") is False and la.get("mirror") is False and la.get("notesW", 0) >= 1250, la)
+check("  the teacher moves to the warm-up: their editor and the teacher's code come back, drawn (code changed while hidden, every line)",
+      lc.get("wide") is False and lc.get("mine") is True and lc.get("mirror") is True and lc.get("lines", 0) >= 20, lc)
+check("  and back to the first slide: wide again", lb.get("wide") is True, lb)
 check("notes with no work in main.py are never wide (the editor would never show)",
       (r.get("plain") or {}).get("wide") is False and (r.get("plain") or {}).get("editor") is True, r.get("plain"))
 

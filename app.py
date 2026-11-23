@@ -3813,7 +3813,9 @@ def _library_page(item=None):
     — editing one — how its IDE writes its tests (LIBRARY_TESTS)."""
     page = {"brand": "Online IDE", "logo": "/static/logo.svg", "ns": "PyIDE", "theme_key": "pyide-theme",
             "home_url": url_for("teacher_home"), "help_url": url_for("help_questions"),
-            "max_tutorial": library.MAX_TUTORIAL, "ides": LIBRARY_IDES}
+            "max_tutorial": library.MAX_TUTORIAL, "ides": LIBRARY_IDES,
+            # A Python tutorial's Try It boxes are checked in PresMaker's preview (try_preview.js).
+            "has_try_preview": True}
     if item is not None and item.kind == "tutorial":
         page.update(LIBRARY_TESTS.get(item.app, {}))
     return page

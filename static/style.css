@@ -340,9 +340,16 @@ img.logo { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
 body.notes-wide .split > .pane-editor, body.notes-wide .split > .pane-right,
 body.notes-wide .split > .resizer { display: none !important; }
 body.notes-wide .split > .pane-notes { flex: 1 1 100% !important; width: auto !important; max-width: none !important; border-left: 0; }
-body.notes-wide .pane-notes > .notes-body { font-size: 21px; max-width: none;
+/* The class's live page (live.js): the slide alone, the rest of the right
+   column and the whole left (their editor, the teacher's code) out. */
+body.notes-wide .live-split > .live-left, body.notes-wide .live-split > .resizer,
+body.notes-wide .live-split > .pane-sprites { display: none !important; }
+body.notes-wide .live-split > .live-right { flex: 1 1 100% !important; width: auto !important; max-width: none !important; }
+body.notes-wide .live-right > :not(#live-notes-view) { display: none !important; }
+body.notes-wide .live-right > #live-notes-view { flex: 1 1 0 !important; height: auto !important; min-height: 0; border-top: 0; }
+body.notes-wide .pane-notes > .notes-body, body.notes-wide #live-notes { font-size: 21px; max-width: none;
   padding-left: max(24px, calc((100% - 76ch) / 2)); padding-right: max(24px, calc((100% - 76ch) / 2)); }
-body.notes-wide .pane-notes > .notes-body > * { max-width: none; }
+body.notes-wide .pane-notes > .notes-body > *, body.notes-wide #live-notes > * { max-width: none; }
 body.notes-wide .pane-notes .notes-close { display: none; }
 body.notes-wide .notes-body .try-code, body.notes-wide .notes-body .try-out { font-size: 19px; }
 body.notes-wide .notes-body .tests-run, body.notes-wide .notes-body .snippet .btn { font-size: 16px; }

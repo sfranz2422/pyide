@@ -963,7 +963,19 @@
      uses live a lot, and the bubble is for the class too (editor_tip.js,
      Nov 2026). The slide is pinned to the teacher's here, and shown whole —
      the bubble follows whichever step on it the student hasn't passed. */
-  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true }) : null;
+  var notesSlides = notesBody ? window.PyIDENotes.slideView(notesBody, { editorTips: true, wide: true }) : null;
+  /* Reading slides fill the screen, as in the student's own editor (notes.js
+     `wide`; the teacher, Nov 2026: "are the live pages also working with the
+     full view?"): before the first slide with work in main.py, the class
+     sees only the slide — the teacher's, since they're pinned to it — and
+     their editor and the teacher's code come back with the warm-up. Both
+     editors are redrawn then: CodeMirror draws nothing while hidden. */
+  document.addEventListener("ide-notes-wide", function (e) {
+    var wide = !!(e.detail && e.detail.wide);
+    if (wide && notesView && notesView.hidden) return;
+    document.body.classList.toggle("notes-wide", wide);
+    if (!wide) setTimeout(function () { mirror.refresh(); mine.refresh(); }, 0);
+  });
   if (notesSlides && window.PyIDEEditorTip && mine) window.PyIDEEditorTip.attach(mine);
   /* Copy to editor under an Easy or Medium box's code with blanks (notes.js
      copyButtons), into the student's own editor, never the teacher's mirror:
@@ -1013,7 +1025,7 @@
     if (!notesView || !notesSlides || typeof data.notes !== "string") return;
     var slide = typeof data.slide === "string" ? data.slide : "";
     notesView.hidden = !data.notes.trim();
-    if (notesView.hidden) return;
+    if (notesView.hidden) { document.body.classList.remove("notes-wide"); return; }
     var jump;
     if (slide !== teacherSlide) {
       teacherSlide = slide;

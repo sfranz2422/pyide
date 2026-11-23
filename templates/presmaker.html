@@ -85,7 +85,7 @@
           <button data-cmd="part" title="A line of ... — the slide plays up to here, then waits for the next press (⇧⌘.)">Part break (…)</button>
           <button data-cmd="pause" title="^ — a second's pause while a part plays; ^^ is two (⇧⌘6)">Pause (^)</button>
           <button data-cmd="pop" title="Wraps the selection in :::pop … ::: — a box that stands out">Pop box</button>
-          <button data-cmd="editor-pop" title="A step students type in their editor: :::pop editor … ::: shows in a pop-up in the student's editor (not on their slide), with its check">Editor pop-up</button>
+          <button data-cmd="editor-pop" title="A Try It step: the step in a box on the slide, and a box under it to type it into, with its own check and hints (```tests try). For a web or Flask tutorial, the step in a pop-up in the student's editor (:::pop editor).">Try It step</button>
           <button data-cmd="cards" title="A ```cards block: front -> back, a card a line">Flip cards</button>
           <button data-cmd="checklist" title="- [ ] items students tick">Checklist</button>
           <button data-cmd="run-code" title="```python run — code students can change and run">Code that runs</button>
@@ -222,6 +222,13 @@
       // a web tutorial's, in PyIDE (pm_autograde: web/autograde.js)
       || window.WebIDETests;
   </script>
+  {#  A Python tutorial's Try It boxes (```tests try) checked in the preview
+      (try_preview.js), with a Python loaded on the first check. Not a web
+      or Flask tutorial's (their tests don't know `try`), nor GameIDE's. #}
+  {% if not pm_autograde and pm_adapter != "gameide" and has_try_preview %}
+  <script src="{{ url_for('static', filename='runtime.js') }}"></script>
+  <script src="{{ url_for('static', filename='try_preview.js') }}"></script>
+  {% endif %}
   {% if pm_adapter == "gameide" %}
   <script>
     /* GameIDE's tutorials, drawn by PyIDE's notes.js: a ```check block (the

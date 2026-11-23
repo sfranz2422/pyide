@@ -537,7 +537,33 @@
      Pop box does. Otherwise a whole step — and with a real check in it: an
      empty tests block has nothing to pass, so it would hold a locked slide
      for good, with no way on for anyone. */
+  /* A Try It step (v13; the teacher, Nov 2026: "the editor popups are just
+     not working"): the step in a plain pop box on the slide, then a
+     ```tests try block, which PyIDE draws as a box to type it into, right
+     there, with its own check, output and hints (two hints and the code,
+     as every v12+ test has). Python's only: a web or Flask tutorial's tests
+     don't know `try`, so theirs is still the v12 editor pop-up. */
+  function pythonTutorial() {
+    var s = window.PM_SERVER;
+    return !s || (s.tests === "form" && (s.testsFence || "tests") === "tests");
+  }
+  var TRY_TESTS = "```tests try\nprints hello\nhint: What to look at in the box above.\nhint: Closer, but not the whole line.\ncode: print(\"hello\")\n```";
+  function insertTryStep() {
+    if (cm.somethingSelected()) {
+      var from = cm.getCursor("from"), to = cm.getCursor("to");
+      var last = to.ch === 0 && to.line > from.line ? to.line - 1 : to.line;
+      cm.operation(function () {
+        cm.replaceRange("\n:::\n\n" + TRY_TESTS, { line: last, ch: cm.getLine(last).length });
+        cm.replaceRange(":::pop\n", { line: from.line, ch: 0 });
+      });
+      cm.focus();
+      return;
+    }
+    lineInsert(":::pop\nA sentence on what it means.\n\n✏ **Type this:**\n\n`print(\"hello\")`\n\nIt should print `hello`.\n:::\n\n" + TRY_TESTS,
+               1, "A sentence on what it means.".length);
+  }
   function insertEditorPop() {
+    if (pythonTutorial()) return insertTryStep();
     if (cm.somethingSelected()) {
       var from = cm.getCursor("from"), to = cm.getCursor("to");
       var last = to.ch === 0 && to.line > from.line ? to.line - 1 : to.line;

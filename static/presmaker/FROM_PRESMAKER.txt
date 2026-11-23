@@ -1,2 +1,2 @@
 Copied from ~/presMaker/web by tools/sync_presmaker.py. Edit PresMaker, then sync.
-dc8e4a6 2026-11-17 Levels: no choice slide (the teacher sets each student's level); synced from PyIDE
+28ce37d 2026-11-23 Insert: Try It step (v13: a pop box and a ```tests try block) for a Python tutorial; web and Flask keep the editor pop-up

@@ -132,6 +132,13 @@ def make_template():
       // a web tutorial's, in PyIDE (pm_autograde: web/autograde.js)
       || window.WebIDETests;
   </script>
+  {#  A Python tutorial's Try It boxes (```tests try) checked in the preview
+      (try_preview.js), with a Python loaded on the first check. Not a web
+      or Flask tutorial's (their tests don't know `try`), nor GameIDE's. #}
+  {% if not pm_autograde and pm_adapter != "gameide" and has_try_preview %}
+  <script src="{{ url_for('static', filename='runtime.js') }}"></script>
+  <script src="{{ url_for('static', filename='try_preview.js') }}"></script>
+  {% endif %}
   {% if pm_adapter == "gameide" %}
   <script>
     /* GameIDE's tutorials, drawn by PyIDE's notes.js: a ```check block (the
