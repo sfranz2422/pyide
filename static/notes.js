@@ -967,6 +967,7 @@ window.PyIDENotes = (function () {
     return {
       show: function (text, i) {
         md = text || "";
+        noteTryOrder(md);
         var head = takeHeader(md);
         theme = head.theme;
         var wasMode = mode;
@@ -1146,6 +1147,41 @@ window.PyIDENotes = (function () {
      parseQuiz must read a block exactly as quiz.parse does. test_quiz.py
      runs both on the same blocks. */
   var FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+  /* The Try It steps (```tests try) in the notes being shown, in order, by
+     their text (trimmed). checks_in_notes.js asks which one comes before a
+     box's, so an empty box starts with that step's code wherever it is —
+     v14 puts each step on a slide of its own (the teacher, Nov 2026: "the
+     difficulty will be carrying over the previous editor box text into the
+     next slide"; "it just applies to the try it slides bc those are all
+     related code"). */
+  var tryOrder = [];
+  function noteTryOrder(md) {
+    var out = [], lines = String(md || "").replace(/\r\n?/g, "\n").split("\n"), i = 0;
+    while (i < lines.length) {
+      var f = FENCE.exec(lines[i]);
+      if (f && /^\s*tests\s+try\s*$/i.test(f[2])) {
+        var body = [], fence = f[1];
+        i++;
+        while (i < lines.length) {
+          var g = FENCE.exec(lines[i]);
+          if (g && g[1][0] === fence[0] && g[1].length >= fence.length && !g[2].trim()) break;
+          body.push(lines[i]);
+          i++;
+        }
+        out.push(body.join("\n").trim());
+      }
+      i++;
+    }
+    tryOrder = out;
+  }
+  /* The step before this one's text: null for the first step, undefined
+     when this step isn't in the notes being shown (then the page guesses). */
+  function tryBefore(text) {
+    var at = tryOrder.indexOf(String(text || "").trim());
+    if (at < 0) return undefined;
+    return at === 0 ? null : tryOrder[at - 1];
+  }
   var CHOICE = /^[-*+]\s+\[([ xX])\]\s+(.*)$/;
   var ANSWER = /^answer\s*:\s*(.*)$/i;
   var POINTS = /^points?\s*:\s*(\d{1,4}(?:\.\d{1,2})?)\s*$/i;
@@ -2555,6 +2591,7 @@ window.PyIDENotes = (function () {
   }
 
   return {
+    tryBefore: tryBefore,
     parseCards: parseCards,
     _enhanceCards: enhanceCards,
     runFences: runFences,

@@ -193,9 +193,9 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
      is posted, nothing graded (autograde.py TRY); the hints are free.
 
      Like typing under the last line in main.py, an empty box starts with
-     the step before's code when it's first clicked (the box above it, or
-     on a new slide the box last typed in), so `print(crop + "seed")` has
-     its `crop`. What's typed is kept in this browser. Paste
+     the Try It step before's code when it's first clicked (in the notes'
+     order, on whatever slide: notes.js tryBefore), so `print(crop +
+     "seed")` has its `crop`. What's typed is kept in this browser. Paste
      is refused: typing it is the exercise (the teacher's pane is
      unselectable on the live page for the same reason). */
   var TRY_KEY = "pyide-try:";
@@ -207,8 +207,9 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
   function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function keep(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* private window */ } }
 
+  function tryKey(source) { return TRY_KEY + location.pathname + ":" + hash(String(source || "").trim()); }
   function tryStep(tests, source) {
-    var key = TRY_KEY + location.pathname + ":" + hash(String(source || ""));
+    var key = tryKey(source);
     var wrap = el("div", "try-step");
     var area = el("textarea", "try-code");
     area.spellcheck = false;
@@ -229,16 +230,24 @@ window.IDENotesChecks = window.IDENotesChecks || (function () {
     // Empty and never typed in: start from the step before's code, as main.py would have it.
     area.addEventListener("focus", function () {
       if (area.value || load(key) !== null) return;
-      var steps = document.querySelectorAll(".try-step"), before = null;
-      for (var i = 0; i < steps.length && steps[i] !== wrap; i++) before = steps[i];
-      var prev = before && before.querySelector(".try-code").value;
-      // The first box on a slide: the step before was on an earlier one
-      // (a Try It split over slides, the teacher's call), so the box last
-      // typed in, kept in this browser.
-      if (!before) {
-        var last = null;
-        try { last = JSON.parse(load(lastKey) || "null"); } catch (e) { last = null; }
-        if (last && last.k !== key) prev = last.v;
+      /* The Try It step before this one in the notes (notes.js tryBefore),
+         wherever it is — v14 puts each step on a slide of its own — and
+         what was typed in it, kept in this browser. Only a Try It box's:
+         they're one program built step by step; nothing else carries. */
+      var N = window.PyIDENotes, prior = N && N.tryBefore ? N.tryBefore(source) : undefined, prev = null;
+      if (prior === null) return;                        // the first step: nothing before it
+      if (prior !== undefined) prev = load(tryKey(prior));
+      else {
+        // Notes the viewer didn't say (no slideView here): the box above it
+        // on the page, else the box last typed in.
+        var steps = document.querySelectorAll(".try-step"), before = null;
+        for (var i = 0; i < steps.length && steps[i] !== wrap; i++) before = steps[i];
+        prev = before && before.querySelector(".try-code").value;
+        if (!before) {
+          var last = null;
+          try { last = JSON.parse(load(lastKey) || "null"); } catch (e) { last = null; }
+          if (last && last.k !== key) prev = last.v;
+        }
       }
       prev = String(prev || "").replace(/\s+$/, "");
       if (!prev) return;

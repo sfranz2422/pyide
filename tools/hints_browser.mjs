@@ -105,6 +105,13 @@ try {
   await s("window.__done(); true");
   await until(s, "!document.querySelector('.hint-panel').hidden");
   out.afterRun = await s(PANEL);
+  // A PASS doesn't wait: the program may sit waiting for input in the console
+  // for good, and the Great Job card never came (the teacher, Nov 2026).
+  await s("document.querySelector('.hint-close').click(); window.IDEHints.wait(new Promise(function () {})); true");
+  await s(answer([{ label: "Prints Hello", ok: true, detail: "" }, { label: "Uses a for loop", ok: true, detail: "" }]));
+  await s(press);
+  await sleep(600);
+  out.passWhileRunning = await s(PANEL);
 
   // A Try It page: free hints, and only the card pressed is talked about.
   const t = await open(cfg.student, cfg.tryit);

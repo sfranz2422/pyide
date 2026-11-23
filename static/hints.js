@@ -339,7 +339,13 @@ window.IDEHints = (function () {
       draw();
       if (!c.passed) reopen(c.label);
     }
-    if (waiting) { hide(); waiting.then(go, go); }
+    /* Only a failure waits for the run: a hint over the console came up
+       before a student could type their answer. A pass shows now — the
+       program may sit waiting for input for good, and then the Great Job
+       card never came (the teacher, Nov 2026: "when i pass a test on the
+       first attempt ... i don't get the big popup"). Keep going closes it,
+       and the console is right there. */
+    if (waiting && !c.passed) { hide(); waiting.then(go, go); }
     else go();
   }
 

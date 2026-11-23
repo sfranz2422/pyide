@@ -121,6 +121,24 @@ try {
   // earlier slide's are.)
   await r(`${STEP(0)}.remove(); ${STEP(0)}.remove(); ${STEP(0)}.querySelector('.try-code').focus(); true`);
   out.nextSlide = await r(`${STEP(0)}.querySelector('.try-code').value`);
+  // v14: each step on its own slide.
+  const NEXT = "(function(){ var b=[...document.querySelectorAll('.slide-nav .slide-btn')].find(b=>b.textContent.trim()==='▶'); b.click(); return true; })()";
+  const PREV = "(function(){ var b=[...document.querySelectorAll('.slide-nav .slide-btn')].find(b=>b.textContent.trim()==='◀'); b.click(); return true; })()";
+  const BOX = "document.querySelector('.try-step .try-code')";
+  const v = await open(cfg.student, cfg.v14), o = out.v14 = {};
+  await v(`${BOX}.focus(); true`);
+  o.firstFresh = await v(`${BOX}.value`);
+  await v(`(function(){ var a=${BOX}; a.value='print("hay" + "ride")'; a.dispatchEvent(new Event('input')); return 1; })()`);
+  await v(NEXT); await sleep(600);
+  await v(`${BOX}.focus(); true`);
+  o.second = await v(`${BOX}.value`);
+  await v(`(function(){ var a=${BOX}; a.value=a.value + 'crop = "pump" + "kin"\\nprint(crop)'; a.dispatchEvent(new Event('input')); return 1; })()`);
+  // Back to step 1 and type there: now the box last typed in is step 1's.
+  await v(PREV); await sleep(600);
+  await v(`(function(){ var a=${BOX}; a.value=a.value + '\\n# BACK'; a.dispatchEvent(new Event('input')); return 1; })()`);
+  await v(NEXT); await sleep(400); await v(NEXT); await sleep(600);
+  await v(`${BOX}.focus(); true`);
+  o.third = await v(`${BOX}.value`);
 } catch (e) {
   out.error = String(e && e.stack || e);
 } finally {

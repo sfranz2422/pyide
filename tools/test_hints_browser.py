@@ -164,6 +164,9 @@ check("fixed: the pass card, with what passes", p.get("pass") and p.get("title")
 check("a program asking for input after the check: the card waits until it's done",
       r.get("heldWhileRunning") is True and ((r.get("afterRun") or {}).get("title") or "").startswith("✗ Not yet"),
       (r.get("heldWhileRunning"), r.get("afterRun")))
+pw = r.get("passWhileRunning") or {}
+check("…but a pass shows ✓ Great Job! at once, while the program still waits for input",
+      pw.get("pass") is True and pw.get("title") == "✓ Great Job!", r.get("passWhileRunning"))
 fs_ = r.get("firstStep") or {}
 check("a Try It slide: passing step 1 says it passes — not that step 2 (not typed yet) fails",
       fs_.get("pass") is True and "Hey" in (fs_.get("why") or ""), fs_)

@@ -109,6 +109,32 @@ a = accounts.Assignment(slug="tryslide", app="pyide", teacher_id=tid, title="Try
 db.add(a)
 db.commit()
 aid = a.id
+# v14: each Try It step on a slide of its own.
+V14 = """# Try It (1 of 3)
+
+```tests try
+prints hayride
+```
+
+---
+
+# Try It (2 of 3)
+
+```tests try
+prints pumpkin
+```
+
+---
+
+# Try It (3 of 3)
+
+```tests try
+prints pumpkinseed
+```
+"""
+db.add(accounts.Assignment(slug="tryv14", app="pyide", teacher_id=tid, title="v14", code="",
+                           files=json.dumps({"notes.md": V14})))
+db.commit()
 db.close()
 
 server = make_server("127.0.0.1", 0, P.app, threaded=True)
@@ -116,7 +142,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 sign = P.app.session_interface.get_signing_serializer(P.app)
 setup = os.path.join(TMP, "setup.json")
 with open(setup, "w") as f:
-    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/tryslide",
+    json.dump({"base": "http://127.0.0.1:%d" % server.server_port, "page": "/a/tryslide", "v14": "/a/tryv14",
                "student": sign.dumps({"uid": sid})}, f)
 run = subprocess.run(["node", os.path.join(HERE, "try_slide_browser.mjs"), setup, chrome],
                      cwd=ROOT, capture_output=True, text=True, timeout=600)
@@ -158,6 +184,12 @@ check("  the exercise's card still untouched", r.get("mainStillUntouched") is Tr
 check("a reload keeps what was typed", "crop = " in (r.get("kept") or ""), r.get("kept"))
 check("a box first on its slide starts from the box last typed in (a Try It split over slides)",
       (r.get("nextSlide") or "").endswith('print(crop)\n') and "hay" in (r.get("nextSlide") or ""), r.get("nextSlide"))
+
+v = r.get("v14") or {}
+check("v14, a step on its own slide: its box starts with the step before's code, from the slide before",
+      v.get("second") == 'print("hay" + "ride")\n', v.get("second"))
+check("  and in the notes' order: the step before's, not the box last typed in (they went back to step 1)",
+      (v.get("third") or "").startswith('print("hay" + "ride")\ncrop = "pump"') and "BACK" not in (v.get("third") or ""), v.get("third"))
 
 db = P.SessionLocal()
 kept = db.query(accounts.TestResult).filter_by(assignment_id=aid).count()
