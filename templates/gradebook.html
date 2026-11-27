@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <script>
   try {
     var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
@@ -21,14 +22,8 @@
 </head>
 <body class="class-page class-teacher">
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ course.name }} · Gradebook</span></div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}" title="Each student's level in v11 lessons">Levels</a>
-    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
-  </div>
-</header>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{{ teacher_nav(course=course, tab="gradebook", site="classes") }}
 
 {#  app.py, "Gradebook": every assignment students can see, oldest first, its
     Skyward category and due date set here; each row's average from the

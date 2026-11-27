@@ -1,0 +1,108 @@
+/* The teacher's navigation (templates/_teacher_nav.html). Its own file, not
+   site_look.css, which is still kept the same as WebIDE's and FlaskIDE's.
+   Loaded after site_look.css by every page that has the nav. */
+/* _teacher_nav.html: the site bar, the breadcrumb, the class's tabs and the
+   page's own buttons, stacked above the sheet. The sheet was sized as the
+   window less one bar (style.css), so three rows more pushed its bottom off
+   a page that doesn't scroll (body is overflow: hidden) — a page with the
+   nav is a column instead, and the sheet takes what's left and scrolls.
+   Colours only from the tokens: a bought theme must still win here. */
+body:has(> .tnav-bar) { display: flex; flex-direction: column; }
+body:has(> .tnav-bar) > .sheet { flex: 1 1 auto; height: auto; min-height: 0; width: 100%; }
+.tnav-bar { flex: none; }
+.tnav-site { display: flex; gap: 4px; flex: 1; min-width: 0; }
+.tnav-site a, .tnav-tabs a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.tnav-site a:hover, .tnav-tabs a:hover { background: var(--hover-bg); }
+.tnav-site a[aria-current] { font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
+
+.tnav-sub {
+  flex: none;
+  padding: 10px 22px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+.tnav-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+  min-width: 0;
+  padding-bottom: 8px;
+}
+.tnav-crumbs > a { color: var(--muted); text-decoration: none; white-space: nowrap; }
+.tnav-crumbs > a:hover { color: var(--accent); text-decoration: underline; }
+.tnav-crumbs > a[aria-current], .tnav-here { color: var(--text); font-weight: 600; }
+.tnav-here { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tnav-sep { opacity: .6; }
+
+/* The class's tabs: the page you're on is underlined, as a tab is. A phone
+   scrolls them sideways rather than wrapping them into a second block. */
+.tnav-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.tnav-tabs a { border-radius: 5px 5px 0 0; padding: 8px 12px 9px; color: var(--muted); }
+.tnav-tabs a[aria-current] { color: var(--text); font-weight: 600; box-shadow: inset 0 -3px 0 var(--accent); }
+.tnav-gap { flex: 1; min-width: 12px; }
+
+/* The page's own buttons, under the nav. */
+.tnav-actions {
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Menus (the account, the class switcher, an assignment's Teacher slides):
+   a <details>, so they open with no script; _teacher_nav.html's one line of
+   script closes an open one on a click outside it. */
+.tnav-menu { position: relative; }
+.tnav-menu > summary { list-style: none; cursor: pointer; }
+.tnav-menu > summary::-webkit-details-marker { display: none; }
+.tnav-account > summary { padding: 7px 10px; border-radius: 5px; font-size: 14px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.tnav-account > summary:hover, .tnav-switch > summary:hover { background: var(--hover-bg); }
+.tnav-switch > summary { padding: 0 7px; border: 1px solid var(--line); border-radius: 4px; line-height: 1.4; }
+.tnav-caret { font-size: 11px; opacity: .7; }
+.tnav-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 18%, transparent);
+}
+.tnav-list-right { left: auto; right: 0; }
+.tnav-list > a, .tnav-list > button {
+  display: block;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: var(--text);
+  text-decoration: none;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tnav-list > a:hover, .tnav-list > button:hover { background: var(--hover-bg); }
+.tnav-list > [hidden] { display: none; }
+.tnav-who { padding: 6px 10px 8px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+
+@media (max-width: 700px) {
+  .tnav-sub, .tnav-actions { padding-left: 12px; padding-right: 12px; }
+  .tnav-site a { padding: 6px 8px; font-size: 14px; }
+}

@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 {#  The description box's toolbar: EasyMDE, as quickpulsepro uses. If the CDN
     can't be reached the box stays a plain textarea, which still works. #}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
@@ -24,27 +25,8 @@
 </head>
 <body class="class-page class-teacher">
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ course.name }}</span></div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('library.library_page') }}" title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
-    <a class="btn" href="{{ url_for('student_class', class_id=course.id) }}"
-       title="This page as the class sees it: unassigned ones left out, unless their lecture or live link is shown">Student view</a>
-    <a class="btn" href="{{ url_for('class_picker', class_id=course.id) }}" target="_blank" rel="noopener"
-       title="Pick a student's name at random: it cycles on your screen and flashes on theirs">Name picker</a>
-    <a class="btn" href="{{ url_for('class_attendance', class_id=course.id) }}"
-       title="Who came into this class, day by day">Attendance</a>
-    <a class="btn" href="{{ url_for('class_gradebook', class_id=course.id) }}"
-       title="Every student's scores and average, categories and weights, Export all to Skyward">Gradebook</a>
-    <a class="btn" href="{{ url_for('class_levels', class_id=course.id) }}"
-       title="Each student's level (Easy / Medium / Master) in v11 lessons">Levels</a>
-    <a class="btn" href="{{ url_for('class_xp', class_id=course.id) }}"
-       title="Each student's XP and tokens: give XP, approve pictures and shop requests">XP &amp; tokens{% if photos_waiting %} <span class="count-pill">{{ photos_waiting }} to approve</span>{% endif %}</a>
-    <a class="btn" href="{{ url_for('teacher_home') }}">All classes</a>
-    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
-  </div>
-</header>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{{ teacher_nav(course=course, tab="assignments", site="classes") }}
 
 <main class="sheet">
   {#  A row's description: its preview (rendered below by notes.js, as the

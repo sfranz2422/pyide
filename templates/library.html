@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='library.css') }}">
 <script>
   try {
@@ -29,17 +30,13 @@
 </head>
 <body>
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ home_url }}">{% if logo.startswith("/") %}<img class="logo" src="{{ logo }}" alt="">{% else %}<span class="logo">{{ logo }}</span>{% endif %} {{ brand }}</a></div>
-  <div class="meta"><span class="pagetitle">Tutorials</span></div>
-  <div class="actions">
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{% call teacher_nav(site="tutorials") %}
     <button id="lib-new" class="btn btn-primary" type="button">New tutorial</button>
     <button id="lib-upload" class="btn" type="button"
             title="Markdown tutorials (.md) and teacher decks (.html) from your computer. One with the same title as one here replaces it, and every assignment using it gets the new version.">Upload…</button>
     <input id="lib-files" type="file" multiple accept=".md,.markdown,.txt,.html,.htm" hidden>
-    <a class="btn" href="{{ home_url }}">Assignments</a>
-  </div>
-</header>
+{% endcall %}
 
 <main class="sheet library">
   <p class="muted library-about">

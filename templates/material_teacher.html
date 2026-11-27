@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 {#  The description box's toolbar: EasyMDE, as quickpulsepro uses. If the CDN
     can't be reached the box stays a plain textarea, which still works. #}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
@@ -25,15 +26,8 @@
 
 <body class="class-page class-teacher">
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ item.title }}</span></div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">← {{ course.name }}</a>
-    <a class="btn" href="{{ url_for('student_class', class_id=course.id) }}">Student view</a>
-    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
-  </div>
-</header>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{{ teacher_nav(course=course, here=item.title, site="classes") }}
 
 {#  A material's own page: everything it is — a name and a description —
     and what can be done with it. No Classroom: a material has no grade. #}

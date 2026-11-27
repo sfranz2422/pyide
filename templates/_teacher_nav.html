@@ -1,0 +1,122 @@
+{#  The teacher's navigation, the same on every teacher page (Nov 2026, the
+    teacher: "the menu bar at the top is cluttered and ... when I'm in an
+    assignment page, there is no way to return to the class page"). Before,
+    every page had its own row of buttons mixing three levels — the site's
+    (Tutorials, Sign out), the class's (Gradebook, Levels, XP...) and the
+    page's own (Edit project, five teacher-slide buttons) — so the way back
+    was a button somewhere in a wrapped row, and the class's tools had no
+    way to each other. Now three layers, each in one place:
+
+      the site bar     Classes · Tutorials · Token shop, and the account menu
+      the breadcrumb   Classes › Period 4 ▾ › this page  (▾ = the same page
+                       in another of their classes)
+      the class tabs   Assignments · Gradebook · Levels · XP · Attendance,
+                       on every page that belongs to one class
+
+    and the page's own buttons in a row under them (the caller's block).
+
+    Use:  {% from "_teacher_nav.html" import teacher_nav with context %}
+          {% call teacher_nav(course=course, tab="gradebook") %}…buttons…{% endcall %}
+    `with context` is what hands it my_classes and user_email (user_context).
+    A page with no buttons of its own calls it with an empty block.
+
+    course   the class this page belongs to, or none (dashboard, library…)
+    tab      which class tab is this page: assignments, gradebook, levels,
+             xp, attendance; none on a page inside the class but not a tab
+             (an assignment, a material)
+    here     the last crumb, this page's name, when it isn't the tab's
+    site     which site link is this page: classes, tutorials, shop
+    twins    {class id: url} — where ▾ goes for each other class, when this
+             page has a counterpart there (an assignment's copy in Period 7);
+             a class with none goes to that class's same tab, or its page.
+    extra    a few words after the crumbs (an assignment's "3 to grade")
+#}
+{% macro teacher_nav(course=none, tab=none, here=none, site=none, twins=none, extra=none) %}
+{%- set tab_urls = {"assignments": "teacher_class", "gradebook": "class_gradebook",
+                    "levels": "class_levels", "xp": "class_xp", "attendance": "class_attendance"} -%}
+<header class="bar tnav-bar">
+  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
+  <nav class="tnav-site" aria-label="Site">
+    <a href="{{ url_for('teacher_home') }}"{% if site == 'classes' %} aria-current="page"{% endif %}>Classes</a>
+    <a href="{{ url_for('library.library_page') }}"{% if site == 'tutorials' %} aria-current="page"{% endif %}
+       title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
+    <a href="{{ url_for('teacher_shop', back=request.path) }}"{% if site == 'shop' %} aria-current="page"{% endif %}
+       title="What your students can spend tokens on">Token shop</a>
+  </nav>
+  {#  Who's signed in, and Sign out, folded into one menu: the email alone
+      was the widest thing in the dashboard's bar. #}
+  <details class="tnav-menu tnav-account">
+    <summary title="{{ user_email }}">{{ (user_name or user_email or "Account") }} <span class="tnav-caret">▾</span></summary>
+    <div class="tnav-list tnav-list-right">
+      <span class="tnav-who">{{ user_email }}</span>
+      <a href="{{ url_for('logout') }}">Sign out</a>
+    </div>
+  </details>
+</header>
+{#  The dashboard and the library have nothing to say here: "Classes"
+    alone, under a bar that already says it. #}
+{%- if course or here %}
+<div class="tnav-sub">
+  <nav class="tnav-crumbs" aria-label="Where you are">
+    <a href="{{ url_for('teacher_home') }}">Classes</a>
+    {%- if course %}
+    <span class="tnav-sep">›</span>
+    <a href="{{ url_for('teacher_class', class_id=course.id) }}"{% if tab == 'assignments' and not here %} aria-current="page"{% endif %}>{{ course.name }}</a>
+    {%- set others = my_classes | rejectattr("id", "equalto", course.id) | list %}
+    {%- if others %}
+    {#  The same page in another class: periods are copies of each other, so
+        Period 4's gradebook → Period 7's, Day 6 → Period 7's Day 6. #}
+    <details class="tnav-menu tnav-switch">
+      <summary aria-label="Switch to another class" title="The same page in another class"><span class="tnav-caret">▾</span></summary>
+      <div class="tnav-list">
+        {%- for c in others %}
+        {%- set url = (twins or {}).get(c.id) or (url_for(tab_urls[tab], class_id=c.id) if tab in tab_urls else c.url) %}
+        <a href="{{ url }}">{{ c.name }}</a>
+        {%- endfor %}
+      </div>
+    </details>
+    {%- endif %}
+    {%- endif %}
+    {%- if here %}
+    <span class="tnav-sep">›</span>
+    <span class="tnav-here" aria-current="page">{{ here }}</span>
+    {%- endif %}
+    {%- if extra %}{{ extra }}{% endif %}
+  </nav>
+  {%- if course %}
+  <nav class="tnav-tabs" aria-label="This class">
+    <a href="{{ url_for('teacher_class', class_id=course.id) }}"{% if tab == 'assignments' %} aria-current="page"{% endif %}>Assignments</a>
+    <a href="{{ url_for('class_gradebook', class_id=course.id) }}"{% if tab == 'gradebook' %} aria-current="page"{% endif %}
+       title="Every student's scores and average, categories and weights, Export all to Skyward">Gradebook</a>
+    <a href="{{ url_for('class_levels', class_id=course.id) }}"{% if tab == 'levels' %} aria-current="page"{% endif %}
+       title="Each student's level (Easy / Medium / Master) in v11 lessons">Levels</a>
+    <a href="{{ url_for('class_xp', class_id=course.id) }}"{% if tab == 'xp' %} aria-current="page"{% endif %}
+       title="Each student's XP and tokens: give XP, approve pictures and shop requests">XP &amp; tokens{% if photos_waiting %} <span class="count-pill">{{ photos_waiting }} to approve</span>{% endif %}</a>
+    <a href="{{ url_for('class_attendance', class_id=course.id) }}"{% if tab == 'attendance' %} aria-current="page"{% endif %}
+       title="Who came into this class, day by day">Attendance</a>
+    <span class="tnav-gap"></span>
+    <a href="{{ url_for('student_class', class_id=course.id) }}"
+       title="This class's page as the class sees it: unassigned ones left out, unless their lecture or live link is shown">Student view</a>
+    <a href="{{ url_for('class_picker', class_id=course.id) }}" target="_blank" rel="noopener"
+       title="Pick a student's name at random: it cycles on your screen and flashes on theirs">Name picker ↗</a>
+  </nav>
+  {%- endif %}
+</div>
+{%- endif %}
+{%- set own = caller() if caller else "" %}
+{%- if own | trim %}
+<div class="tnav-actions actions">{{ own }}</div>
+{%- endif %}
+<script>
+  /* A <details> menu stays open until its own summary is clicked again;
+     a click anywhere else closes it, as a menu would, and so does Escape. */
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll("details.tnav-menu[open]").forEach(function (d) {
+      if (!d.contains(e.target) || (e.target.closest(".tnav-list > a, .tnav-list > button"))) d.open = false;
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") document.querySelectorAll("details.tnav-menu[open]").forEach(function (d) { d.open = false; });
+  });
+</script>
+{% endmacro %}

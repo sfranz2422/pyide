@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <script>
   // The editor's light/dark choice, so this page matches it rather than the
   // computer's setting, and never flashes the other one first.
@@ -23,20 +24,14 @@
 </head>
 <body>
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">Assignments</span></div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('library.library_page') }}" title="Every tutorial you've written, to edit and link to assignments">Tutorials</a>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{% call teacher_nav(site="classes") %}
     {% include "_new_project.html" %}
     {#  A lesson: notes and questions, no code — for classes that are not
         programming. Made here, written and presented on its own page. #}
     <button id="create-lesson" class="btn" type="button"
             title="Slides with questions in them, and no code: students answer as they read">Create lesson</button>
-    <span class="whoami">{{ user_email }}</span>
-    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
-  </div>
-</header>
+{% endcall %}
 
 <main class="sheet">
   {#  Classes: one per period, each its own page of assignments. Linked to

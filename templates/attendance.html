@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <script>
   try {
     var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
@@ -21,14 +22,10 @@
 </head>
 <body class="class-page class-teacher attendance-page">
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ course.name }} · Attendance</span></div>
-  <div class="actions">
-    <button class="btn" type="button" id="csv" title="Every day below, one row per student, for a spreadsheet">Download CSV</button>
-    <a class="btn" href="{{ url_for('teacher_class', class_id=course.id) }}">Back to the class</a>
-  </div>
-</header>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{% call teacher_nav(course=course, tab="attendance", site="classes") %}
+  <button class="btn" type="button" id="csv" title="Every day below, one row per student, for a spreadsheet">Download CSV</button>
+{% endcall %}
 
 <main class="sheet">
   <h1 class="att-title">Attendance</h1>

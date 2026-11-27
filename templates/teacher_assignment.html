@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='library.css') }}">
 <script>
   // The editor's light/dark choice, so this page matches it rather than the
@@ -26,13 +27,11 @@
 </head>
 <body>
 
-<header class="bar bar-wrap">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">{{ assignment.title }}</span>
-    {#  Long responses turned in and not marked yet; kept up to date by Mark. #}
-    <span id="needs-grading" class="needs-grading" title="Long responses waiting for your points — they're under each student below"
-          {% if not waiting %}hidden{% endif %}>{{ waiting }} to grade</span></div>
-  <div class="actions">
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{#  Long responses turned in and not marked yet; kept up to date by Mark. #}
+{% set to_grade %}<span id="needs-grading" class="needs-grading" title="Long responses waiting for your points — they're under each student below"
+      {% if not waiting %}hidden{% endif %}>{{ waiting }} to grade</span>{% endset %}
+{% call teacher_nav(course=in_class, here=assignment.title, site="classes", twins=nav_twins, extra=to_grade) %}
     {#  The whole project — code, data files and notes — in the editor, for
         when the code needs changing too; this page saves the notes alone.
         A lesson has no code: its notes page is the link below. #}
@@ -52,36 +51,39 @@
       <a class="btn" id="student-preview" href="{{ url_for('student_preview', slug=assignment.slug) }}"
          title="See it exactly as a student does, from the start. Nothing is saved, and Exit brings you back here.">👁 Student preview</a>
     {% endif %}
-    {#  The teacher's own HTML slides for this (teacher_deck), in a tab of
-        their own. Only they can open it. Upload replaces it. #}
-    <a class="btn" id="deck-open" target="_blank" rel="noopener"
-       href="{{ url_for('teacher_deck', slug=assignment.slug) }}"
-       title="{{ deck.name if deck else '' }}" {% if not deck %}hidden{% endif %}>Teacher lesson ↗</a>
-    {#  The same slides in the library's PresMaker, to change them (Nov 2026).
-        The deck is the library's, so every assignment using it gets the edit. #}
-    <a class="btn" id="deck-edit" target="_blank" rel="noopener" href="{{ deck_edit or '#' }}"
-       title="Change these slides in PresMaker" {% if not deck_edit %}hidden{% endif %}>Edit teacher slides</a>
-    {#  The same slides, shown on the screen of everyone on the lesson's live
-        link and moved by the teacher (deck_show.js). Labs are never live. #}
-    {% if assignment.kind not in ('lab', 'discussion') %}
-    <a class="btn" id="deck-show" target="_blank" rel="noopener"
-       href="{{ url_for('teacher_deck', slug=assignment.slug, show=1) }}"
-       title="Your slides on the screen of every student on this lesson's live link. You move them; they watch."
-       {% if not deck %}hidden{% endif %}>Show to class ↗</a>
-    {% endif %}
-    <a class="btn" id="deck-download"
-       href="{{ url_for('teacher_deck', slug=assignment.slug, download=1) }}"
-       title="Download the HTML file as it is now" {% if not deck %}hidden{% endif %}>Download</a>
-    <button class="btn" id="deck-upload" type="button"
-            title="Upload the HTML slides you present this from">{{ "Replace teacher lesson" if deck else "Upload teacher lesson" }}</button>
+    {#  The teacher's own HTML slides (teacher_deck) — open, show to the
+        class, edit in PresMaker, download, upload — in one menu: they were
+        five buttons of a header that wrapped onto a second line (Nov 2026).
+        The ids and `hidden`s are the ones the page's script and
+        test_teacher_deck.py have always used; only where they sit moved. #}
+    <details class="tnav-menu" id="deck-menu">
+      <summary class="btn" title="The HTML slides you present this from">Teacher slides <span class="tnav-caret">▾</span></summary>
+      <div class="tnav-list">
+        {#  In a tab of their own. Only the teacher who set it can open it. #}
+        <a id="deck-open" target="_blank" rel="noopener"
+           href="{{ url_for('teacher_deck', slug=assignment.slug) }}"
+           title="{{ deck.name if deck else '' }}" {% if not deck %}hidden{% endif %}>Teacher lesson ↗</a>
+        {#  On the screen of everyone on the lesson's live link, moved by
+            the teacher (deck_show.js). Labs and discussions are never live. #}
+        {% if assignment.kind not in ('lab', 'discussion') %}
+        <a id="deck-show" target="_blank" rel="noopener"
+           href="{{ url_for('teacher_deck', slug=assignment.slug, show=1) }}"
+           title="Your slides on the screen of every student on this lesson's live link. You move them; they watch."
+           {% if not deck %}hidden{% endif %}>Show to class ↗</a>
+        {% endif %}
+        {#  In the library's PresMaker. The deck is the library's, so every
+            assignment using it gets the edit. #}
+        <a id="deck-edit" target="_blank" rel="noopener" href="{{ deck_edit or '#' }}"
+           title="Change these slides in PresMaker" {% if not deck_edit %}hidden{% endif %}>Edit teacher slides ↗</a>
+        <a id="deck-download"
+           href="{{ url_for('teacher_deck', slug=assignment.slug, download=1) }}"
+           title="Download the HTML file as it is now" {% if not deck %}hidden{% endif %}>Download</a>
+        <button id="deck-upload" type="button"
+                title="Upload the HTML slides you present this from">{{ "Replace teacher lesson" if deck else "Upload teacher lesson" }}</button>
+      </div>
+    </details>
     <input type="file" id="deck-file" accept=".html,.htm,text/html" hidden>
-    {% if in_class %}
-      <a class="btn" href="{{ url_for('teacher_class', class_id=in_class.id) }}">← {{ in_class.name }}</a>
-    {% endif %}
-    <a class="btn" href="{{ url_for('teacher_home') }}">All assignments</a>
-    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
-  </div>
-</header>
+{% endcall %}
 
 <main class="sheet">
 

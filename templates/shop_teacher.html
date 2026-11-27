@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&family=Ubuntu:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='site_look.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='teacher_nav.css') }}">
 <script>
   try {
     var saved = {{ (user_theme or "")|tojson }} || localStorage.getItem("pyide-theme");
@@ -21,13 +22,10 @@
 </head>
 <body class="class-page class-teacher">
 
-<header class="bar">
-  <div class="brand"><a class="brandlink" href="{{ url_for('teacher_home') }}"><img class="logo" src="/static/logo.svg" alt=""> Online IDE</a></div>
-  <div class="meta"><span class="pagetitle">Token shop</span></div>
-  <div class="actions">
-    <a class="btn" href="{{ back if back.startswith('/') and not back.startswith('//') else url_for('teacher_home') }}">Back</a>
-  </div>
-</header>
+{% from "_teacher_nav.html" import teacher_nav with context %}
+{% call teacher_nav(site="shop", here="Token shop") %}
+  {% if back and back.startswith('/') and not back.startswith('//') %}<a class="btn" href="{{ back }}">← Back</a>{% endif %}
+{% endcall %}
 
 {#  The teacher's shop (accounts.ShopItem): what their students can spend
     tokens on, in every class and every editor. Started from

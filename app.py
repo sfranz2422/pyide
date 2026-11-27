@@ -32,7 +32,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, Text, UniqueConstraint, create_engine, func
+from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, Text, UniqueConstraint, and_, create_engine, false, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, defer, sessionmaker
 
@@ -4658,7 +4658,9 @@ def teacher_assignment(slug):
         # Which class it is in, for the way back, Move and Copy, and so
         # Post to Classroom can start on that class's Classroom course.
         _, in_class = _class_of(db, item)
-        ctx.update(in_class=in_class, classes=_my_classes(db, user))
+        classes = _my_classes(db, user)
+        ctx.update(in_class=in_class, classes=classes,
+                   nav_twins=_twins(db, item, [c.id for c in classes if not in_class or c.id != in_class.id]))
         ctx.update(classroom_on=classroom_configured(),
                    classroom_connected=(classroom_configured()
                                         and _classroom_link(db, user) is not None))
@@ -6326,6 +6328,31 @@ def _top_position(db, class_id):
     least = (db.query(func.min(accounts.ClassItem.position))
                .filter(accounts.ClassItem.class_id == class_id).scalar())
     return (least if least is not None else 1) - 1
+
+
+def _twins(db, item, class_ids):
+    """{class id: url of this assignment's copy in that class} — where the
+    teacher nav's class switcher goes from an assignment's page (Period 4's
+    Day 6 → Period 7's Day 6). A copy is the one linked to the same library
+    tutorial (every period's copy of a lesson is, since the library), else
+    the one with the same title. A class with neither isn't in the dict, and
+    the switcher goes to that class's page instead."""
+    if not class_ids:
+        return {}
+    rows = (db.query(accounts.ClassItem.class_id, accounts.Assignment.slug,
+                     accounts.Assignment.tutorial_id, accounts.Assignment.title)
+              .join(accounts.Assignment, accounts.Assignment.id == accounts.ClassItem.assignment_id)
+              .filter(accounts.ClassItem.class_id.in_(class_ids),
+                      accounts.Assignment.id != item.id,
+                      or_(accounts.Assignment.title == item.title,
+                          and_(accounts.Assignment.tutorial_id == item.tutorial_id,
+                               accounts.Assignment.tutorial_id > 0) if item.tutorial_id else false()))
+              .all())
+    out = {}
+    # A tutorial match wins over a title match in the same class.
+    for cid, slug, tid, title in sorted(rows, key=lambda r: not (item.tutorial_id and r[2] == item.tutorial_id)):
+        out.setdefault(cid, url_for("teacher_assignment", slug=slug))
+    return out
 
 
 def _class_of(db, item):
