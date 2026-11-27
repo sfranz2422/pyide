@@ -976,7 +976,6 @@ window.PyIDENotes = (function () {
         var wasLock = lockOn;
         lockOn = lockWanted() && head.locked && !head.quiz;
         quizOn = head.quiz;
-        quizCopy = !!head.quiz;
         if (window.IDENotesChecks && window.IDENotesChecks.setQuiz) window.IDENotesChecks.setQuiz(quizOn);
         if (lockOn && !wasLock) unlocked = loadUnlocked();
         var c = slides(md);
@@ -1572,22 +1571,22 @@ window.PyIDENotes = (function () {
      The file is the one the box's direction names (`script.js`), if any. */
   var copier = null;           // {copy({code, file}), on()} from the page
   var FILE_NAME = /^[\w./-]+\.(py|html?|css|js|sql|php|txt|csv|json)$/i;
-  /* In a quiz (`quiz: yes`) the coding question has no level boxes: it's
-     one Medium program for everyone (the teacher, Nov 2026: "if the coding
-     questions on exams are medium or easy level they should have that
-     button" — the Forms quiz's form, blanks and all, had to be retyped).
-     So there, code with blanks anywhere outside a box gets the button too.
-     A Master-style question is jobs in words with no blanks, so it still
-     gets none. Set by slideView's show(), which reads the header. */
-  var quizCopy = false;
+  /* Not only level boxes: code with blanks anywhere on a slide gets the
+     button, except in a Master box. A quiz's coding question has no level
+     boxes (the teacher, Nov 2026: "if the coding questions on exams are
+     medium or easy level they should have that button"), and neither does
+     a lesson's warm-up, which the teacher expected the button on too (Inf
+     Sys Day 6's warm-up, Nov 2026). A Master-style question is jobs in
+     words with no blanks, so it still gets none. A blank is three or more
+     underscores: the warm-ups were written with `___`, the exercises with
+     `_____`, and only the longer one used to count. */
+  var BLANK = /_{3,}/;
   function copyButtons(root) {
     if (!copier || !copier.on()) return;
-    var sel = '.level-part[data-level="easy"] pre > code, .level-part[data-level="medium"] pre > code';
-    if (quizCopy) sel += ", pre > code";
-    Array.prototype.forEach.call((root || document).querySelectorAll(sel), function (code) {
+    Array.prototype.forEach.call((root || document).querySelectorAll("pre > code"), function (code) {
       var pre = code.parentNode;
       if (/language-(text|output|plain|tests|quiz)/.test(code.className || "")) return;
-      if (code.textContent.indexOf("_____") < 0) return;
+      if (!BLANK.test(code.textContent)) return;
       var lv = pre.closest(".level-part");
       if (lv && !/^(easy|medium)$/.test(lv.getAttribute("data-level") || "")) return;
       if (pre.closest(".quiz, .snippet, .tests-card")) return;

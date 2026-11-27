@@ -208,10 +208,11 @@ Fall Fair
 ```
 :::end
 
-Code with blanks outside any box, in notes that aren't a quiz:
+A warm-up: code with blanks outside any box, written with three
+underscores (the warm-ups were), gets the button too (Nov 2026):
 
 ```html
-<h5>_____</h5>
+<h5>___</h5>
 ```
 """
 
@@ -387,7 +388,7 @@ else:
     check("copy to editor: a button under each piece of the Easy box's code with blanks",
           cp.get("easyButtons") == 2, cp)
     check("  and Medium's, but never Master's", cp.get("mediumButtons") == 1 and cp.get("masterButtons") == 0, cp)
-    check("  nor code with blanks outside a box, when the notes aren't a quiz", cp.get("allButtons") == 3, cp)
+    check("  and a warm-up's code with ___ blanks outside any box", cp.get("allButtons") == 4, cp)
     check("  pressed: the code goes into the file the step names, inside <body>, indented, blanks and all",
           cp.get("htmlFile") == "index.html" and cp.get("htmlInBody") is True and cp.get("selected") == "_____", cp)
     check("  pressed again: not put in twice", cp.get("twice") == 1, cp)

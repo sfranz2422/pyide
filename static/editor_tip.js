@@ -49,9 +49,10 @@ window.PyIDEEditorTip = (function () {
       doc.replaceRange((empty ? "" : "\n") + code, empty ? { line: 0, ch: 0 } : { line: n, ch: line.length });
       at = editor.getValue().indexOf(code);
     }
-    var blank = code.indexOf("_____");
+    // A blank is three or more underscores (notes.js BLANK): select it all.
+    var m = /_{3,}/.exec(code), blank = m ? m.index : -1;
     var from = doc.posFromIndex(at + (blank >= 0 ? blank : 0));
-    if (blank >= 0) doc.setSelection(from, { line: from.line, ch: from.ch + 5 });
+    if (blank >= 0) doc.setSelection(from, { line: from.line, ch: from.ch + m[0].length });
     else doc.setCursor(from);
     editor.focus();
     editor.scrollIntoView(doc.posFromIndex(at + code.length), 40);
