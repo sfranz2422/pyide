@@ -99,7 +99,7 @@
         {% if tutorial_others %}<span class="muted"> · also in {{ tutorial_others }} other assignment{{ '' if tutorial_others == 1 else 's' }}: editing it changes them all</span>{% endif %}
       </p>
       <div class="tutorial-actions">
-        <a class="btn btn-primary" id="tutorial-edit" href="{{ url_for('library.library_edit_page', slug=tutorial.slug) }}">Edit in library</a>
+        <a class="btn btn-primary" id="tutorial-edit" target="_blank" rel="noopener" href="{{ url_for('library.library_edit_page', slug=tutorial.slug) }}">Edit in library</a>
         <label class="small">Use another:
           <select id="tutorial-choose" aria-label="Use another tutorial">
             <option value="">Choose…</option>
