@@ -1580,13 +1580,13 @@ window.PyIDENotes = (function () {
      words with no blanks, so it still gets none. A blank is three or more
      underscores: the warm-ups were written with `___`, the exercises with
      `_____`, and only the longer one used to count. */
-  var BLANK = /_{3,}/;
+  var COPY_BLANK = /_{3,}/;   // not BLANK: that name is the [[blank]] questions' (above), and reusing it broke them
   function copyButtons(root) {
     if (!copier || !copier.on()) return;
     Array.prototype.forEach.call((root || document).querySelectorAll("pre > code"), function (code) {
       var pre = code.parentNode;
       if (/language-(text|output|plain|tests|quiz)/.test(code.className || "")) return;
-      if (!BLANK.test(code.textContent)) return;
+      if (!COPY_BLANK.test(code.textContent)) return;
       var lv = pre.closest(".level-part");
       if (lv && !/^(easy|medium)$/.test(lv.getAttribute("data-level") || "")) return;
       if (pre.closest(".quiz, .snippet, .tests-card")) return;
